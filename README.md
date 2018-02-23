@@ -1,1 +1,1 @@
-# ArraysOfArrays
+# ArraysOfArrays.jl

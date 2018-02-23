@@ -1,5 +1,5 @@
-using ArraysOfArrays
-using Base.Test
+# This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
-# write your own tests here
-@test 1 == 2
+import Compat.Test
+Test.@testset "Package ArraysOfArrays" begin
+end
