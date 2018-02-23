@@ -4,6 +4,11 @@ __precompile__(true)
 
 module ArraysOfArrays
 
-# package code goes here
+using Compat
+using Compat.Markdown
+using Compat: axes
+
+include("util.jl")
+include("array_of_similar_arrays.jl")
 
 end # module
