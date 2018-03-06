@@ -10,5 +10,6 @@ using Compat: axes
 
 include("util.jl")
 include("array_of_similar_arrays.jl")
+include("jaggedarray.jl")
 
 end # module
