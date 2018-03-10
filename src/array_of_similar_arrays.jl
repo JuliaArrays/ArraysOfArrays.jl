@@ -104,11 +104,11 @@ Base.parent(A::ArrayOfSimilarArrays) = A.data
 Base.size(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = split_tuple(size(A.data), Val{M}())[2]
 
 
-Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Any,N}) where {T,M,N} =
+Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Integer,N}) where {T,M,N} =
     A.viewfunc(A.data, _ncolons(Val{M}())..., idxs...)
 
 
-Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarArrays{T,M,N}, x::AbstractArray{U,M}, idxs::Vararg{Any,N}) where {T,M,N,U} =
+Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarArrays{T,M,N}, x::AbstractArray{U,M}, idxs::Vararg{Integer,N}) where {T,M,N,U} =
     setindex!(A.data, x, _ncolons(Val{M}())..., idxs...)
 
 
@@ -175,6 +175,10 @@ VectorOfSimilarArrays(parent::AbstractArray{T,L}, viewfunc::VF = view) where {T,
 
 
 @inline Base.IndexStyle(V::VectorOfSimilarArrays) = IndexLinear()
+
+
+Base.@propagate_inbounds Base.getindex(A::VectorOfSimilarArrays{T,M}, rng::Union{Colon,UnitRange{<:Integer}}) where {T,M} =
+    VectorOfSimilarArrays(A.viewfunc(A.data, _ncolons(Val{M}())..., rng), A.viewfunc)
 
 
 function Base.push!(V::VectorOfSimilarArrays{T,M}, x::AbstractArray{U,M}) where {T,M,U}
