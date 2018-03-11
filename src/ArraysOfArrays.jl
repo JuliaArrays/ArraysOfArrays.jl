@@ -8,6 +8,8 @@ using Compat
 using Compat.Markdown
 using Compat: axes
 
+using UnsafeArrays
+
 include("util.jl")
 include("array_of_similar_arrays.jl")
 
