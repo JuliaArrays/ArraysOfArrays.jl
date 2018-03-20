@@ -12,5 +12,6 @@ using UnsafeArrays
 
 include("util.jl")
 include("array_of_similar_arrays.jl")
+include("vector_of_arrays.jl")
 
 end # module
