@@ -114,7 +114,7 @@ Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarArrays{T,M,N}, x::Abstr
 
 
 @static if VERSION < v"0.7.0-DEV.2791"
-    Base.repremptyarray(io::IO, X::ArrayOfSimilarArrays{T,M,N,L,P}) where {T,M,N,L,P} = print(io, "ElasticArray{$T,$M,$N,$L,$P}(", join(size(X),','), ')')
+    Base.repremptyarray(io::IO, X::ArrayOfSimilarArrays{T,M,N,L,P}) where {T,M,N,L,P} = print(io, "ArrayOfSimilarArrays{$T,$M,$N,$L,$P}(", join(size(X),','), ')')
 end
 
 
