@@ -161,14 +161,14 @@ Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractAr
 #    ArrayOfSimilarArrays{M}(A.data, viewfunc)
 
 
+# TODO: implement:
+#
+# Base.unsafe_view(A::ArrayOfSimilarArrays{T,M,N}, I::Vararg{Base.ViewIndex,N}) where {T,M,N}
+# Base.unsafe_view(A::ArrayOfSimilarArrays{T,M,N}, i::Base.ViewIndex) where {T,M,N}
+
+
 UnsafeArrays.unsafe_uview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} =
     ArrayOfSimilarArrays{M}(uview(A.data), uview)
-
-UnsafeArrays.unsafe_uview(A::ArrayOfSimilarArrays{T,M,N}, I::Vararg{Base.ViewIndex,N}) where {T,M,N} =
-    view(UnsafeArrays.unsafe_uview(A), I...)
-
-UnsafeArrays.unsafe_uview(A::ArrayOfSimilarArrays{T,M,N}, i::Base.ViewIndex) where {T,M,N} =
-    view(UnsafeArrays.unsafe_uview(A), i)
 
 
 const VectorOfSimilarArrays{
