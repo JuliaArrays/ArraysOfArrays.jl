@@ -32,7 +32,7 @@ export AbstractVectorOfSimilarVectors
 
 
 @doc doc"""
-    ArrayOfSimilarArrays{T,M,N,L,P,VF} <: AbstractArrayOfSimilarArrays{T,M,N}
+    ArrayOfSimilarArrays{T,M,N,L,P} <: AbstractArrayOfSimilarArrays{T,M,N}
 
 Represents a view of an array of dimension `L = M + N` as an array of
 dimension M with elements that are arrays with dimension N. All element arrays
@@ -53,17 +53,15 @@ array supports resizing of it's last dimension (e.g. an `ElasticArray`).
 """
 struct ArrayOfSimilarArrays{
     T, M, N, L,
-    P<:AbstractArray{T,L},
-    VF<:Function
+    P<:AbstractArray{T,L}
 } <: AbstractArrayOfSimilarArrays{T,M,N}
     data::P
-    viewfunc::VF
 
-    function ArrayOfSimilarArrays{M}(parent::AbstractArray{T,L}, viewfunc::VF = view) where {T,M,L,VF<:Function}
+    function ArrayOfSimilarArrays{M}(parent::AbstractArray{T,L}) where {T,M,L}
         size_inner, size_outer = split_tuple(size(parent), Val{M}())
         N = length(size_outer)
         P = typeof(parent)
-        new{T,M,N,L,P,VF}(parent, viewfunc)
+        new{T,M,N,L,P}(parent)
     end
 end
 
@@ -87,7 +85,7 @@ function _size_inner(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
 end
 
 
-function ArrayOfSimilarArrays(A::AbstractArray{<:AbstractArray{T,M},N}, viewfunc::VF = view) where {T,M,N,VF<:Function}
+function ArrayOfSimilarArrays(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
     B = ArrayOfSimilarArrays{M}(Array{T,M+N}(_size_inner(A)..., size(A)...))
     copy!(B, A)
 end
@@ -105,7 +103,7 @@ Base.size(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = split_tuple(size(A.dat
 
 
 Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Integer,N}) where {T,M,N} =
-    A.viewfunc(A.data, _ncolons(Val{M}())..., idxs...)
+    view(A.data, _ncolons(Val{M}())..., idxs...)
 
 
 Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarArrays{T,M,N}, x::AbstractArray{U,M}, idxs::Vararg{Integer,N}) where {T,M,N,U} =
@@ -113,7 +111,7 @@ Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarArrays{T,M,N}, x::Abstr
 
 
 @static if VERSION < v"0.7.0-DEV.2791"
-    Base.repremptyarray(io::IO, X::ArrayOfSimilarArrays{T,M,N,L,P,VF}) where {T,M,N,L,P,VF} = print(io, "ElasticArray{$T,$M,$N,$L,$P,$VF}(", join(size(X),','), ')')
+    Base.repremptyarray(io::IO, X::ArrayOfSimilarArrays{T,M,N,L,P}) where {T,M,N,L,P} = print(io, "ElasticArray{$T,$M,$N,$L,$P}(", join(size(X),','), ')')
 end
 
 
@@ -126,7 +124,7 @@ end
 function Base.similar(A::ArrayOfSimilarArrays{T,M,N}, ::Type{<:AbstractArray{U}}, dims::Dims) where {T,M,N,U}
     data = A.data
     size_inner, size_outer = split_tuple(size(data), Val{M}())
-    ArrayOfSimilarArrays{M}(similar(data, U, size_inner..., dims...), A.viewfunc)
+    ArrayOfSimilarArrays{M}(similar(data, U, size_inner..., dims...))
 end
 
 
@@ -157,37 +155,27 @@ Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractAr
     prepend!(dest, ArrayOfSimilarArrays(src))
 
 
-# viewwith(A::ArrayOfSimilarArrays{T,M,N}, viewfunc::Function) where {T,M,N} =
-#    ArrayOfSimilarArrays{M}(A.data, viewfunc)
-
-
-# TODO: implement:
-#
-# Base.unsafe_view(A::ArrayOfSimilarArrays{T,M,N}, I::Vararg{Base.ViewIndex,N}) where {T,M,N}
-# Base.unsafe_view(A::ArrayOfSimilarArrays{T,M,N}, i::Base.ViewIndex) where {T,M,N}
-
-
 UnsafeArrays.unsafe_uview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} =
-    ArrayOfSimilarArrays{M}(uview(A.data), uview)
+    ArrayOfSimilarArrays{M}(uview(A.data))
+
 
 
 const VectorOfSimilarArrays{
     T, M, L,
-    P<:AbstractArray{T,L},
-    VF<:Function    
-} = ArrayOfSimilarArrays{T,M,1,L,P,VF}
+    P<:AbstractArray{T,L}
+} = ArrayOfSimilarArrays{T,M,1,L,P}
 
 export VectorOfSimilarArrays
 
-VectorOfSimilarArrays(parent::AbstractArray{T,L}, viewfunc::VF = view) where {T,L,VF<:Function} =
-    ArrayOfSimilarArrays{L-1}(parent, viewfunc)
+VectorOfSimilarArrays(parent::AbstractArray{T,L}) where {T,L} =
+    ArrayOfSimilarArrays{L-1}(parent)
 
 
 @inline Base.IndexStyle(V::VectorOfSimilarArrays) = IndexLinear()
 
 
 Base.@propagate_inbounds Base.getindex(A::VectorOfSimilarArrays{T,M}, rng::Union{Colon,UnitRange{<:Integer}}) where {T,M} =
-    VectorOfSimilarArrays(A.viewfunc(A.data, _ncolons(Val{M}())..., rng), A.viewfunc)
+    VectorOfSimilarArrays(view(A.data, _ncolons(Val{M}())..., rng))
 
 
 function Base.push!(V::VectorOfSimilarArrays{T,M}, x::AbstractArray{U,M}) where {T,M,U}
@@ -216,24 +204,22 @@ end
 
 const ArrayOfSimilarVectors{
     T, N, L,
-    P<:AbstractArray{T,L},
-    VF<:Function,
-} = ArrayOfSimilarArrays{T,1,N,L,P,VF}
+    P<:AbstractArray{T,L}
+} = ArrayOfSimilarArrays{T,1,N,L,P}
 
 export ArrayOfSimilarVectors
 
-ArrayOfSimilarVectors(parent::AbstractArray{T,L}, viewfunc::VF = view) where {T,L,VF<:Function} =
-    ArrayOfSimilarArrays{1}(parent, viewfunc)
+ArrayOfSimilarVectors(parent::AbstractArray{T,L}) where {T,L} =
+    ArrayOfSimilarArrays{1}(parent)
 
 
 
 const VectorOfSimilarVectors{
     T,
-    P<:AbstractArray{T,2},
-    VF<:Function,
-} = ArrayOfSimilarArrays{T,1,1,2,P,VF}
+    P<:AbstractArray{T,2}
+} = ArrayOfSimilarArrays{T,1,1,2,P}
 
 export VectorOfSimilarVectors
 
-VectorOfSimilarVectors(parent::AbstractArray{T,2}, viewfunc::VF = view) where {T,VF<:Function} =
-    ArrayOfSimilarArrays{1}(parent, viewfunc)
+VectorOfSimilarVectors(parent::AbstractArray{T,2}) where {T} =
+    ArrayOfSimilarArrays{1}(parent)
