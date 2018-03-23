@@ -78,6 +78,19 @@ end
 
 export VectorOfArrays
 
+function VectorOfArrays{T,N}(A::AbstractVector{AbstractArray{U,N}}) where {T,N,U}
+    R = VectorOfArrays{T,N}()
+    append!(R, A)
+end
+
+VectorOfArrays(A::AbstractVector{AbstractArray{T,N}}) where {T,N} = VectorOfArrays{T,N}(A)
+
+
+@static if VERSION < v"0.7.0-DEV.3138"
+    Base.convert(VA::Type{VectorOfArrays{T,N}}, A::AbstractVector{AbstractArray{U,N}}) where {T,N,U} = VA(A)
+    Base.convert(VA::Type{VectorOfArrays}, A::AbstractVector{AbstractArray{T,N}}) where {T,N} = VA(A)
+end
+
 
 function full_consistency_checks(A::VectorOfArrays)
     simple_consistency_checks(A)
