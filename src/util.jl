@@ -26,3 +26,8 @@ end
 end
 
 @inline split_tuple(x, ::Val{N}) where {N} = _split_tuple_impl((), x, Val{N}())
+
+
+_convert_elype(::Type{T}, A::AbstractArray{T}) where {T} = A
+
+_convert_elype(::Type{T}, A::AbstractArray{U}) where {T,U} = broadcast(x -> convert(T, x), A)
