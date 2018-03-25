@@ -70,7 +70,8 @@ export ArrayOfSimilarArrays
 
 function _size_inner(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
     s = if !isempty(A)
-        map(Int, size(A[1]))
+        sz_A = size(A[1])
+        ntuple(i -> Int(sz_A[i]), Val(M))
     else
         ntuple(_ -> zero(Int), Val(M))
     end
