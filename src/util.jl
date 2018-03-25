@@ -1,4 +1,4 @@
-# This file is a part of ElasticArrays.jl, licensed under the MIT License (MIT).
+# This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 
 #=
