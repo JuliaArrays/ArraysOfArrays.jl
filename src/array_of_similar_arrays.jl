@@ -17,7 +17,7 @@ The following type aliases are defined:
 * `AbstractArrayOfSimilarVectors{T,N} = AbstractArrayOfSimilarArrays{T,1,N}`
 * `AbstractVectorOfSimilarVectors{T} = AbstractArrayOfSimilarArrays{T,1,1}`
 """
-abstract type AbstractArrayOfSimilarArrays{T,M,N} <: AbstractArray{AbstractArray{T,M},N} end
+abstract type AbstractArrayOfSimilarArrays{T,M,N} <: AbstractArray{Array{T,M},N} end
 export AbstractArrayOfSimilarArrays
 
 const AbstractVectorOfSimilarArrays{T,M} = AbstractArrayOfSimilarArrays{T,M,1}
