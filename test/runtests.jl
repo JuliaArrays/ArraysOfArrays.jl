@@ -2,4 +2,7 @@
 
 import Compat.Test
 Test.@testset "Package ArraysOfArrays" begin
+
+include("array_of_similar_arrays.jl")
+
 end
