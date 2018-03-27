@@ -31,3 +31,14 @@ end
 _convert_elype(::Type{T}, A::AbstractArray{T}) where {T} = A
 
 _convert_elype(::Type{T}, A::AbstractArray{U}) where {T,U} = broadcast(x -> convert(T, x), A)
+
+
+Base.@pure _add_vals(Val_M::Val{M}, Val_N::Val{N}) where {M,N} =
+    Val{length((ntuple(identity, Val_M)..., ntuple(identity, Val_N)...))}()
+
+
+Base.@pure require_ndims(A::AbstractArray{T,N}, Val_N::Val{N}) where {T,N} =
+    nothing
+
+Base.@pure require_ndims(A::AbstractArray{T,M}, Val_N::Val{N}) where {T,M,N} =
+    throw(ArgumentError("Require an array with $N dimensions"))

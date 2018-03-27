@@ -57,9 +57,9 @@ struct ArrayOfSimilarArrays{
 } <: AbstractArrayOfSimilarArrays{T,M,N}
     data::P
 
-    function ArrayOfSimilarArrays{T,M}(parent::AbstractArray{U,L}) where {T,M,L,U}
+    function ArrayOfSimilarArrays{T,M,N}(parent::AbstractArray{U,L}) where {T,M,N,L,U}
         size_inner, size_outer = split_tuple(size(parent), Val{M}())
-        N = length(size_outer)
+        require_ndims(parent, _add_vals(Val{M}(), Val{N}()))
         conv_parent = _convert_elype(T, parent)
         P = typeof(conv_parent)
         new{T,M,N,L,P}(conv_parent)
@@ -69,7 +69,7 @@ end
 export ArrayOfSimilarArrays
 
 function ArrayOfSimilarArrays{T,M,N}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
-    B = ArrayOfSimilarArrays{T,M}(Array{T}(_size_inner(A)..., size(A)...))
+    B = ArrayOfSimilarArrays{T,M,N}(Array{T}(_size_inner(A)..., size(A)...))
     copy!(B, A)
 end
 
@@ -81,7 +81,7 @@ ArrayOfSimilarArrays(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
 
 
 @static if VERSION < v"0.7.0-DEV.3138"
-    Base.convert(R::Type{ArrayOfSimilarArrays{T,M}}, parent::AbstractArray{U,L}) where {T,M,L,U} = R(parent)
+    Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, parent::AbstractArray{U,L}) where {T,M,N,L,U} = R(parent)
 
     Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
     Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
@@ -143,7 +143,7 @@ end
 function Base.similar(A::ArrayOfSimilarArrays{T,M,N}, ::Type{<:AbstractArray{U}}, dims::Dims) where {T,M,N,U}
     data = A.data
     size_inner, size_outer = split_tuple(size(data), Val{M}())
-    ArrayOfSimilarArrays{T,M}(similar(data, U, size_inner..., dims...))
+    ArrayOfSimilarArrays{T,M,N}(similar(data, U, size_inner..., dims...))
 end
 
 
@@ -175,7 +175,7 @@ Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractAr
 
 
 UnsafeArrays.unsafe_uview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} =
-    ArrayOfSimilarArrays{T,M}(uview(A.data))
+    ArrayOfSimilarArrays{T,M,N}(uview(A.data))
 
 
 
@@ -187,7 +187,7 @@ const VectorOfSimilarArrays{
 export VectorOfSimilarArrays
 
 VectorOfSimilarArrays{T}(parent::AbstractArray{U,L}) where {T,U,L} =
-    ArrayOfSimilarArrays{T,length(Base.front(size(parent)))}(parent)
+    ArrayOfSimilarArrays{T,length(Base.front(size(parent))),1}(parent)
 
 VectorOfSimilarArrays{T}(A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} =
     VectorOfSimilarArrays{T,M}(A)
@@ -237,6 +237,9 @@ const ArrayOfSimilarVectors{
 
 export ArrayOfSimilarVectors
 
+ArrayOfSimilarVectors{T}(parent::AbstractArray{U,L}) where {T,U,L} =
+    ArrayOfSimilarArrays{T,1,length(Base.front(size(parent)))}(parent)
+
 ArrayOfSimilarVectors{T}(A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} =
     ArrayOfSimilarVectors{T,N}(A)
 
@@ -245,6 +248,7 @@ ArrayOfSimilarVectors(A::AbstractArray{<:AbstractVector{T},N}) where {T,N} =
 
 
 @static if VERSION < v"0.7.0-DEV.3138"
+    Base.convert(R::Type{ArrayOfSimilarVectors{T}}, parent::AbstractArray{U,L}) where {T,U,L} = R(parent)
     Base.convert(R::Type{ArrayOfSimilarVectors{T}}, A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} = R(A)
     Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T},N}) where {T,N} = R(A)
 end
@@ -258,7 +262,7 @@ const VectorOfSimilarVectors{
 export VectorOfSimilarVectors
 
 VectorOfSimilarVectors{T}(parent::AbstractArray{U,2}) where {T,U} =
-    ArrayOfSimilarArrays{T,1}(parent)
+    ArrayOfSimilarArrays{T,1,1}(parent)
 
 VectorOfSimilarVectors(parent::AbstractArray{T,2}) where {T} =
     VectorOfSimilarVectors{T}(parent)
