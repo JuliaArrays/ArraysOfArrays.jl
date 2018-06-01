@@ -2,7 +2,7 @@
 
 
 doc"""
-    VectorOfArrays{T,N,M} <: AbstractVector{AbstractArray{T,N}}
+    VectorOfArrays{T,N,M} <: AbstractVector{<:AbstractArray{T,N}}
 
 An `VectorOfArrays` represents a vector of `N`-dimensional arrays (that may
 differ in size). Internally, `VectorOfArrays` stores all elements of all
@@ -39,7 +39,7 @@ struct VectorOfArrays{
     VT<:AbstractVector{T},
     VI<:AbstractVector{Int},
     VD<:AbstractVector{Dims{M}}
-} <: AbstractVector{AbstractArray{T,N}}
+} <: AbstractVector{Array{T,N}}
     data::VT
     elem_ptr::VI
     kernel_size::VD
