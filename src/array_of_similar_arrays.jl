@@ -1,7 +1,7 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 @doc doc"""
-    AbstractArrayOfSimilarArrays{T,M,N} <: AbstractArray{AbstractArray{T,M},N}
+    AbstractArrayOfSimilarArrays{T,M,N} <: AbstractArray{<:AbstractArray{T,M},N}
 
 An array that contains arrays that have the same size/axes. The array is
 internally stored in flattened form as some kind of array of dimension
