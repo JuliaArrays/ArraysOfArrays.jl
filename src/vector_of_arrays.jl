@@ -1,7 +1,7 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 
-doc"""
+"""
     VectorOfArrays{T,N,M} <: AbstractVector{<:AbstractArray{T,N}}
 
 An `VectorOfArrays` represents a vector of `N`-dimensional arrays (that may
@@ -144,6 +144,8 @@ Base.parent(A::VectorOfArrays) = A.data
 
 Base.size(A::VectorOfArrays) = size(A.kernel_size)
 
+Base.IndexStyle(A::ArrayOfSimilarArrays) = IndexLinear()
+
 
 Base.@propagate_inbounds function Base.getindex(A::VectorOfArrays, i::Integer)
     @boundscheck checkbounds(A, i)
@@ -170,11 +172,11 @@ Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArray
     A_ep = A.elem_ptr
     A_data = A.data
 
-    elem_ptr = similar(A_ep, length(linearindices(idxs)) + 1)
+    elem_ptr = similar(A_ep, length(eachindex(idxs)) + 1)
     delta_i = firstindex(elem_ptr) - firstindex(idxs)
 
     elem_ptr[firstindex(elem_ptr)] = firstindex(A_data)
-    for i in linearindices(idxs)
+    for i in eachindex(idxs)
         idx = idxs[i]
         l = A_ep[idx + 1] - A_ep[idx]
         elem_ptr[i + 1 + delta_i] = elem_ptr[i + delta_i] + l
@@ -186,7 +188,7 @@ Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArray
         broadcast!(+, elem_ptr, elem_ptr, firstindex(data) - first(elem_ptr))
     end
 
-    for i in linearindices(idxs)
+    for i in eachindex(idxs)
         idx = idxs[i]
         l = A_ep[idx + 1] - A_ep[idx]
 
@@ -210,8 +212,10 @@ Base.@propagate_inbounds function Base.setindex!(A::VectorOfArrays{T,N}, x::Abst
 end
 
 Base.length(A::VectorOfArrays) = length(A.kernel_size)
-Base._length(A::VectorOfArrays) = Base._length(A.kernel_size)
-Base.linearindices(A::VectorOfArrays) = linearindices(A.kernel_size)
+
+@static if VERSION < v"0.7.0-beta.250"
+    Base._length(A::VectorOfArrays) = Base._length(A.kernel_size)
+end
 
 
 function Base.append!(A::VectorOfArrays{T,N}, B::VectorOfArrays{U,N}) where {T,N,U}
@@ -223,7 +227,7 @@ function Base.append!(A::VectorOfArrays{T,N}, B::VectorOfArrays{U,N}) where {T,N
         idxs_B = firstindex(B_ep):(lastindex(B_ep) - 1)
         delta_ep_idx = lastindex(A_ep) + 1 - firstindex(B_ep)
         delta_ep = last(A_ep) - first(B_ep)
-        resize!(A_ep, length(linearindices(A_ep)) + length(idxs_B))
+        resize!(A_ep, length(eachindex(A_ep)) + length(idxs_B))
         @assert checkbounds(Bool, B_ep, idxs_B)
         @assert checkbounds(Bool, A_ep, broadcast(+, idxs_B, delta_ep_idx))
         @inbounds @simd for i_B in idxs_B
@@ -241,12 +245,12 @@ end
 
 function Base.append!(A::VectorOfArrays{T,N}, B::AbstractVector{AbstractArray{U,N}}) where {T,N,U}
     if !isempty(B)
-        n_A = length(linearindices(A))
-        n_B = length(linearindices(B))
-        datalen_A = length(linearindices(A.data))
+        n_A = length(eachindex(A))
+        n_B = length(eachindex(B))
+        datalen_A = length(eachindex(A.data))
         datalen_B = zero(Int)
         for i in eachindex(B)
-            datalen_B += Int(length(linearindices(B[i])))
+            datalen_B += Int(length(eachindex(B[i])))
         end
 
         sizehint!(A.data, datalen_A + datalen_B)

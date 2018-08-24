@@ -1,6 +1,6 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
-@doc doc"""
+"""
     AbstractArrayOfSimilarArrays{T,M,N} <: AbstractArray{<:AbstractArray{T,M},N}
 
 An array that contains arrays that have the same size/axes. The array is
@@ -31,7 +31,7 @@ export AbstractVectorOfSimilarVectors
 
 
 
-@doc doc"""
+"""
     ArrayOfSimilarArrays{T,M,N,L,P} <: AbstractArrayOfSimilarArrays{T,M,N}
 
 Represents a view of an array of dimension `L = M + N` as an array of
@@ -116,6 +116,9 @@ Base.parent(A::ArrayOfSimilarArrays) = A.data
 
 
 Base.size(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = split_tuple(size(A.data), Val{M}())[2]
+
+
+Base.IndexStyle(A::ArrayOfSimilarArrays) = IndexLinear()
 
 
 Base.@propagate_inbounds function Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Integer,N}) where {T,M,N}
