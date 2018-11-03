@@ -236,14 +236,14 @@ function Base.pop!(V::VectorOfSimilarArrays)
     x
 end
 
-function Compat.pushfirst!(V::VectorOfSimilarArrays{T,M}, x::AbstractArray{U,M}) where {T,M,U}
+function Base.pushfirst!(V::VectorOfSimilarArrays{T,M}, x::AbstractArray{U,M}) where {T,M,U}
     size(x) != Base.front(size(V.data)) && throw(DimensionMismatch("Can't push, shape of source and elements of target is incompatible"))
     prepend!(V.data, x)
     V
 end
 
 # Will need equivalent of resize! that resizes in front of data instead of in back:
-# Compat.popfirst!(V::ArrayOfSimilarArrays) = ...
+# popfirst!(V::ArrayOfSimilarArrays) = ...
 
 
 

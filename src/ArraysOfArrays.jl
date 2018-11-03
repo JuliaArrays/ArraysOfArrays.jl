@@ -4,10 +4,6 @@ __precompile__(true)
 
 module ArraysOfArrays
 
-using Compat
-using Compat.Markdown
-using Compat: axes
-
 using UnsafeArrays
 
 include("util.jl")

@@ -1,11 +1,10 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 using ArraysOfArrays
+using Test
+
 using ElasticArrays
 using UnsafeArrays
-using Compat
-using Compat.Test
-using Compat.Random
 
 
 @testset "array_of_similar_arrays" begin
