@@ -69,8 +69,8 @@ end
 export ArrayOfSimilarArrays
 
 function ArrayOfSimilarArrays{T,M,N}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
-    B = ArrayOfSimilarArrays{T,M,N}(Array{T}(_size_inner(A)..., size(A)...))
-    copy!(B, A)
+    B = ArrayOfSimilarArrays{T,M,N}(Array{T}(undef, _size_inner(A)..., size(A)...))
+    copyto!(B, A)
 end
 
 ArrayOfSimilarArrays{T}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
