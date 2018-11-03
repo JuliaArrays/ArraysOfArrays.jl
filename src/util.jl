@@ -17,15 +17,14 @@ end
 Base.@pure _ncolons(::Val{N}) where N = ntuple(_ -> Colon(), Val{N}())
 
 
-@inline function _split_tuple_impl(x::NTuple{N,Any}, y::Tuple, ::Val{N}) where {N}
-    x, y
-end
+Base.@propagate_inbounds front_tuple(x::NTuple{N}, ::Val{M}) where {N,M} =
+    Base.ntuple(i -> x[i], Val{M}())
 
-@inline function _split_tuple_impl(x::NTuple{M,Any}, y::Tuple, ::Val{N}) where {M, N}
-    _split_tuple_impl((x..., y[1]), _tail(y), Val{N}())
-end
+Base.@propagate_inbounds back_tuple(x::NTuple{N}, ::Val{M}) where {N,M} =
+    Base.ntuple(i -> x[i + N - M], Val{M}())
 
-@inline split_tuple(x, ::Val{N}) where {N} = _split_tuple_impl((), x, Val{N}())
+Base.@propagate_inbounds split_tuple(x::NTuple{N}, ::Val{M}) where {N,M} =
+    (front_tuple(x, Val{M}()), back_tuple(x, Val{N - M}()))
 
 
 _convert_elype(::Type{T}, A::AbstractArray{T}) where {T} = A
