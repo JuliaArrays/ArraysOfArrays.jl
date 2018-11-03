@@ -86,10 +86,8 @@ end
 VectorOfArrays(A::AbstractVector{AbstractArray{T,N}}) where {T,N} = VectorOfArrays{T,N}(A)
 
 
-@static if VERSION < v"0.7.0-DEV.3138"
-    Base.convert(VA::Type{VectorOfArrays{T,N}}, A::AbstractVector{AbstractArray{U,N}}) where {T,N,U} = VA(A)
-    Base.convert(VA::Type{VectorOfArrays}, A::AbstractVector{AbstractArray{T,N}}) where {T,N} = VA(A)
-end
+Base.convert(VA::Type{VectorOfArrays{T,N}}, A::AbstractVector{AbstractArray{U,N}}) where {T,N,U} = VA(A)
+Base.convert(VA::Type{VectorOfArrays}, A::AbstractVector{AbstractArray{T,N}}) where {T,N} = VA(A)
 
 
 function full_consistency_checks(A::VectorOfArrays)
@@ -212,10 +210,6 @@ Base.@propagate_inbounds function Base.setindex!(A::VectorOfArrays{T,N}, x::Abst
 end
 
 Base.length(A::VectorOfArrays) = length(A.kernel_size)
-
-@static if VERSION < v"0.7.0-beta.250"
-    Base._length(A::VectorOfArrays) = Base._length(A.kernel_size)
-end
 
 
 function Base.append!(A::VectorOfArrays{T,N}, B::VectorOfArrays{U,N}) where {T,N,U}

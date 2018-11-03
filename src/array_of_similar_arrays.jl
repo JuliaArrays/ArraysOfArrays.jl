@@ -80,13 +80,11 @@ ArrayOfSimilarArrays(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
     ArrayOfSimilarArrays{T,M,N}(A)
 
 
-@static if VERSION < v"0.7.0-DEV.3138"
-    Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, parent::AbstractArray{U,L}) where {T,M,N,L,U} = R(parent)
+Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, parent::AbstractArray{U,L}) where {T,M,N,L,U} = R(parent)
 
-    Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
-    Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
-    Base.convert(R::Type{ArrayOfSimilarArrays}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = R(A)
-end
+Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
+Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
+Base.convert(R::Type{ArrayOfSimilarArrays}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = R(A)
 
 
 function _size_inner(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
@@ -130,11 +128,6 @@ end
 
 Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarArrays{T,M,N}, x::AbstractArray{U,M}, idxs::Vararg{Integer,N}) where {T,M,N,U} =
     setindex!(A.data, x, _ncolons(Val{M}())..., idxs...)
-
-
-@static if VERSION < v"0.7.0-DEV.2791"
-    Base.repremptyarray(io::IO, X::ArrayOfSimilarArrays{T,M,N,L,P}) where {T,M,N,L,P} = print(io, "ArrayOfSimilarArrays{$T,$M,$N,$L,$P}(", join(size(X),','), ')')
-end
 
 
 @inline function Base.resize!(A::ArrayOfSimilarArrays{T,M,N}, dims::Vararg{Integer,N}) where {T,M,N}
@@ -213,11 +206,9 @@ VectorOfSimilarArrays(A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} =
     VectorOfSimilarArrays{T,M}(A)
 
 
-@static if VERSION < v"0.7.0-DEV.3138"
-    Base.convert(R::Type{VectorOfSimilarArrays{T}}, parent::AbstractArray{U,L}) where {T,U,L} = R(parent)
-    Base.convert(R::Type{VectorOfSimilarArrays{T}}, A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} = R(A)
-    Base.convert(R::Type{VectorOfSimilarArrays}, A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} = R(A)
-end
+Base.convert(R::Type{VectorOfSimilarArrays{T}}, parent::AbstractArray{U,L}) where {T,U,L} = R(parent)
+Base.convert(R::Type{VectorOfSimilarArrays{T}}, A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} = R(A)
+Base.convert(R::Type{VectorOfSimilarArrays}, A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} = R(A)
 
 
 @inline Base.IndexStyle(V::VectorOfSimilarArrays) = IndexLinear()
@@ -264,11 +255,9 @@ ArrayOfSimilarVectors(A::AbstractArray{<:AbstractVector{T},N}) where {T,N} =
     ArrayOfSimilarVectors{T,N}(A)
 
 
-@static if VERSION < v"0.7.0-DEV.3138"
-    Base.convert(R::Type{ArrayOfSimilarVectors{T}}, parent::AbstractArray{U,L}) where {T,U,L} = R(parent)
-    Base.convert(R::Type{ArrayOfSimilarVectors{T}}, A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} = R(A)
-    Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T},N}) where {T,N} = R(A)
-end
+Base.convert(R::Type{ArrayOfSimilarVectors{T}}, parent::AbstractArray{U,L}) where {T,U,L} = R(parent)
+Base.convert(R::Type{ArrayOfSimilarVectors{T}}, A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} = R(A)
+Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T},N}) where {T,N} = R(A)
 
 
 const VectorOfSimilarVectors{
@@ -290,9 +279,7 @@ VectorOfSimilarVectors{T}(A::AbstractVector{<:AbstractVector{U}}) where {T,U} =
 VectorOfSimilarVectors(A::AbstractVector{<:AbstractVector{T}}) where {T} =
     VectorOfSimilarVectors{T}(A)
 
-@static if VERSION < v"0.7.0-DEV.3138"
-    Base.convert(R::Type{VectorOfSimilarVectors{T}}, parent::AbstractArray{U,2}) where {T,U} = R(parent)
-    Base.convert(R::Type{VectorOfSimilarVectors}, parent::AbstractArray{T,2}) where {T} = R(parent)
-    Base.convert(R::Type{VectorOfSimilarVectors{T}}, A::AbstractVector{<:AbstractVector{U}}) where {T,U} = R(A)
-    Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector{T}}) where {T} = R(A)
-end
+Base.convert(R::Type{VectorOfSimilarVectors{T}}, parent::AbstractArray{U,2}) where {T,U} = R(parent)
+Base.convert(R::Type{VectorOfSimilarVectors}, parent::AbstractArray{T,2}) where {T} = R(parent)
+Base.convert(R::Type{VectorOfSimilarVectors{T}}, A::AbstractVector{<:AbstractVector{U}}) where {T,U} = R(A)
+Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector{T}}) where {T} = R(A)
