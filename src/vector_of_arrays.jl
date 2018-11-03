@@ -243,7 +243,7 @@ function Base.append!(A::VectorOfArrays{T,N}, B::VectorOfArrays{U,N}) where {T,N
 end
 
 
-function Base.append!(A::VectorOfArrays{T,N}, B::AbstractVector{AbstractArray{U,N}}) where {T,N,U}
+function Base.append!(A::VectorOfArrays{T,N}, B::AbstractVector{<:AbstractArray{U,N}}) where {T,N,U}
     if !isempty(B)
         n_A = length(eachindex(A))
         n_B = length(eachindex(B))
