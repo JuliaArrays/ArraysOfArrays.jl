@@ -20,7 +20,7 @@ using UnsafeArrays
         sz_inner = ntuple(i -> sz_max[i], Val_M)
         sz_outer = ntuple(i -> sz_max[i + M], Val_N)
 
-        A = Array{Array{Float64, M}, N}(uninitialized, sz_outer...)
+        A = Array{Array{Float64, M}, N}(undef, sz_outer...)
         for i in eachindex(A)
             A[i] = rand(sz_inner...)
         end
@@ -108,4 +108,3 @@ using UnsafeArrays
         test_from_nested(VectorOfSimilarVectors, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
     end
 end
-
