@@ -142,7 +142,7 @@ Base.parent(A::VectorOfArrays) = A.data
 
 Base.size(A::VectorOfArrays) = size(A.kernel_size)
 
-Base.IndexStyle(A::ArrayOfSimilarArrays) = IndexLinear()
+Base.IndexStyle(A::VectorOfArrays) = IndexLinear()
 
 
 Base.@propagate_inbounds function Base.getindex(A::VectorOfArrays, i::Integer)
