@@ -99,9 +99,13 @@ function _size_inner(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
     s
 end
 
-function _size_inner(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
-    sz_inner, sz_outer = split_tuple(size(A.data), Val{M}())
-    sz_inner
+@inline function _size_inner(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+    front_tuple(size(A.data), Val{M}())
+end
+
+
+@inline function _length_inner(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
+    prod(_size_inner(A))
 end
 
 
@@ -116,18 +120,14 @@ Base.parent(A::ArrayOfSimilarArrays) = A.data
 Base.size(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = split_tuple(size(A.data), Val{M}())[2]
 
 
-Base.IndexStyle(A::ArrayOfSimilarArrays) = IndexLinear()
 
+Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Integer,N}) where {T,M,N} =
+    view(A.data, _ncolons(Val{M}())..., idxs...)
 
-Base.@propagate_inbounds function Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Integer,N}) where {T,M,N}
-    @boundscheck checkbounds(A, idxs...)
-    J = Base.to_indices(A.data, (_ncolons(Val{M}())..., idxs...))
-    @boundscheck checkbounds(A.data, J...)
-    Base.unsafe_view(A.data, J...)
-end
 
 Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarArrays{T,M,N}, x::AbstractArray{U,M}, idxs::Vararg{Integer,N}) where {T,M,N,U} =
     setindex!(A.data, x, _ncolons(Val{M}())..., idxs...)
+
 
 
 @inline function Base.resize!(A::ArrayOfSimilarArrays{T,M,N}, dims::Vararg{Integer,N}) where {T,M,N}
@@ -211,7 +211,7 @@ Base.convert(R::Type{VectorOfSimilarArrays{T}}, A::AbstractVector{<:AbstractArra
 Base.convert(R::Type{VectorOfSimilarArrays}, A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} = R(A)
 
 
-@inline Base.IndexStyle(V::VectorOfSimilarArrays) = IndexLinear()
+@inline Base.IndexStyle(A::VectorOfSimilarArrays) = IndexLinear()
 
 
 function Base.push!(V::VectorOfSimilarArrays{T,M}, x::AbstractArray{U,M}) where {T,M,U}
@@ -260,6 +260,38 @@ Base.convert(R::Type{ArrayOfSimilarVectors{T}}, A::AbstractArray{<:AbstractVecto
 Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T},N}) where {T,N} = R(A)
 
 
+# @inline Base.IndexStyle(A::ArrayOfSimilarVectors) = IndexLinear()
+
+
+# Base.@propagate_inbounds function _linear_data_idxs(A::ArrayOfSimilarVectors, i::Integer)
+#     @boundscheck checkbounds(A, i)
+#     n_inner = _length_inner(A)
+#     i0 = firstindex(A.data)
+#     from = (i - i0) * n_inner + i0
+#     to  = from + n_inner - 1
+#     from:to
+# end
+
+
+# # Base.@propagate_inbounds function _linear_data_idxs(A::ArrayOfSimilarVectors, idxs::AbstractUnitRange{<:Integer})
+# #     @boundscheck checkbounds(A, idxs)
+# #     n_inner = _length_inner(A)
+# #     i0 = firstindex(A.data)
+# #     a = first(idxs)
+# #     b = last(idxs) + 1
+# #     from = (a - i0) * n_inner + i0
+# #     to  = (b - i0) * n_inner + i0 - 1
+# #     from:to
+# # end
+
+
+# Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarVectors{T}, i::Integer) where {T} =
+#     Base.view(A.data, _linear_data_idxs(A, i))
+# 
+# Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarVectors{T}, x::AbstractVector{U}, i::Integer) where {T,U} =
+#     setindex!(A.data, x, _linear_data_idxs(A, i))
+
+
 const VectorOfSimilarVectors{
     T,
     P<:AbstractArray{T,2}
@@ -283,3 +315,12 @@ Base.convert(R::Type{VectorOfSimilarVectors{T}}, parent::AbstractArray{U,2}) whe
 Base.convert(R::Type{VectorOfSimilarVectors}, parent::AbstractArray{T,2}) where {T} = R(parent)
 Base.convert(R::Type{VectorOfSimilarVectors{T}}, A::AbstractVector{<:AbstractVector{U}}) where {T,U} = R(A)
 Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector{T}}) where {T} = R(A)
+
+
+@inline Base.IndexStyle(A::VectorOfSimilarVectors) = IndexLinear()
+
+# Base.@propagate_inbounds Base.getindex(A::VectorOfSimilarVectors{T}, i::Integer) where {T} =
+#     Base.view(A.data, :, i)
+# 
+# Base.@propagate_inbounds Base.setindex!(A::VectorOfSimilarVectors{T}, x::AbstractVector{U}, i::Integer) where {T,U} =
+#     setindex!(A.data, x, :, i)
