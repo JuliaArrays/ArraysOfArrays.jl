@@ -27,3 +27,20 @@ deepmap(f::Base.Callable, x::Any) = map(f, x)
 
 deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray}) =
     map(X -> deepmap(f, X), A)
+
+
+"""
+    flatview(A::AbstractArray)
+    flatview(A::AbstractArray{<:AbstractArray{<:...}})
+
+View array `A` in a suitable flattened form. The shape of the flattened form
+will depend on the type of `A`. If the `A` is not a nested array, the return
+value is `A` itself. When no type-specific method is available, `flatview`
+will fall back to `Base.Iterators.flatten`.
+"""
+function flatview end
+export flatview
+
+flatview(A::AbstractArray) = A
+
+flatview(A::AbstractArray{<:AbstractArray}) = Base.Iterators.flatten(A)

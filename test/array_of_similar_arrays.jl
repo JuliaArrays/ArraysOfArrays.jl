@@ -50,7 +50,7 @@ using UnsafeArrays
             A = rand_nested_similar_arrays(Val_M, Val_N)
 
             A2_ctor = @inferred TT(A)
-            U = eltype(parent(A2_ctor))
+            U = eltype(flatview(A2_ctor))
 
             A_U = Array{Array{U,M},N}(A)
 
@@ -61,7 +61,7 @@ using UnsafeArrays
             @test typeof(A2_conv) == RT
             @test A2_conv == A2_ctor
 
-            U = eltype(parent(A2_ctor))
+            U = eltype(flatview(A2_ctor))
             A3 = @inferred Array(A2_ctor)
             @test typeof(A3) == Array{Array{U,M},N}
             @test A3 == A_U

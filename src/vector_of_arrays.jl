@@ -137,8 +137,14 @@ import Base.==
 (==)(A::VectorOfArrays, B::VectorOfArrays) =
     A.data == B.data && A.elem_ptr == B.elem_ptr && A.kernel_size == B.kernel_size
 
+"""
+    flatview(A::VectorOfArrays{T})::Vector{T}
 
-Base.parent(A::VectorOfArrays) = A.data
+Returns the internal serialized representation of all element arrays of `A` as
+a single vector. Do *not* change the length of the returned vector, as it
+would break the inner consistency of `A`.
+"""
+flatview(A::VectorOfArrays) = A.data
 
 Base.size(A::VectorOfArrays) = size(A.kernel_size)
 

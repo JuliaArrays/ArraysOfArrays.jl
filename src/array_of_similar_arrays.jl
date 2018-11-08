@@ -5,11 +5,11 @@
 
 An array that contains arrays that have the same size/axes. The array is
 internally stored in flattened form as some kind of array of dimension
-`M + N`. The flattened form can be accessed via `parent(A)`.
+`M + N`. The flattened form can be accessed via `flatview(A)`.
 
 Subtypes must implement (in addition to typical array operations):
 
-    parent(A::SomeArrayOfSimilarArrays)::AbstractArray{T,M+N}
+    flatview(A::SomeArrayOfSimilarArrays)::AbstractArray{T,M+N}
 
 The following type aliases are defined:
 
@@ -40,7 +40,7 @@ implicitly have equal size/axes.
 
 Constructors:
 
-    ArrayOfSimilarArrays{N}(parent::AbstractArray)
+    ArrayOfSimilarArrays{N}(flatview::AbstractArray)
 
 The following type aliases are defined:
 
@@ -57,10 +57,10 @@ struct ArrayOfSimilarArrays{
 } <: AbstractArrayOfSimilarArrays{T,M,N}
     data::P
 
-    function ArrayOfSimilarArrays{T,M,N}(parent::AbstractArray{U,L}) where {T,M,N,L,U}
-        size_inner, size_outer = split_tuple(size(parent), Val{M}())
-        require_ndims(parent, _add_vals(Val{M}(), Val{N}()))
-        conv_parent = _convert_elype(T, parent)
+    function ArrayOfSimilarArrays{T,M,N}(flatview::AbstractArray{U,L}) where {T,M,N,L,U}
+        size_inner, size_outer = split_tuple(size(flatview), Val{M}())
+        require_ndims(flatview, _add_vals(Val{M}(), Val{N}()))
+        conv_parent = _convert_elype(T, flatview)
         P = typeof(conv_parent)
         new{T,M,N,L,P}(conv_parent)
     end
@@ -80,7 +80,7 @@ ArrayOfSimilarArrays(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
     ArrayOfSimilarArrays{T,M,N}(A)
 
 
-Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, parent::AbstractArray{U,L}) where {T,M,N,L,U} = R(parent)
+Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, flatview::AbstractArray{U,L}) where {T,M,N,L,U} = R(flatview)
 
 Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
 Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
@@ -114,7 +114,14 @@ import Base.==
     (A.data == B.data)
 
 
-Base.parent(A::ArrayOfSimilarArrays) = A.data
+"""
+    flatview(A::ArrayOfSimilarArrays{T,M,N,L,P})::P
+
+Returns the array of dimensionality `L = M + N` wrapped by `A`. The shape of
+the result may be freely changed without breaking the inner consistency of
+`A`.
+"""
+flatview(A::ArrayOfSimilarArrays) = A.data
 
 
 Base.size(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = split_tuple(size(A.data), Val{M}())[2]
@@ -196,8 +203,8 @@ const VectorOfSimilarArrays{
 
 export VectorOfSimilarArrays
 
-VectorOfSimilarArrays{T}(parent::AbstractArray{U,L}) where {T,U,L} =
-    ArrayOfSimilarArrays{T,length(Base.front(size(parent))),1}(parent)
+VectorOfSimilarArrays{T}(flatview::AbstractArray{U,L}) where {T,U,L} =
+    ArrayOfSimilarArrays{T,length(Base.front(size(flatview))),1}(flatview)
 
 VectorOfSimilarArrays{T}(A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} =
     VectorOfSimilarArrays{T,M}(A)
@@ -206,7 +213,7 @@ VectorOfSimilarArrays(A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} =
     VectorOfSimilarArrays{T,M}(A)
 
 
-Base.convert(R::Type{VectorOfSimilarArrays{T}}, parent::AbstractArray{U,L}) where {T,U,L} = R(parent)
+Base.convert(R::Type{VectorOfSimilarArrays{T}}, flatview::AbstractArray{U,L}) where {T,U,L} = R(flatview)
 Base.convert(R::Type{VectorOfSimilarArrays{T}}, A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} = R(A)
 Base.convert(R::Type{VectorOfSimilarArrays}, A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} = R(A)
 
@@ -245,8 +252,8 @@ const ArrayOfSimilarVectors{
 
 export ArrayOfSimilarVectors
 
-ArrayOfSimilarVectors{T}(parent::AbstractArray{U,L}) where {T,U,L} =
-    ArrayOfSimilarArrays{T,1,length(Base.front(size(parent)))}(parent)
+ArrayOfSimilarVectors{T}(flatview::AbstractArray{U,L}) where {T,U,L} =
+    ArrayOfSimilarArrays{T,1,length(Base.front(size(flatview)))}(flatview)
 
 ArrayOfSimilarVectors{T}(A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} =
     ArrayOfSimilarVectors{T,N}(A)
@@ -255,7 +262,7 @@ ArrayOfSimilarVectors(A::AbstractArray{<:AbstractVector{T},N}) where {T,N} =
     ArrayOfSimilarVectors{T,N}(A)
 
 
-Base.convert(R::Type{ArrayOfSimilarVectors{T}}, parent::AbstractArray{U,L}) where {T,U,L} = R(parent)
+Base.convert(R::Type{ArrayOfSimilarVectors{T}}, flatview::AbstractArray{U,L}) where {T,U,L} = R(flatview)
 Base.convert(R::Type{ArrayOfSimilarVectors{T}}, A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} = R(A)
 Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T},N}) where {T,N} = R(A)
 
@@ -299,11 +306,11 @@ const VectorOfSimilarVectors{
 
 export VectorOfSimilarVectors
 
-VectorOfSimilarVectors{T}(parent::AbstractArray{U,2}) where {T,U} =
-    ArrayOfSimilarArrays{T,1,1}(parent)
+VectorOfSimilarVectors{T}(flatview::AbstractArray{U,2}) where {T,U} =
+    ArrayOfSimilarArrays{T,1,1}(flatview)
 
-VectorOfSimilarVectors(parent::AbstractArray{T,2}) where {T} =
-    VectorOfSimilarVectors{T}(parent)
+VectorOfSimilarVectors(flatview::AbstractArray{T,2}) where {T} =
+    VectorOfSimilarVectors{T}(flatview)
 
 VectorOfSimilarVectors{T}(A::AbstractVector{<:AbstractVector{U}}) where {T,U} =
     ArrayOfSimilarArrays{T,1}(A)
@@ -311,8 +318,8 @@ VectorOfSimilarVectors{T}(A::AbstractVector{<:AbstractVector{U}}) where {T,U} =
 VectorOfSimilarVectors(A::AbstractVector{<:AbstractVector{T}}) where {T} =
     VectorOfSimilarVectors{T}(A)
 
-Base.convert(R::Type{VectorOfSimilarVectors{T}}, parent::AbstractArray{U,2}) where {T,U} = R(parent)
-Base.convert(R::Type{VectorOfSimilarVectors}, parent::AbstractArray{T,2}) where {T} = R(parent)
+Base.convert(R::Type{VectorOfSimilarVectors{T}}, flatview::AbstractArray{U,2}) where {T,U} = R(flatview)
+Base.convert(R::Type{VectorOfSimilarVectors}, flatview::AbstractArray{T,2}) where {T} = R(flatview)
 Base.convert(R::Type{VectorOfSimilarVectors{T}}, A::AbstractVector{<:AbstractVector{U}}) where {T,U} = R(A)
 Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector{T}}) where {T} = R(A)
 
