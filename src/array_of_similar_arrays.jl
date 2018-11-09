@@ -261,38 +261,6 @@ Base.convert(R::Type{ArrayOfSimilarVectors{T}}, A::AbstractArray{<:AbstractVecto
 Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T},N}) where {T,N} = R(A)
 
 
-# @inline Base.IndexStyle(A::ArrayOfSimilarVectors) = IndexLinear()
-
-
-# Base.@propagate_inbounds function _linear_data_idxs(A::ArrayOfSimilarVectors, i::Integer)
-#     @boundscheck checkbounds(A, i)
-#     n_inner = _innerlength(A)
-#     i0 = firstindex(A.data)
-#     from = (i - i0) * n_inner + i0
-#     to  = from + n_inner - 1
-#     from:to
-# end
-
-
-# # Base.@propagate_inbounds function _linear_data_idxs(A::ArrayOfSimilarVectors, idxs::AbstractUnitRange{<:Integer})
-# #     @boundscheck checkbounds(A, idxs)
-# #     n_inner = _innerlength(A)
-# #     i0 = firstindex(A.data)
-# #     a = first(idxs)
-# #     b = last(idxs) + 1
-# #     from = (a - i0) * n_inner + i0
-# #     to  = (b - i0) * n_inner + i0 - 1
-# #     from:to
-# # end
-
-
-# Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarVectors{T}, i::Integer) where {T} =
-#     Base.view(A.data, _linear_data_idxs(A, i))
-# 
-# Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarVectors{T}, x::AbstractVector{U}, i::Integer) where {T,U} =
-#     setindex!(A.data, x, _linear_data_idxs(A, i))
-
-
 const VectorOfSimilarVectors{
     T,
     P<:AbstractArray{T,2}
@@ -319,9 +287,3 @@ Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector
 
 
 @inline Base.IndexStyle(A::VectorOfSimilarVectors) = IndexLinear()
-
-# Base.@propagate_inbounds Base.getindex(A::VectorOfSimilarVectors{T}, i::Integer) where {T} =
-#     Base.view(A.data, :, i)
-# 
-# Base.@propagate_inbounds Base.setindex!(A::VectorOfSimilarVectors{T}, x::AbstractVector{U}, i::Integer) where {T,U} =
-#     setindex!(A.data, x, :, i)
