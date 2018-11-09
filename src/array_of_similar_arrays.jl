@@ -40,7 +40,7 @@ implicitly have equal size/axes.
 
 Constructors:
 
-    ArrayOfSimilarArrays{N}(flatview::AbstractArray)
+    ArrayOfSimilarArrays{N}(flat_data::AbstractArray)
 
 The following type aliases are defined:
 
@@ -57,10 +57,10 @@ struct ArrayOfSimilarArrays{
 } <: AbstractArrayOfSimilarArrays{T,M,N}
     data::P
 
-    function ArrayOfSimilarArrays{T,M,N}(flatview::AbstractArray{U,L}) where {T,M,N,L,U}
-        size_inner, size_outer = split_tuple(size(flatview), Val{M}())
-        require_ndims(flatview, _add_vals(Val{M}(), Val{N}()))
-        conv_parent = _convert_elype(T, flatview)
+    function ArrayOfSimilarArrays{T,M,N}(flat_data::AbstractArray{U,L}) where {T,M,N,L,U}
+        size_inner, size_outer = split_tuple(size(flat_data), Val{M}())
+        require_ndims(flat_data, _add_vals(Val{M}(), Val{N}()))
+        conv_parent = _convert_elype(T, flat_data)
         P = typeof(conv_parent)
         new{T,M,N,L,P}(conv_parent)
     end
