@@ -45,3 +45,29 @@ export flatview
 flatview(A::AbstractArray) = A
 
 flatview(A::AbstractArray{<:AbstractArray}) = Base.Iterators.flatten(A)
+
+
+
+"""
+    innersize(A:AbstractArray{<:AbstractArray}, [dim])
+
+Returns the size of the element arrays of `A`. Fails if the element arrays
+are not of equal size.
+"""
+function innersize end
+export innersize
+
+function innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
+    s = if !isempty(A)
+        sz_A = size(first(A))
+        ntuple(i -> Int(sz_A[i]), Val(M))
+    else
+        ntuple(_ -> zero(Int), Val(M))
+    end
+
+    all(X -> size(X) == s, A) || throw(DimensionMismatch("Shape of element arrays of A is not equal, can't determine common shape"))
+    s
+end
+
+@inline innersize(A::AbstractArray{<:AbstractArray}, dim::Integer) =
+    innersize(A)[dim]

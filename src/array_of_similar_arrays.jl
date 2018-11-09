@@ -69,7 +69,7 @@ end
 export ArrayOfSimilarArrays
 
 function ArrayOfSimilarArrays{T,M,N}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
-    B = ArrayOfSimilarArrays{T,M,N}(Array{T}(undef, _size_inner(A)..., size(A)...))
+    B = ArrayOfSimilarArrays{T,M,N}(Array{T}(undef, innersize(A)..., size(A)...))
     copyto!(B, A)
 end
 
@@ -87,25 +87,13 @@ Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{
 Base.convert(R::Type{ArrayOfSimilarArrays}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = R(A)
 
 
-function _size_inner(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
-    s = if !isempty(A)
-        sz_A = size(A[1])
-        ntuple(i -> Int(sz_A[i]), Val(M))
-    else
-        ntuple(_ -> zero(Int), Val(M))
-    end
-
-    all(X -> size(X) == s, A) || throw(DimensionMismatch("Shape of element arrays of A is not equal, can't determine common shape"))
-    s
-end
-
-@inline function _size_inner(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+@inline function innersize(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     front_tuple(size(A.data), Val{M}())
 end
 
 
-@inline function _length_inner(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
-    prod(_size_inner(A))
+@inline function _innerlength(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
+    prod(innersize(A))
 end
 
 
@@ -144,7 +132,7 @@ end
 
 
 @inline function Base.resize!(A::ArrayOfSimilarArrays{T,M,N}, dims::Vararg{Integer,N}) where {T,M,N}
-    resize!(A.data, _size_inner(A)..., dims...)
+    resize!(A.data, innersize(A)..., dims...)
     A
 end
 
@@ -157,14 +145,14 @@ end
 
 
 function Base.resize!(dest::ArrayOfSimilarArrays{T,M,N}, src::ArrayOfSimilarArrays{U,M,N}) where {T,M,N,U}
-    _size_inner(dest) != _size_inner(src) && throw(DimensionMismatch("Can't append, shape of element arrays of source and dest are not equal"))
+    innersize(dest) != innersize(src) && throw(DimensionMismatch("Can't append, shape of element arrays of source and dest are not equal"))
     append!(dest.data, src.data)
     dest
 end
 
 
 function Base.append!(dest::ArrayOfSimilarArrays{T,M,N}, src::ArrayOfSimilarArrays{U,M,N}) where {T,M,N,U}
-    _size_inner(dest) != _size_inner(src) && throw(DimensionMismatch("Can't append, shape of element arrays of source and dest are not equal"))
+    innersize(dest) != innersize(src) && throw(DimensionMismatch("Can't append, shape of element arrays of source and dest are not equal"))
     append!(dest.data, src.data)
     dest
 end
@@ -174,7 +162,7 @@ Base.append!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractArr
 
 
 function Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::ArrayOfSimilarArrays{U,M,N}) where {T,M,N,U}
-    _size_inner(dest) != _size_inner(src) && throw(DimensionMismatch("Can't prepend, shape of element arrays of source and dest are not equal"))
+    innersize(dest) != innersize(src) && throw(DimensionMismatch("Can't prepend, shape of element arrays of source and dest are not equal"))
     prepend!(dest.data, src.data)
     dest
 end
@@ -278,7 +266,7 @@ Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T
 
 # Base.@propagate_inbounds function _linear_data_idxs(A::ArrayOfSimilarVectors, i::Integer)
 #     @boundscheck checkbounds(A, i)
-#     n_inner = _length_inner(A)
+#     n_inner = _innerlength(A)
 #     i0 = firstindex(A.data)
 #     from = (i - i0) * n_inner + i0
 #     to  = from + n_inner - 1
@@ -288,7 +276,7 @@ Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T
 
 # # Base.@propagate_inbounds function _linear_data_idxs(A::ArrayOfSimilarVectors, idxs::AbstractUnitRange{<:Integer})
 # #     @boundscheck checkbounds(A, idxs)
-# #     n_inner = _length_inner(A)
+# #     n_inner = _innerlength(A)
 # #     i0 = firstindex(A.data)
 # #     a = first(idxs)
 # #     b = last(idxs) + 1
