@@ -295,3 +295,41 @@ Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector
 
 
 @inline Base.IndexStyle(A::VectorOfSimilarVectors) = IndexLinear()
+
+
+"""
+    sum(X::VectorOfSimilarVectors)
+
+Compute the sum of the elements vectors of `X`. Equivalent to `sum` of
+`flatview(X)` along dimension 2.
+"""
+Main.sum(X::VectorOfSimilarVectors{<:Real}) = sum(flatview(X); dims = 2)
+
+
+"""
+    mean(X::VectorOfSimilarVectors)
+
+Compute the mean of the elements vectors of `X`. Equivalent to `mean` of
+`flatview(X)` along dimension 2.
+"""
+Statistics.mean(X::VectorOfSimilarVectors) = mean(flatview(X); dims = 2)
+
+
+"""
+    cov(X::VectorOfSimilarVectors; corrected::Bool = true)
+    cov(X::VectorOfSimilarVectors, w::AbstractVector; corrected::Bool = true)
+
+Compute the covariance matrix between the elements of the elements of `X`
+along `X`. Equivalent to `cov` of `flatview(X)` along dimension 2.
+"""
+Statistics.cov(X::VectorOfSimilarVectors; corrected::Bool = true) =
+    cov(flatview(X); dims = 2, corrected = corrected)
+
+
+"""
+    cor(X::VectorOfSimilarVectors)
+
+Compute the Pearson correlation matrix between the elements of the elements of
+ `X` along `X`. Equivalent to `cor` of `flatview(X)` along dimension 2.
+"""
+Statistics.cor(X::VectorOfSimilarVectors) = cor(flatview(X); dims = 2)
