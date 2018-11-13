@@ -49,6 +49,7 @@ export flatview
 
 """
     nestedview(A::AbstractArray{T,M+N}, M::Integer)
+    nestedview(A::AbstractArray{T,2})
 
 AbstractArray{<:AbstractArray{T,M},N}
 
@@ -60,6 +61,9 @@ export nestedview
 
 @inline nestedview(A::AbstractArray{T,L}, M::Integer) where {T,L} =
     ArrayOfSimilarArrays{T,M}(A)
+
+@inline nestedview(A::AbstractArray{T,2}) where {T} =
+    VectorOfSimilarVectors{T}(A)
 
 
 """
