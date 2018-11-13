@@ -9,10 +9,11 @@ differ in size). Internally, `VectorOfArrays` stores all elements of all
 arrays in a single flat vector. `M` must equal `N - 1`
 
 The `VectorOfArrays` itself supports `push!`, `unshift!`, etc., but the size
-of each individual array in the vector is fixed. `resize!` is not supported,
-as the size of all arrays in the vector must be defined. However, memory space
-for up to `n` arrays with a maximum size `s` can be reserved via
-`sizehint!(A::VectorOfArrays, n, s::Dims{N})`
+of each individual array in the vector is fixed. `resize!` can be used to
+shrink, but not to grow, as the size of the additional element arrays in the
+vector would be unknown. However, memory space for up to `n` arrays with a
+maximum size `s` can be reserved via
+`sizehint!(A::VectorOfArrays, n, s::Dims{N})`.
 
 Constructors:
 
@@ -216,6 +217,19 @@ Base.@propagate_inbounds function Base.setindex!(A::VectorOfArrays{T,N}, x::Abst
 end
 
 Base.length(A::VectorOfArrays) = length(A.kernel_size)
+
+
+@inline function Base.resize!(A::VectorOfArrays{T,N,M}, n::Integer) where {T,M,N}
+    old_n = length(A)
+    if n > old_n
+        throw(ArgumentError("Cannot resize VectorOfArrays from length $old_n to $n, can only shrink, not grow"))
+    elseif n < old_n
+        resize!(A.data, A.elem_ptr[n+1] - 1)
+        resize!(A.elem_ptr, n + 1)
+        resize!(A.kernel_size, n)
+    end
+    A
+end
 
 
 function Base.append!(A::VectorOfArrays{T,N}, B::VectorOfArrays{U,N}) where {T,N,U}
