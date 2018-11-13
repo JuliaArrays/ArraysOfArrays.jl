@@ -42,10 +42,24 @@ will fall back to `Base.Iterators.flatten`.
 function flatview end
 export flatview
 
-flatview(A::AbstractArray) = A
+@inline flatview(A::AbstractArray) = A
 
-flatview(A::AbstractArray{<:AbstractArray}) = Base.Iterators.flatten(A)
+@inline flatview(A::AbstractArray{<:AbstractArray}) = Base.Iterators.flatten(A)
 
+
+"""
+    nestedview(A::AbstractArray{T,M+N}, M::Integer)
+
+AbstractArray{<:AbstractArray{T,M},N}
+
+View array `A` in as an `M`-dimensional array of `N`-dimensional arrays by
+wrapping it into an [`ArrayOfSimilarArrays`](@ref).
+"""
+function nestedview end
+export nestedview
+
+@inline nestedview(A::AbstractArray{T,L}, M::Integer) where {T,L} =
+    ArrayOfSimilarArrays{T,M}(A)
 
 
 """

@@ -109,4 +109,11 @@ using UnsafeArrays
         test_from_nested(VectorOfSimilarVectors{Float32}, VectorOfSimilarVectors{Float32,Array{Float32,2}}, Val(1), Val(1))
         test_from_nested(VectorOfSimilarVectors, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
     end
+
+    @testset "examples" begin
+        A_flat = rand(2,3,4,5,6)
+        A_nested = nestedview(A_flat, 2)
+        A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
+        flatview(A_nested) === A_flat
+    end
 end
