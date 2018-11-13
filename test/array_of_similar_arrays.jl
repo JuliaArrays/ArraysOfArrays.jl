@@ -71,12 +71,14 @@ using UnsafeArrays
 
     @testset "construct/convert from flat array" begin
         test_from_flat(ArrayOfSimilarArrays{Float64,2,3}, ArrayOfSimilarArrays{Float64,2,3,5,Array{Float64,5}}, Val(5))
+        test_from_flat(ArrayOfSimilarArrays{Float64,2}, ArrayOfSimilarArrays{Float64,2,3,5,Array{Float64,5}}, Val(5))
         test_from_flat(ArrayOfSimilarVectors{Float64}, ArrayOfSimilarVectors{Float64,2,3,Array{Float64,3}}, Val(3))
         test_from_flat(VectorOfSimilarArrays{Float64}, VectorOfSimilarArrays{Float64,2,3,Array{Float64,3}}, Val(3))
         test_from_flat(VectorOfSimilarVectors{Float64}, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(2))
         test_from_flat(VectorOfSimilarVectors, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(2))
 
         test_from_flat(ArrayOfSimilarArrays{Float32,2,3}, ArrayOfSimilarArrays{Float32,2,3,5,Array{Float32,5}}, Val(5))
+        test_from_flat(ArrayOfSimilarArrays{Float32,2}, ArrayOfSimilarArrays{Float32,2,3,5,Array{Float32,5}}, Val(5))
         test_from_flat(ArrayOfSimilarVectors{Float32}, ArrayOfSimilarVectors{Float32,2,3,Array{Float32,3}}, Val(3))
         test_from_flat(VectorOfSimilarArrays{Float32}, VectorOfSimilarArrays{Float32,2,3,Array{Float32,3}}, Val(3))
         test_from_flat(VectorOfSimilarVectors{Float32}, VectorOfSimilarVectors{Float32,Array{Float32,2}}, Val(2))

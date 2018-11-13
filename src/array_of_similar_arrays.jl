@@ -40,7 +40,8 @@ implicitly have equal size/axes.
 
 Constructors:
 
-    ArrayOfSimilarArrays{N}(flat_data::AbstractArray)
+    ArrayOfSimilarArrays{T,M,N}(flat_data::AbstractArray)
+    ArrayOfSimilarArrays{T,M}(flat_data::AbstractArray)
 
 The following type aliases are defined:
 
@@ -64,6 +65,14 @@ struct ArrayOfSimilarArrays{
         P = typeof(conv_parent)
         new{T,M,N,L,P}(conv_parent)
     end
+
+    function ArrayOfSimilarArrays{T,M}(flat_data::AbstractArray{U,L}) where {T,M,L,U}
+        size_inner, size_outer = split_tuple(size(flat_data), Val{M}())
+        N = length(size_outer)
+        conv_parent = _convert_elype(T, flat_data)
+        P = typeof(conv_parent)
+        new{T,M,N,L,P}(conv_parent)
+    end
 end
 
 export ArrayOfSimilarArrays
@@ -81,6 +90,7 @@ ArrayOfSimilarArrays(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
 
 
 Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, flatview::AbstractArray{U,L}) where {T,M,N,L,U} = R(flatview)
+Base.convert(R::Type{ArrayOfSimilarArrays{T,M}}, flatview::AbstractArray{U,L}) where {T,M,L,U} = R(flatview)
 
 Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
 Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
