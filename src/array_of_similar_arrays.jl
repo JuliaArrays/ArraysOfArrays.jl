@@ -100,8 +100,8 @@ ArrayOfSimilarArrays(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
     ArrayOfSimilarArrays{T,M,N}(A)
 
 
-Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, flatview::AbstractArray{U,L}) where {T,M,N,L,U} = R(flatview)
-Base.convert(R::Type{ArrayOfSimilarArrays{T,M}}, flatview::AbstractArray{U,L}) where {T,M,L,U} = R(flatview)
+Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, flat_data::AbstractArray{U,L}) where {T,M,N,L,U} = R(flat_data)
+Base.convert(R::Type{ArrayOfSimilarArrays{T,M}}, flat_data::AbstractArray{U,L}) where {T,M,L,U} = R(flat_data)
 
 Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
 Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
@@ -211,11 +211,11 @@ const VectorOfSimilarArrays{
 
 export VectorOfSimilarArrays
 
-VectorOfSimilarArrays{T}(flatview::AbstractArray{U,L}) where {T,U,L} =
-    ArrayOfSimilarArrays{T,length(Base.front(size(flatview))),1}(flatview)
+VectorOfSimilarArrays{T}(flat_data::AbstractArray{U,L}) where {T,U,L} =
+    ArrayOfSimilarArrays{T,length(Base.front(size(flat_data))),1}(flat_data)
 
-VectorOfSimilarArrays(flatview::AbstractArray{T,L}) where {T,L} =
-    ArrayOfSimilarArrays{T,length(Base.front(size(flatview))),1}(flatview)
+VectorOfSimilarArrays(flat_data::AbstractArray{T,L}) where {T,L} =
+    ArrayOfSimilarArrays{T,length(Base.front(size(flat_data))),1}(flat_data)
 
 VectorOfSimilarArrays{T}(A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} =
     VectorOfSimilarArrays{T,M}(A)
@@ -224,8 +224,8 @@ VectorOfSimilarArrays(A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} =
     VectorOfSimilarArrays{T,M}(A)
 
 
-Base.convert(R::Type{VectorOfSimilarArrays{T}}, flatview::AbstractArray{U,L}) where {T,U,L} = R(flatview)
-Base.convert(R::Type{VectorOfSimilarArrays}, flatview::AbstractArray{T,L}) where {T,L} = R(flatview)
+Base.convert(R::Type{VectorOfSimilarArrays{T}}, flat_data::AbstractArray{U,L}) where {T,U,L} = R(flat_data)
+Base.convert(R::Type{VectorOfSimilarArrays}, flat_data::AbstractArray{T,L}) where {T,L} = R(flat_data)
 Base.convert(R::Type{VectorOfSimilarArrays{T}}, A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} = R(A)
 Base.convert(R::Type{VectorOfSimilarArrays}, A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} = R(A)
 
@@ -264,11 +264,11 @@ const ArrayOfSimilarVectors{
 
 export ArrayOfSimilarVectors
 
-ArrayOfSimilarVectors{T}(flatview::AbstractArray{U,L}) where {T,U,L} =
-    ArrayOfSimilarArrays{T,1,length(Base.front(size(flatview)))}(flatview)
+ArrayOfSimilarVectors{T}(flat_data::AbstractArray{U,L}) where {T,U,L} =
+    ArrayOfSimilarArrays{T,1,length(Base.front(size(flat_data)))}(flat_data)
 
-ArrayOfSimilarVectors(flatview::AbstractArray{T,L}) where {T,L} =
-    ArrayOfSimilarArrays{T,1,length(Base.front(size(flatview)))}(flatview)
+ArrayOfSimilarVectors(flat_data::AbstractArray{T,L}) where {T,L} =
+    ArrayOfSimilarArrays{T,1,length(Base.front(size(flat_data)))}(flat_data)
 
 ArrayOfSimilarVectors{T}(A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} =
     ArrayOfSimilarVectors{T,N}(A)
@@ -277,8 +277,8 @@ ArrayOfSimilarVectors(A::AbstractArray{<:AbstractVector{T},N}) where {T,N} =
     ArrayOfSimilarVectors{T,N}(A)
 
 
-Base.convert(R::Type{ArrayOfSimilarVectors{T}}, flatview::AbstractArray{U,L}) where {T,U,L} = R(flatview)
-Base.convert(R::Type{ArrayOfSimilarVectors}, flatview::AbstractArray{T,L}) where {T,L} = R(flatview)
+Base.convert(R::Type{ArrayOfSimilarVectors{T}}, flat_data::AbstractArray{U,L}) where {T,U,L} = R(flat_data)
+Base.convert(R::Type{ArrayOfSimilarVectors}, flat_data::AbstractArray{T,L}) where {T,L} = R(flat_data)
 Base.convert(R::Type{ArrayOfSimilarVectors{T}}, A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} = R(A)
 Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T},N}) where {T,N} = R(A)
 
@@ -290,11 +290,11 @@ const VectorOfSimilarVectors{
 
 export VectorOfSimilarVectors
 
-VectorOfSimilarVectors{T}(flatview::AbstractArray{U,2}) where {T,U} =
-    ArrayOfSimilarArrays{T,1,1}(flatview)
+VectorOfSimilarVectors{T}(flat_data::AbstractArray{U,2}) where {T,U} =
+    ArrayOfSimilarArrays{T,1,1}(flat_data)
 
-VectorOfSimilarVectors(flatview::AbstractArray{T,2}) where {T} =
-    VectorOfSimilarVectors{T}(flatview)
+VectorOfSimilarVectors(flat_data::AbstractArray{T,2}) where {T} =
+    VectorOfSimilarVectors{T}(flat_data)
 
 VectorOfSimilarVectors{T}(A::AbstractVector{<:AbstractVector{U}}) where {T,U} =
     ArrayOfSimilarArrays{T,1}(A)
@@ -302,8 +302,8 @@ VectorOfSimilarVectors{T}(A::AbstractVector{<:AbstractVector{U}}) where {T,U} =
 VectorOfSimilarVectors(A::AbstractVector{<:AbstractVector{T}}) where {T} =
     VectorOfSimilarVectors{T}(A)
 
-Base.convert(R::Type{VectorOfSimilarVectors{T}}, flatview::AbstractArray{U,2}) where {T,U} = R(flatview)
-Base.convert(R::Type{VectorOfSimilarVectors}, flatview::AbstractArray{T,2}) where {T} = R(flatview)
+Base.convert(R::Type{VectorOfSimilarVectors{T}}, flat_data::AbstractArray{U,2}) where {T,U} = R(flat_data)
+Base.convert(R::Type{VectorOfSimilarVectors}, flat_data::AbstractArray{T,2}) where {T} = R(flat_data)
 Base.convert(R::Type{VectorOfSimilarVectors{T}}, A::AbstractVector{<:AbstractVector{U}}) where {T,U} = R(A)
 Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector{T}}) where {T} = R(A)
 
