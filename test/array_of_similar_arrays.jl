@@ -113,7 +113,20 @@ using UnsafeArrays
     @testset "examples" begin
         A_flat = rand(2,3,4,5,6)
         A_nested = nestedview(A_flat, 2)
-        A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
-        flatview(A_nested) === A_flat
+        @test A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
+        @test flatview(A_nested) === A_flat
+
+        # -------------------------------------------------------------------
+
+        A_nested = nestedview(ElasticArray{Float64}(undef, 2, 3, 0), 2)
+
+        for i in 1:4
+            push!(A_nested, rand(2, 3))
+        end
+        @test size(flatview(A_nested)) == (2, 3, 4)
+
+        resize!(A_nested, 6)
+        @test size(flatview(A_nested)) == (2, 3, 6)
+
     end
 end
