@@ -5,14 +5,14 @@
 [![Codecov](https://codecov.io/gh/oschulz/ArraysOfArrays.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/oschulz/ArraysOfArrays.jl)
 
 
-A Julia package for efficient storage of nested arrays.
+A Julia package for efficient storage and handling of nested arrays.
 
 ArraysOfArrays provides two different types of nested arrays: `ArrayOfSimilarArrays` and `VectorOfArrays`.
 
 
 ## ArrayOfSimilarArrays
 
-An `ArrayOfSimilarArrays` offers duality of viewing the same data as both a flat multi-dimensional array and as an array of equally-sized arrays.
+An `ArrayOfSimilarArrays` offers duality of viewing the same data as both a flat multi-dimensional array and as an array of equally-sized arrays:
 
 ```julia
 A_flat = rand(2,3,4,5,6)
@@ -72,7 +72,8 @@ There is a full duality between the nested and the flat view of the data. `A_fla
 
 `AbstractVectorOfSimilarArrays` supports the functions `sum`, `mean` and `var`, `AbstractVectorOfSimilarVectors` additionally support `cov` and `cor`.
 
-Methods for these function are defined both without and with weights (via `StatsBase.AbstractWeights`). Because of this, `ArraysOfArrays` currently requires `StatsBase`. It's possible that this requirement can be dropped in the future, though (see JuliaLang/julia#29974).
+Methods for these function are defined both without and with weights (via `StatsBase.AbstractWeights`). Because of this, `ArraysOfArrays` currently requires `StatsBase`. It's possible that this requirement can be dropped in the future, though (see
+[Julia issue #29974](https://github.com/JuliaLang/julia/issues/29974)).
 
 ## VectorOfArrays
 
