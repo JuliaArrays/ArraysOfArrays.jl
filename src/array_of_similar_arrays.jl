@@ -312,38 +312,63 @@ Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector
 
 
 """
-    sum(X::VectorOfSimilarVectors)
+    sum(X::AbstractVectorOfSimilarArrays)
+    sum(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights)
 
 Compute the sum of the elements vectors of `X`. Equivalent to `sum` of
-`flatview(X)` along dimension 2.
+`flatview(X)` along the last dimension.
 """
-Main.sum(X::VectorOfSimilarVectors{<:Real}) = sum(flatview(X); dims = 2)
+Base.sum(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} = sum(flatview(X); dims = M + 1)
+Base.sum(X::AbstractVectorOfSimilarArrays{T,M}, w::StatsBase.AbstractWeights) where {T,M} = sum(flatview(X), w, M + 1)
 
 
 """
-    mean(X::VectorOfSimilarVectors)
+    mean(X::AbstractVectorOfSimilarArrays)
+    mean(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights)
 
 Compute the mean of the elements vectors of `X`. Equivalent to `mean` of
-`flatview(X)` along dimension 2.
+`flatview(X)` along the last dimension.
 """
-Statistics.mean(X::VectorOfSimilarVectors) = mean(flatview(X); dims = 2)
+Statistics.mean(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} =
+    mean(flatview(X); dims = M + 1)
+Statistics.mean(X::AbstractVectorOfSimilarArrays{T,M}, w::StatsBase.AbstractWeights) where {T,M} =
+    mean(flatview(X), w, M + 1)
 
 
 """
-    cov(X::VectorOfSimilarVectors; corrected::Bool = true)
-    cov(X::VectorOfSimilarVectors, w::AbstractVector; corrected::Bool = true)
+    var(X::AbstractVectorOfSimilarArrays; corrected::Bool = true)
+    var(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights; corrected::Bool = true)
+
+Compute the sample variance of the elements vectors of `X`. Equivalent to
+`var` of `flatview(X)` along the last dimension.
+"""
+Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true) where {T,M} =
+    var(flatview(X); dims = M + 1, corrected = corrected)
+Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}, w::StatsBase.AbstractWeights; corrected::Bool = true) where {T,M} =
+    var(flatview(X), w, M + 1; corrected = corrected)
+
+
+"""
+    cov(X::AbstractVectorOfSimilarVectors; corrected::Bool = true)
+    cov(X::AbstractVectorOfSimilarVectors, w::StatsBase.AbstractWeights; corrected::Bool = true)
 
 Compute the covariance matrix between the elements of the elements of `X`
 along `X`. Equivalent to `cov` of `flatview(X)` along dimension 2.
 """
-Statistics.cov(X::VectorOfSimilarVectors; corrected::Bool = true) =
+Statistics.cov(X::AbstractVectorOfSimilarVectors; corrected::Bool = true) =
     cov(flatview(X); dims = 2, corrected = corrected)
+Statistics.cov(X::AbstractVectorOfSimilarVectors, w::StatsBase.AbstractWeights; corrected::Bool = true) =
+    cov(flatview(X), w, 2; corrected = corrected)
 
 
 """
-    cor(X::VectorOfSimilarVectors)
+    cor(X::AbstractVectorOfSimilarVectors)
+    cor(X::AbstractVectorOfSimilarVectors, w::StatsBase.AbstractWeights)
 
 Compute the Pearson correlation matrix between the elements of the elements of
  `X` along `X`. Equivalent to `cor` of `flatview(X)` along dimension 2.
 """
-Statistics.cor(X::VectorOfSimilarVectors) = cor(flatview(X); dims = 2)
+Statistics.cor(X::AbstractVectorOfSimilarVectors) =
+    cor(flatview(X); dims = 2)
+Statistics.cor(X::AbstractVectorOfSimilarVectors, w::StatsBase.AbstractWeights) =
+    cor(flatview(X), w, 2)
