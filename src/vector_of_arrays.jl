@@ -17,7 +17,7 @@ maximum size `s` can be reserved via
 
 Constructors:
 
-```
+```julia
 VectorOfArrays{T, N}()
 
 VectorOfArrays(

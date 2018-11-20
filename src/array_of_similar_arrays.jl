@@ -57,10 +57,10 @@ and the wrapped flat array can be accessed using [`flatview`](@ref)
 afterwards:
 
 ```julia
-    A_flat = rand(2,3,4,5,6)
-    A_nested = nestedview(A_flat, 2)
-    A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
-    flatview(A_nested) === A_flat
+A_flat = rand(2,3,4,5,6)
+A_nested = nestedview(A_flat, 2)
+A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
+flatview(A_nested) === A_flat
 ```
 """
 struct ArrayOfSimilarArrays{
