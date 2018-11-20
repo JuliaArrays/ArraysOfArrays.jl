@@ -52,7 +52,7 @@ The following type aliases are defined:
 `VectorOfSimilarArrays` supports `push!()`, etc., provided the underlying
 array supports resizing of it's last dimension (e.g. an `ElasticArray`).
 
-The nested array can also be created using the function [`nestedview`](@doc)
+The nested array can also be created using the function [`nestedview`](@ref)
 and the wrapped flat array can be accessed using [`flatview`](@ref)
 afterwards:
 
