@@ -85,6 +85,7 @@ using UnsafeArrays
         test_from_flat(VectorOfSimilarVectors{Float32}, VectorOfSimilarVectors{Float32,Array{Float32,2}}, Val(2))
     end
 
+
     @testset "construct/convert from nested arrays" begin
         test_from_nested(ArrayOfSimilarArrays, ArrayOfSimilarArrays{Float64,2,3,5,Array{Float64,5}}, Val(2), Val(3))
         test_from_nested(ArrayOfSimilarArrays{Float64,2,3}, ArrayOfSimilarArrays{Float64,2,3,5,Array{Float64,5}}, Val(2), Val(3))
@@ -109,6 +110,69 @@ using UnsafeArrays
         test_from_nested(VectorOfSimilarVectors{Float32}, VectorOfSimilarVectors{Float32,Array{Float32,2}}, Val(1), Val(1))
         test_from_nested(VectorOfSimilarVectors, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
     end
+
+    @testset "flatview" begin
+        A = rand_nested_similar_arrays(Val(3), Val(2))
+        B = ArrayOfSimilarArrays(A)
+        @inferred(flatview(B))[:] == collect(flatview(A))
+    end
+
+
+    @testset "deepgetindex" begin
+        A = rand_nested_similar_arrays(Val(3), Val(2))
+        B = ArrayOfSimilarArrays(A)
+
+        @test deepgetindex(A, 3, 4, 2, 1, 2) == @inferred deepgetindex(B, 3, 4, 2, 1, 2)
+        @test deepgetindex(A, 2:3, 4, 2, 1, 2) == @inferred deepgetindex(B, 2:3, 4, 2, 1, 2)
+        @test deepgetindex(A, 2:3, 2:4, 2, 1, 2) == @inferred deepgetindex(B, 2:3, 2:4, 2, 1, 2)
+        @test deepgetindex(A, 2, 4, :, 1, 2) == @inferred deepgetindex(B, 2, 4, :, 1, 2)
+        @test deepgetindex(A, 2, 4, :, 1, 1:2) == @inferred deepgetindex(B, 2, 4, :, 1, 1:2)
+        @test deepgetindex(A, 2:3, 4, :, 1, 2) == @inferred deepgetindex(B, 2:3, 4, :, 1, 2)
+        @test deepgetindex(A, 2:3, 4, :, 1, 1:2) == @inferred deepgetindex(B, 2:3, 4, :, 1, 1:2)
+    end
+
+
+    @testset "deepsetindex!" begin
+        function testdata()
+            A = rand_nested_similar_arrays(Val(3), Val(2))
+            B = ArrayOfSimilarArrays(A)
+            A, B
+        end
+
+        A, B = testdata()
+        @test deepsetindex!(A, 42, 3, 4, 2, 1, 2) == @inferred deepsetindex!(B, 42, 3, 4, 2, 1, 2)
+        @test deepgetindex(B, 3, 4, 2, 1, 2) == 42
+
+        A, B = testdata()
+        X1 = rand(2)
+        @test deepsetindex!(A, X1, 2:3, 4, 2, 1, 2) == @inferred deepsetindex!(B, X1, 2:3, 4, 2, 1, 2)
+        @test deepgetindex(B, 2:3, 4, 2, 1, 2) == X1
+
+        A, B = testdata()
+        X2 = rand(2,2)
+        @test deepsetindex!(A, X2, 2, 4, :, 1, 1:2) == @inferred deepsetindex!(B, X2, 2, 4, :, 1, 1:2)
+        @test deepgetindex(B, 2, 4, :, 1, 1:2) == X2
+
+        A, B = testdata()
+        X3 = [rand(2,2), rand(2,2)]
+        @test deepsetindex!(A, X3, 2:3, 4, :, 1, 1:2) == @inferred deepsetindex!(B, X3, 2:3, 4, :, 1, 1:2)
+        @test deepgetindex(B, 2:3, 4, :, 1, 1:2) == X3
+    end
+
+
+    @testset "deepview" begin
+        A = rand_nested_similar_arrays(Val(3), Val(2))
+        B = ArrayOfSimilarArrays(A)
+
+        @test deepview(A, 3, 4, 2, 1, 2) == @inferred deepview(B, 3, 4, 2, 1, 2)
+        @test deepgetindex(A, 2:3, 4, 2, 1, 2) == @inferred deepview(B, 2:3, 4, 2, 1, 2)
+        @test deepgetindex(A, 2:3, 2:4, 2, 1, 2) == @inferred deepview(B, 2:3, 2:4, 2, 1, 2)
+        @test deepview(A, 2, 4, :, 1, 2) == @inferred deepview(B, 2, 4, :, 1, 2)
+        @test deepview(A, 2, 4, :, 1, 1:2) == @inferred deepview(B, 2, 4, :, 1, 1:2)
+        @test deepview(A, 2:3, 4, :, 1, 2) == @inferred deepview(B, 2:3, 4, :, 1, 2)
+        @test deepview(A, 2:3, 4, :, 1, 1:2) == @inferred deepview(B, 2:3, 4, :, 1, 1:2)
+    end
+
 
     @testset "examples" begin
         A_flat = rand(2,3,4,5,6)

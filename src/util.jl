@@ -17,14 +17,17 @@ end
 Base.@pure _ncolons(::Val{N}) where N = ntuple(_ -> Colon(), Val{N}())
 
 
-Base.@propagate_inbounds front_tuple(x::NTuple{N}, ::Val{M}) where {N,M} =
+Base.@propagate_inbounds front_tuple(x::NTuple{N,Any}, ::Val{M}) where {N,M} =
     Base.ntuple(i -> x[i], Val{M}())
 
-Base.@propagate_inbounds back_tuple(x::NTuple{N}, ::Val{M}) where {N,M} =
+Base.@propagate_inbounds back_tuple(x::NTuple{N,Any}, ::Val{M}) where {N,M} =
     Base.ntuple(i -> x[i + N - M], Val{M}())
 
-Base.@propagate_inbounds split_tuple(x::NTuple{N}, ::Val{M}) where {N,M} =
+Base.@propagate_inbounds split_tuple(x::NTuple{N,Any}, ::Val{M}) where {N,M} =
     (front_tuple(x, Val{M}()), back_tuple(x, Val{N - M}()))
+
+Base.@propagate_inbounds swap_front_back_tuple(x::NTuple{N,Any}, ::Val{M}) where {N,M} =
+    (back_tuple(x, Val{N - M}())..., front_tuple(x, Val{M}())...)
 
 
 _convert_elype(::Type{T}, A::AbstractArray{T}) where {T} = A

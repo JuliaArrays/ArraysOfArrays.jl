@@ -204,6 +204,58 @@ end
 
 
 
+Base.@pure _result_is_nested(idxs_outer::Tuple, idxs_inner::Tuple) =
+    Val{!(Base.index_dimsum(idxs_outer...) isa Tuple{}) && !(Base.index_dimsum(idxs_inner...) isa Tuple{})}()
+
+Base.@pure ndims_after_getindex(idxs::Tuple) = Val{length(Base.index_dimsum(idxs...))}()
+
+
+Base.@propagate_inbounds function deepgetindex(A::ArrayOfSimilarArrays{T,M,N,L}, idxs::Vararg{Any,L}) where {T,M,N,L}
+    idxs_outer, idxs_inner = split_tuple(idxs, Val{N}())
+    nested = _result_is_nested(idxs_outer, idxs_inner)
+    _deepgetindex_impl_aosa(A, idxs_outer, idxs_inner, nested)
+end
+
+Base.@propagate_inbounds _deepgetindex_impl_aosa(A::ArrayOfSimilarArrays, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{false}) =
+    getindex(A.data, idxs_inner..., idxs_outer...)
+
+Base.@propagate_inbounds function _deepgetindex_impl_aosa(A::ArrayOfSimilarArrays, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{true})
+    new_data = getindex(A.data, idxs_inner..., idxs_outer...)
+    nestedview(new_data, ndims_after_getindex(idxs_inner))
+end
+
+
+Base.@propagate_inbounds function deepsetindex!(A::ArrayOfSimilarArrays{T,M,N,L}, x, idxs::Vararg{Any,L}) where {T,M,N,L}
+    idxs_outer, idxs_inner = split_tuple(idxs, Val{N}())
+    _deepsetindex_impl_aosa!(A, x, idxs_outer, idxs_inner, _result_is_nested(idxs_outer, idxs_inner))
+    A
+end
+
+Base.@propagate_inbounds _deepsetindex_impl_aosa!(A::ArrayOfSimilarArrays, x, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{false}) =
+    setindex!(A.data, x, idxs_inner..., idxs_outer...)
+
+Base.@propagate_inbounds _deepsetindex_impl_aosa!(A::ArrayOfSimilarArrays, x, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{true}) =
+    _deepsetindex_impl!(A, x, idxs_outer, idxs_inner)
+
+# TODO: Specialized method _deepsetindex_impl_aosa!(A::ArrayOfSimilarArrays, x::ArrayOfSimilarArrays, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{true}) =
+
+
+Base.@propagate_inbounds function deepview(A::ArrayOfSimilarArrays{T,M,N,L}, idxs::Vararg{Any,L}) where {T,M,N,L}
+    idxs_outer, idxs_inner = split_tuple(idxs, Val{N}())
+    nested = _result_is_nested(idxs_outer, idxs_inner)
+    _deepview_impl_aosa(A, idxs_outer, idxs_inner, nested)
+end
+
+Base.@propagate_inbounds _deepview_impl_aosa(A::ArrayOfSimilarArrays, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{false}) =
+    view(A.data, idxs_inner..., idxs_outer...)
+
+Base.@propagate_inbounds function _deepview_impl_aosa(A::ArrayOfSimilarArrays, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{true})
+    new_data = view(A.data, idxs_inner..., idxs_outer...)
+    nestedview(new_data, ndims_after_getindex(idxs_inner))
+end
+
+
+
 const VectorOfSimilarArrays{
     T, M, L,
     P<:AbstractArray{T,L}
