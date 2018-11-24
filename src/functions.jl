@@ -62,6 +62,9 @@ export nestedview
 @inline nestedview(A::AbstractArray{T,L}, M::Integer) where {T,L} =
     ArrayOfSimilarArrays{T,M}(A)
 
+@inline nestedview(A::AbstractArray{T,L}, ::Val{M}) where {T,L,M} =
+    ArrayOfSimilarArrays{T,M}(A)
+
 @inline nestedview(A::AbstractArray{T,2}) where {T} =
     VectorOfSimilarVectors{T}(A)
 
