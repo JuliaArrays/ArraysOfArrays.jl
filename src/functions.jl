@@ -198,3 +198,29 @@ Base.@propagate_inbounds _deepview_impl(A::AbstractArray{<:AbstractArray}, idxs_
     _deepview_tupled.(view(A, idxs_outer...), (idxs_inner,))
 
 Base.@propagate_inbounds _deepview_tupled(A::AbstractArray, idxs::Tuple) = deepview(A, idxs...)
+
+
+"""
+    abstract_nestedarray_type(T_inner::Type, ::Val{ndims_tuple})
+
+Return the type of nested `AbstractArray`s. `T_inner` specifies the element
+type of the innermost layer of arrays, `ndims_tuple` specifies the
+dimensionality of each nesting layer (outer arrays first).
+
+If `ndims_tuple` is empty, the returns is the (typically scalar) type
+`T_inner` itself.
+"""
+function abstract_nestedarray_type end
+export abstract_nestedarray_type
+
+
+Base.@pure function abstract_nestedarray_type(::Type{T_inner}, outer::Val{ndims_tuple}) where {T_inner,ndims_tuple}
+    _abstract_nestedarray_type_impl(T_inner, ndims_tuple...)
+end
+
+Base.@pure _abstract_nestedarray_type_impl(::Type{T_inner}) where {T_inner} = T_inner
+
+Base.@pure _abstract_nestedarray_type_impl(::Type{T_inner}, N) where {T_inner} = AbstractArray{T_inner, N}
+
+Base.@pure _abstract_nestedarray_type_impl(::Type{T_inner}, N, M, ndims_tuple...) where {T_inner} =
+    AbstractArray{<:_abstract_nestedarray_type_impl(T_inner, M, ndims_tuple...), N}

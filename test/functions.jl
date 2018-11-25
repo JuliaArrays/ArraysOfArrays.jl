@@ -62,4 +62,12 @@ using Test
         @test_throws MethodError deepview(B, 6)
         @test_throws MethodError deepview(B, 2, 3)
     end
+
+
+    @testset "abstract_nestedarray_type" begin
+        @test @inferred(abstract_nestedarray_type(Int, Val(()))) == Int
+        @test @inferred(abstract_nestedarray_type(Int, Val((2,)))) == AbstractArray{Int, 2}
+        @test @inferred(abstract_nestedarray_type(Float32, Val((2,3,4)))) ==
+            AbstractArray{<:AbstractArray{<:AbstractArray{Float32, 4}, 3}, 2}
+    end
 end
