@@ -189,7 +189,7 @@ UnsafeArrays.unsafe_uview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} =
     ArrayOfSimilarArrays{T,M,N}(uview(A.data))
 
 
-function nestedmap2(f::Base.Callable, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+function innermap(f::Base.Callable, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     new_data = map(f, A.data)
     U = eltype(new_data)
     ArrayOfSimilarArrays{U,M,N}(new_data)

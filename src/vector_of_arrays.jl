@@ -318,7 +318,7 @@ function UnsafeArrays.uview(A::VectorOfArrays)
 end
 
 
-function nestedmap2(f::Base.Callable, A::VectorOfArrays)
+function innermap(f::Base.Callable, A::VectorOfArrays)
     new_data = map(f, A.data)
     VectorOfArrays(new_data, A.elem_ptr, A.kernel_size, simple_consistency_checks)
 end

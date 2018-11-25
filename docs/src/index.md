@@ -3,7 +3,7 @@
 A Julia package for efficient storage and handling of nested arrays. ArraysOfArrays provides two different types of nested arrays: [`ArrayOfSimilarArrays`](@ref section_ArrayOfSimilarArrays) and [`VectorOfArrays`](@ref section_VectorOfArrays).
 
 This package also exports the following new functions that are applicable to nested arrays in general:
-[`flatview`](@ref), [`nestedview`](@ref), [`innersize`](@ref), [`deepgetindex`](@ref), [`deepsetindex!`](@ref), [`deepview`](@ref), [`deepmap`](@ref) and [`nestedmap2`](@ref).
+[`flatview`](@ref), [`nestedview`](@ref), [`innersize`](@ref), [`deepgetindex`](@ref), [`deepsetindex!`](@ref), [`deepview`](@ref), [`deepmap`](@ref) and [`innermap`](@ref).
 
 
 ## [ArrayOfSimilarArrays](@id section_ArrayOfSimilarArrays)

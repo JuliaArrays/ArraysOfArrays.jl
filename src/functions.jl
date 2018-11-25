@@ -2,14 +2,14 @@
 
 
 """
-    nestedmap2(f::Base.Callable, A::AbstractArray{<:AbstractArray})
+    innermap(f::Base.Callable, A::AbstractArray{<:AbstractArray})
 
 Nested `map` at depth 2. Equivalent to `map(X -> map(f, X) A)`.
 """
-function nestedmap2 end
-export nestedmap2
+function innermap end
+export innermap
 
-nestedmap2(f::Base.Callable, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
+innermap(f::Base.Callable, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
     map(X -> map(f, X), A)
 
 
