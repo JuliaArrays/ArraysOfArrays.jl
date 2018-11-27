@@ -79,12 +79,12 @@ end
 
 export VectorOfArrays
 
-function VectorOfArrays{T,N}(A::AbstractVector{AbstractArray{U,N}}) where {T,N,U}
+function VectorOfArrays{T,N}(A::AbstractVector{<:AbstractArray{U,N}}) where {T,N,U}
     R = VectorOfArrays{T,N}()
     append!(R, A)
 end
 
-VectorOfArrays(A::AbstractVector{AbstractArray{T,N}}) where {T,N} = VectorOfArrays{T,N}(A)
+VectorOfArrays(A::AbstractVector{<:AbstractArray{T,N}}) where {T,N} = VectorOfArrays{T,N}(A)
 
 
 Base.convert(VA::Type{VectorOfArrays{T,N}}, A::AbstractVector{AbstractArray{U,N}}) where {T,N,U} = VA(A)
@@ -345,10 +345,10 @@ VectorOfVectors{T}() where {T} = VectorOfArrays{T,1}()
 VectorOfVectors(
     data::AbstractVector,
     elem_ptr::AbstractVector{Int},
-    checks::Function = consistency_checks
+    checks::Function = full_consistency_checks
 ) = VectorOfArrays(
     data,
     elem_ptr,
-    similar(A.elem_ptr, Dims{0}, size(elem_ptr, 1) - 1),
+    similar(elem_ptr, Dims{0}, size(elem_ptr, 1) - 1),
     checks
 )
