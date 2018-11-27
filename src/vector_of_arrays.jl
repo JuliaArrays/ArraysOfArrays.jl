@@ -330,7 +330,22 @@ function deepmap(f::Base.Callable, A::VectorOfArrays)
 end
 
 
+"""
+    VectorOfVectors{T,...} = VectorOfArrays{T,1,...}
 
+Constructors:
+
+```julia
+    VectorOfVectors{T}(A::AbstractVector{<:AbstractVector}) where {T}
+
+    VectorOfVectors(A::AbstractVector{<:AbstractVector})
+
+    VectorOfVectors(
+        data::AbstractVector, elem_ptr::AbstractVector{Int},
+        checks::Function = full_consistency_checks
+    )
+```
+"""
 const VectorOfVectors{
     T,
     VT<:AbstractVector{T},
@@ -341,6 +356,9 @@ const VectorOfVectors{
 export VectorOfVectors
 
 VectorOfVectors{T}() where {T} = VectorOfArrays{T,1}()
+
+VectorOfVectors{T}(A::AbstractVector{<:AbstractVector}) where {T} = VectorOfArrays{T,1}(A)
+VectorOfVectors(A::AbstractVector{<:AbstractVector}) = VectorOfArrays(A)
 
 VectorOfVectors(
     data::AbstractVector,
