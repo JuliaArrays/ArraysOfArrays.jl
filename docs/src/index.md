@@ -9,6 +9,7 @@ This package also defines and exports the following new functions applicable to 
 * [`deepgetindex`](@ref), [`deepsetindex!`](@ref) and [`deepview`](@ref) provide index-based access across multiple layers of nested arrays
 * [`innermap`](@ref) and [`deepmap`](@ref) apply a function to the elements of the inner (resp. innermost) arrays.
 * [`abstract_nestedarray_type`](@ref) returns the type of nested `AbstractArray`s for a given innermost element type with multiple layers of nesting.
+* [`consgroupedview`](@ref) computes a grouping of equal consecutive elements on a vector and applies it to another vector or (named or unnamed) tuple of vectors.
 
 
 ## [ArrayOfSimilarArrays](@id section_ArrayOfSimilarArrays)

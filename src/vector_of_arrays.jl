@@ -370,3 +370,115 @@ VectorOfVectors(
     similar(elem_ptr, Dims{0}, size(elem_ptr, 1) - 1),
     checks
 )
+
+
+
+"""
+    consgrouped_ptrs(A::AbstractVector)
+
+Compute an element pointer vector, suitable for creation of a
+[`VectorOfVectors`](@ref) that implies grouping equal consecutive entries of
+`A`.
+
+Example:
+
+```julia
+    A = [1, 1, 2, 3, 3, 2, 2, 2]
+    elem_ptr = consgrouped_ptrs(A)
+    first.(VectorOfVectors(A, elem_ptr)) == [1, 2, 3, 2]
+```
+consgrouped_ptrs
+Typically, `elem_ptr` will be used to apply the computed grouping to other
+data:
+
+```julia
+    B = [1, 2, 3, 4, 5, 6, 7, 8]
+    VectorOfVectors(B, elem_ptr) == [[1, 2], [3], [4, 5], [6, 7, 8]]
+```
+"""
+function consgrouped_ptrs end
+export consgrouped_ptrs
+
+function consgrouped_ptrs(A::AbstractVector)
+    elem_ptr = Vector{Int}()
+    idxs = eachindex(A)
+    push!(elem_ptr, first(idxs))
+    if !isempty(A)
+        prev_0 = A[first(idxs)]
+        prev::typeof(prev_0) = prev_0
+        @inbounds for i in (first(idxs) + 1):last(idxs)
+            curr = A[i]
+            if (curr != prev)
+                push!(elem_ptr, i)
+                prev = curr
+            end
+        end
+        push!(elem_ptr, last(idxs) + 1)
+    end
+    elem_ptr
+end
+
+
+"""
+    consgroupedview(source::AbstractVector, target)
+
+Compute a grouping of equal consecutive elements on `source` via
+[`consgrouped_ptrs`](@ref) and apply the grouping to target, resp. each
+element of `target`. `target` may be an vector or a named or unnamed tuple of
+vectors. The result is a [`VectorOfVectors`](@ref), resp. a tuple of such.
+
+Example:
+
+    A = [1, 1, 2, 3, 3, 2, 2, 2]
+    B = [1, 2, 3, 4, 5, 6, 7, 8]
+    consgroupedview(A, B) == [[1, 2], [3], [4, 5], [6, 7, 8]]
+
+`consgroupedview` plays well with columnar tables, too:
+
+```julia
+    using Tables, TypedTables
+    data = Table(
+        a = [1, 1, 2, 3, 3, 2, 2, 2],
+        b = [1, 2, 3, 4, 5, 6, 7, 8],
+        c = [1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8]
+    )
+
+    result = Table(consgroupedview(data.a, Tables.columns(data)))
+```
+
+will return
+
+```
+     a          b          c
+   ┌──────────────────────────────────────
+ 1 │ [1, 1]     [1, 2]     [1.1, 2.2]
+ 2 │ [2]        [3]        [3.3]
+ 3 │ [3, 3]     [4, 5]     [4.4, 5.5]
+ 4 │ [2, 2, 2]  [6, 7, 8]  [6.6, 7.7, 8.8]
+```
+
+without copying any data:
+
+```
+    flatview(result.a) === data.a
+    flatview(result.b) === data.b
+    flatview(result.c) === data.c
+```
+"""
+function consgroupedview end
+export consgroupedview
+
+function consgroupedview(source::AbstractVector, target::AbstractVector)
+    elem_ptr = consgrouped_ptrs(source)
+    VectorOfVectors(target, elem_ptr)
+end
+
+function consgroupedview(source::AbstractVector, target::NTuple{N,AbstractVector}) where {N}
+    elem_ptr = consgrouped_ptrs(source)
+    map(X -> VectorOfVectors(X, elem_ptr), target)
+end
+
+function consgroupedview(source::AbstractVector, target::NamedTuple{syms,<:NTuple{N,AbstractVector}}) where {syms,N}
+    elem_ptr = consgrouped_ptrs(source)
+    map(X -> VectorOfVectors(X, elem_ptr), target)
+end
