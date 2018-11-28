@@ -3,6 +3,8 @@
 using ArraysOfArrays
 using Test
 
+using StaticArrays
+
 
 @testset "functions" begin
     function gen_nested()
@@ -11,6 +13,15 @@ using Test
         A12 = [10 11; 12 13; 14 15]
         A22 = [16 17; 18 19]
         hcat(Array[A11, A21], Array[A12, A22])
+    end
+
+
+    @testset "flatview and nestedview" begin
+        A = [(@SArray randn(3, 2, 4)) for i in 1:2, j in 1:2]
+        @test @inferred(nestedview(flatview(A), Val(3))) == A
+
+        B = rand(3, 2, 4)
+        @test @inferred(nestedview(flatview(B), SVector{3})) == @inferred(nestedview(B, Val(1)))
     end
 
 

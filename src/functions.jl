@@ -57,6 +57,12 @@ AbstractArray{<:AbstractArray{T,M},N}
 
 View array `A` in as an `M`-dimensional array of `N`-dimensional arrays by
 wrapping it into an [`ArrayOfSimilarArrays`](@ref).
+
+It's also possible to use a `StaticVector` of length `S` as the type of the
+inner arrays via
+
+    nestedview(A::AbstractArray{T}, ::Type{StaticArrays.SVector{S}})
+    nestedview(A::AbstractArray{T}, ::Type{StaticArrays.SVector{S,T}})
 """
 function nestedview end
 export nestedview
