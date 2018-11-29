@@ -91,6 +91,28 @@ Base.convert(VA::Type{VectorOfArrays{T,N}}, A::AbstractVector{AbstractArray{U,N}
 Base.convert(VA::Type{VectorOfArrays}, A::AbstractVector{AbstractArray{T,N}}) where {T,N} = VA(A)
 
 
+"""
+    internal_element_ptr(A::VectorOfArrays)
+
+Returns the internal element pointer vector of `A`.
+
+Do *not* change modify the returned vector in any way, as this would break the
+inner consistency of `A`.
+
+Use with care, see [`element_ptr`](@ref) for a safe version of this function.
+"""
+internal_element_ptr(A::VectorOfArrays) = A.elem_ptr
+
+
+"""
+    element_ptr(A::VectorOfArrays)
+
+Returns a copy of the internal element pointer vector of `A`.
+"""
+element_ptr(A::VectorOfArrays) = deepcopy(internal_element_ptr(A))
+
+
+
 function full_consistency_checks(A::VectorOfArrays)
     simple_consistency_checks(A)
     all(eachindex(A.kernel_size)) do i
