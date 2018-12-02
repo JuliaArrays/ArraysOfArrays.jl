@@ -118,7 +118,7 @@ function full_consistency_checks(A::VectorOfArrays)
     all(eachindex(A.kernel_size)) do i
         len = A.elem_ptr[i+1] - A.elem_ptr[i]
         klen = prod(A.kernel_size[i])
-        len > 0 && (klen == 1 || mod(len, klen) == 0)
+        len >= 0 && (klen == 1 || mod(len, klen) == 0)
     end || throw(ArgumentError("VectorOfArrays inconsistent: Content of elem_ptr and kernel_size is inconsistent"))
     nothing
 end
