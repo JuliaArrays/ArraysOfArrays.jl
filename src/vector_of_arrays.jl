@@ -149,7 +149,8 @@ Base.@propagate_inbounds function _elem_range_size(A::VectorOfArrays, i::Integer
 
     ksize = A.kernel_size[i]
     klen = prod(ksize)
-    sz_lastdim = div(len, klen)
+    len_p, klen_p = promote(len, klen)
+    sz_lastdim = len == 0 ? len_p : div(len_p, klen_p)
     sz = (ksize..., sz_lastdim)
 
     (from:to, sz)
