@@ -5,11 +5,19 @@ using Test
 
 using UnsafeArrays
 
+using ArraysOfArrays: full_consistency_checks, append_elemptr!
+
 
 @testset "vector_of_arrays" begin
     ref_AoA1(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 5)][1:0] : [rand(T, rand(1:9)) for i in 1:n]
     ref_AoA2(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 4, 2)][1:0] : [rand(T, rand(1:4), rand(1:4)) for i in 1:n]
     ref_AoA3(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 3, 2, 4)][1:0] : [rand(T, rand(1:3), rand(1:3), rand(1:3)) for i in 1:n]
+
+    @testset "element pointer handling" begin
+        A = [2, 4, 5, 9]; B = [3, 6, 8]
+        @test @inferred(append_elemptr!(deepcopy(A), B)) == [2, 4, 5, 9, 12, 14]
+        @test @inferred(append_elemptr!([2], [5])) == [2]
+    end
 
 
     @testset "ctors" begin
@@ -62,6 +70,33 @@ using UnsafeArrays
         @test VectorOfArrays{Float64}(deepcopy(A3_empty)) == A3_empty
         @test @inferred(VectorOfArrays{Float64,3}(deepcopy(A3_empty))) isa VectorOfArrays{Float64,3,2,Array{Float64,1},Array{Int64,1},Array{Tuple{Int64,Int64},1}}
         @test VectorOfArrays{Float64,3}(deepcopy(A3_empty)) == A3_empty
+    end
+
+
+    @testset "append! and vcat" begin
+        A1 = ref_AoA3(Float32, 3); A2 = ref_AoA3(Float32, 0)
+        A3 = ref_AoA3(Float32, 4); A4 = ref_AoA3(Float64, 2)
+
+        B1 = VectorOfArrays(A1); B2 = VectorOfArrays(A2);
+        B3 = VectorOfArrays(A3); B4 = VectorOfArrays(A4);
+
+        @test @inferred(vcat(B1)) === B1
+        full_consistency_checks(vcat(B1))
+
+        @test @inferred(vcat(B1, B2)) isa VectorOfArrays
+        @test vcat(B1, B2) == vcat(A1, A2)
+        @test eltype(vcat(B1, B2)) == Array{Float32,3}
+        full_consistency_checks(vcat(B1, B2))
+
+        @test @inferred(vcat(B1, B3)) isa VectorOfArrays
+        @test vcat(B1, B3) == vcat(A1, A3)
+        @test eltype(vcat(B1, B3)) == Array{Float32,3}
+        full_consistency_checks(vcat(B1, B3))
+
+        @test @inferred(vcat(B1, B2, B3, B4)) isa VectorOfArrays
+        @test vcat(B1, B2, B3, B4) == vcat(A1, A2, A3, A4)
+        @test eltype(vcat(B1, B2, B3, B4)) == Array{Float64,3}
+        full_consistency_checks(vcat(B1, B2, B3, B4))
     end
 
 

@@ -263,26 +263,38 @@ Base.length(A::VectorOfArrays) = length(A.kernel_size)
 end
 
 
+function append_elemptr!(A::AbstractVector{<:Integer}, B::AbstractVector{<:Integer})
+    idxs_A = LinearIndices(A)
+    idxs_B = LinearIndices(B)
+    length_B = length(idxs_B)
+
+    A_from = last(idxs_A) + 1
+    A_to = A_from - 1 + length_B - 1
+    resize!(A, length(first(idxs_A):A_to))
+
+    B_from = first(idxs_B) + 1
+    B_to = last(idxs_B)
+
+    A_idxs_offs = A_from - B_from
+
+    checkindex(Bool, eachindex(B), B_from:B_to)
+    checkindex(Bool, eachindex(A), (B_from:B_to) .+ A_idxs_offs)
+    @inbounds begin
+        value_offset = A[A_from - 1] - B[B_from - 1]
+        @simd for i in B_from:B_to
+            A[i + A_idxs_offs] = B[i] + value_offset
+        end
+    end
+
+    A
+end
+
+
 function Base.append!(A::VectorOfArrays{T,N}, B::VectorOfArrays{U,N}) where {T,N,U}
     if !isempty(B)
-        # Implementation supports A === B
-
-        A_ep = A.elem_ptr
-        B_ep = B.elem_ptr
-        idxs_B = firstindex(B_ep):(lastindex(B_ep) - 1)
-        delta_ep_idx = lastindex(A_ep) + 1 - firstindex(B_ep)
-        delta_ep = last(A_ep) - first(B_ep)
-        resize!(A_ep, length(eachindex(A_ep)) + length(idxs_B))
-        @assert checkbounds(Bool, B_ep, idxs_B)
-        @assert checkbounds(Bool, A_ep, broadcast(+, idxs_B, delta_ep_idx))
-        @inbounds @simd for i_B in idxs_B
-            A_ep[i_B + delta_ep_idx] = B_ep[i_B + 1] + delta_ep
-        end
-
         append!(A.data, B.data)
+        append_elemptr!(A.elem_ptr, B.elem_ptr)
         append!(A.kernel_size, B.kernel_size)
-
-        simple_consistency_checks(A)
     end
     A
 end
@@ -307,6 +319,23 @@ function Base.append!(A::VectorOfArrays{T,N}, B::AbstractVector{<:AbstractArray{
         end
     end
     A
+end
+
+
+Base.vcat(V::VectorOfArrays) = V
+
+function Base.vcat(Vs::(VectorOfArrays{U,N} where U)...) where {N}
+    data = vcat(map(x -> x.data, Vs)...)
+
+    elem_ptr = similar(Vs[1].elem_ptr, 1)
+    elem_ptr[1] = firstindex(data)
+    @inbounds for i in eachindex(Vs)
+        append_elemptr!(elem_ptr, Vs[i].elem_ptr)
+    end
+
+    kernel_size = vcat(map(x -> x.kernel_size, Vs)...)
+
+    VectorOfArrays(data, elem_ptr, kernel_size, no_consistency_checks)
 end
 
 
