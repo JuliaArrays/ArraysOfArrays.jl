@@ -7,6 +7,64 @@ using UnsafeArrays
 
 
 @testset "vector_of_arrays" begin
+    ref_AoA1(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 5)][1:0] : [rand(T, rand(1:9)) for i in 1:n]
+    ref_AoA2(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 4, 2)][1:0] : [rand(T, rand(1:4), rand(1:4)) for i in 1:n]
+    ref_AoA3(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 3, 2, 4)][1:0] : [rand(T, rand(1:3), rand(1:3), rand(1:3)) for i in 1:n]
+
+
+    @testset "ctors" begin
+        A1 = ref_AoA1(Float32, 5)
+        @test @inferred(VectorOfArrays(deepcopy(A1))) isa VectorOfArrays{Float32,1,0,Array{Float32,1},Array{Int64,1},Array{Tuple{},1}}
+        @test VectorOfArrays(deepcopy(A1)) == A1
+        @test @inferred(VectorOfArrays{Float64}(deepcopy(A1))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int64,1},Array{Tuple{},1}}
+        @test VectorOfArrays{Float64}(deepcopy(A1)) == A1
+        @test @inferred(VectorOfArrays{Float64,1}(deepcopy(A1))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int64,1},Array{Tuple{},1}}
+        @test VectorOfArrays{Float64,1}(deepcopy(A1)) == A1
+
+        @test @inferred(VectorOfVectors(deepcopy(A1))) isa VectorOfArrays{Float32,1,0,Array{Float32,1},Array{Int64,1},Array{Tuple{},1}}
+        @test VectorOfVectors(deepcopy(A1)) == A1
+        @test @inferred(VectorOfVectors{Float64}(deepcopy(A1))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int64,1},Array{Tuple{},1}}
+        @test VectorOfVectors{Float64}(deepcopy(A1)) == A1
+
+        A1_empty = ref_AoA1(Float32, 0)
+        @test @inferred(VectorOfArrays(deepcopy(A1_empty))) isa VectorOfArrays{Float32,1,0,Array{Float32,1},Array{Int64,1},Array{Tuple{},1}}
+        @test VectorOfArrays(deepcopy(A1_empty)) == A1_empty
+        @test @inferred(VectorOfArrays{Float64}(deepcopy(A1_empty))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int64,1},Array{Tuple{},1}}
+        @test VectorOfArrays{Float64}(deepcopy(A1_empty)) == A1_empty
+        @test @inferred(VectorOfArrays{Float64,1}(deepcopy(A1_empty))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int64,1},Array{Tuple{},1}}
+        @test VectorOfArrays{Float64,1}(deepcopy(A1_empty)) == A1_empty
+
+        @test @inferred(VectorOfVectors(deepcopy(A1_empty))) isa VectorOfArrays{Float32,1,0,Array{Float32,1},Array{Int64,1},Array{Tuple{},1}}
+        @test VectorOfVectors(deepcopy(A1_empty)) == A1_empty
+        @test @inferred(VectorOfVectors{Float64}(deepcopy(A1_empty))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int64,1},Array{Tuple{},1}}
+        @test VectorOfVectors{Float64}(deepcopy(A1_empty)) == A1_empty
+
+        A2 = ref_AoA2(Float32, 4)
+        @test @inferred(VectorOfArrays(deepcopy(A2))) isa VectorOfArrays{Float32,2,1,Array{Float32,1},Array{Int64,1},Array{Tuple{Int64},1}}
+        @test VectorOfArrays(deepcopy(A2)) == A2
+        @test @inferred(VectorOfArrays{Float64}(deepcopy(A2))) isa VectorOfArrays{Float64,2,1,Array{Float64,1},Array{Int64,1},Array{Tuple{Int64},1}}
+        @test VectorOfArrays{Float64}(deepcopy(A2)) == A2
+        @test @inferred(VectorOfArrays{Float64,2}(deepcopy(A2))) isa VectorOfArrays{Float64,2,1,Array{Float64,1},Array{Int64,1},Array{Tuple{Int64},1}}
+        @test VectorOfArrays{Float64,2}(deepcopy(A2)) == A2
+
+        A3 = ref_AoA3(Float32, 3)
+        @test @inferred(VectorOfArrays(deepcopy(A3))) isa VectorOfArrays{Float32,3,2,Array{Float32,1},Array{Int64,1},Array{Tuple{Int64,Int64},1}}
+        @test VectorOfArrays(deepcopy(A3)) == A3
+        @test @inferred(VectorOfArrays{Float64}(deepcopy(A3))) isa VectorOfArrays{Float64,3,2,Array{Float64,1},Array{Int64,1},Array{Tuple{Int64,Int64},1}}
+        @test VectorOfArrays{Float64}(deepcopy(A3)) == A3
+        @test @inferred(VectorOfArrays{Float64,3}(deepcopy(A3))) isa VectorOfArrays{Float64,3,2,Array{Float64,1},Array{Int64,1},Array{Tuple{Int64,Int64},1}}
+        @test VectorOfArrays{Float64,3}(deepcopy(A3)) == A3
+
+        A3_empty = ref_AoA3(Float32, 0)
+        @test @inferred(VectorOfArrays(deepcopy(A3_empty))) isa VectorOfArrays{Float32,3,2,Array{Float32,1},Array{Int64,1},Array{Tuple{Int64,Int64},1}}
+        @test VectorOfArrays(deepcopy(A3_empty)) == A3_empty
+        @test @inferred(VectorOfArrays{Float64}(deepcopy(A3_empty))) isa VectorOfArrays{Float64,3,2,Array{Float64,1},Array{Int64,1},Array{Tuple{Int64,Int64},1}}
+        @test VectorOfArrays{Float64}(deepcopy(A3_empty)) == A3_empty
+        @test @inferred(VectorOfArrays{Float64,3}(deepcopy(A3_empty))) isa VectorOfArrays{Float64,3,2,Array{Float64,1},Array{Int64,1},Array{Tuple{Int64,Int64},1}}
+        @test VectorOfArrays{Float64,3}(deepcopy(A3_empty)) == A3_empty
+    end
+
+
     @testset "examples" begin
         VA = VectorOfArrays{Float64, 2}()
 

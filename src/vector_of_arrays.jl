@@ -18,7 +18,11 @@ maximum size `s` can be reserved via
 Constructors:
 
 ```julia
-VectorOfArrays{T, N}()
+VectorOfArrays{T,N}()
+
+VectorOfArrays(A::AbstractVector{<:AbstractArray})
+VectorOfArrays{T}(A::AbstractVector{<:AbstractArray})
+VectorOfArrays{T,N}(A::AbstractVector{<:AbstractArray})
 
 VectorOfArrays(
     data::AbstractVector,
@@ -31,9 +35,11 @@ VectorOfArrays(
 Other suitable values for `checks` are `ArraysOfArrays.simple_consistency_checks`
 and `ArraysOfArrays.no_consistency_checks`.
 
-The following type aliases are defined:
+[VectorOfVectors](@ref) is defined as an type alias:
 
-* `VectorOfVectors{T,VT,VI,VD} = VectorOfArrays{T,1,VT,VI,VD}`
+```julia
+`VectorOfVectors{T,VT,VI,VD} = VectorOfArrays{T,1,VT,VI,VD}`
+```
 """
 struct VectorOfArrays{
     T, N, M,
@@ -83,6 +89,8 @@ function VectorOfArrays{T,N}(A::AbstractVector{<:AbstractArray{U,N}}) where {T,N
     R = VectorOfArrays{T,N}()
     append!(R, A)
 end
+
+VectorOfArrays{T}(A::AbstractVector{<:AbstractArray{U,N}}) where {T,U,N} = VectorOfArrays{T,N}(A)
 
 VectorOfArrays(A::AbstractVector{<:AbstractArray{T,N}}) where {T,N} = VectorOfArrays{T,N}(A)
 
@@ -359,14 +367,15 @@ end
 Constructors:
 
 ```julia
-    VectorOfVectors{T}(A::AbstractVector{<:AbstractVector}) where {T}
+VectorOfVectors(A::AbstractVector{<:AbstractVector})
+VectorOfVectors{T}(A::AbstractVector{<:AbstractVector}) where {T}
 
-    VectorOfVectors(A::AbstractVector{<:AbstractVector})
+VectorOfVectors(
+    data::AbstractVector, elem_ptr::AbstractVector{Int},
+    checks::Function = full_consistency_checks
+)
 
-    VectorOfVectors(
-        data::AbstractVector, elem_ptr::AbstractVector{Int},
-        checks::Function = full_consistency_checks
-    )
+See also [VectorOfArrays](@ref).
 ```
 """
 const VectorOfVectors{
