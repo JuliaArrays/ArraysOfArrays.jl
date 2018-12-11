@@ -183,11 +183,17 @@ Base.size(A::VectorOfArrays) = size(A.kernel_size)
 Base.IndexStyle(A::VectorOfArrays) = IndexLinear()
 
 
+Base.@propagate_inbounds _reshape_dataview(dataview::AbstractArray, s::NTuple{1,Integer}) = dataview
+
+Base.@propagate_inbounds _reshape_dataview(dataview::AbstractArray, s::NTuple{N,Integer}) where {N} =
+    Base.__reshape((dataview, IndexStyle(dataview)), s)
+
+
 Base.@propagate_inbounds function Base.getindex(A::VectorOfArrays, i::Integer)
     @boundscheck checkbounds(A, i)
     r, s = _elem_range_size(A, i)
     dataview = view(A.data, r)
-    Base.__reshape((dataview, IndexStyle(dataview)), s)
+    _reshape_dataview(dataview, s)
 end
 
 
