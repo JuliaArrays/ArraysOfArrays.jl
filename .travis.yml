@@ -7,8 +7,8 @@ os:
   - osx
 
 julia:
-  - 0.7
   - 1.0
+  - 1.1
   - nightly
 
 ## uncomment the following lines to allow failures on nightly julia
