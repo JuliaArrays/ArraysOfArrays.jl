@@ -88,13 +88,19 @@ export innersize
 
 function innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
     s = if !isempty(A)
-        sz_A = size(first(A))
-        ntuple(i -> Int(sz_A[i]), Val(M))
+        let sz_A = size(first(A))
+            ntuple(i -> Int(sz_A[i]), Val(M))
+        end
     else
         ntuple(_ -> zero(Int), Val(M))
     end
 
-    all(X -> size(X) == s, A) || throw(DimensionMismatch("Shape of element arrays of A is not equal, can't determine common shape"))
+    let s = s
+        if any(X -> size(X) != s, A)
+            throw(DimensionMismatch("Shape of element arrays of A is not equal, can't determine common shape"))
+        end
+    end
+
     s
 end
 

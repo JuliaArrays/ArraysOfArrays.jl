@@ -25,6 +25,13 @@ using StaticArrays
     end
 
 
+    @testset "innersize" begin
+        @test @inferred(innersize([[1, 2, 3], [4, 5, 6]])) == (3,)
+        @test @inferred(innersize([[]])) == (0,)
+        @test_throws DimensionMismatch @inferred(innersize([[1, 2, 3], [4, 5]]))
+    end
+
+
     @testset "deepgetindex" begin
         A = gen_nested()
         @test @inferred(deepgetindex(A, 1, 2)) === A[1, 2]
