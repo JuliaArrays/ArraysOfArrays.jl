@@ -35,7 +35,7 @@ VectorOfArrays(
 Other suitable values for `checks` are `ArraysOfArrays.simple_consistency_checks`
 and `ArraysOfArrays.no_consistency_checks`.
 
-[VectorOfVectors](@ref) is defined as an type alias:
+`VectorOfVectors` is defined as an type alias:
 
 ```julia
 `VectorOfVectors{T,VT,VI,VD} = VectorOfArrays{T,1,VT,VI,VD}`
@@ -444,7 +444,7 @@ VectorOfVectors(
     consgrouped_ptrs(A::AbstractVector)
 
 Compute an element pointer vector, suitable for creation of a
-[`VectorOfVectors`](@ref) that implies grouping equal consecutive entries of
+`VectorOfVectors` that implies grouping equal consecutive entries of
 `A`.
 
 Example:
@@ -492,7 +492,7 @@ end
 Compute a grouping of equal consecutive elements on `source` via
 [`consgrouped_ptrs`](@ref) and apply the grouping to target, resp. each
 element of `target`. `target` may be an vector or a named or unnamed tuple of
-vectors. The result is a [`VectorOfVectors`](@ref), resp. a tuple of such.
+vectors. The result is a `VectorOfVectors`, resp. a tuple of such.
 
 Example:
 
