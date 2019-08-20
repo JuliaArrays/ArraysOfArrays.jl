@@ -111,6 +111,16 @@ using UnsafeArrays
         test_from_nested(VectorOfSimilarVectors, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
     end
 
+
+    @testset "similar and copyto!" begin
+        A = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
+        @test (@inferred copyto!((@inferred similar(A)), A)) == A
+
+        A = ArrayOfSimilarArrays{Float64,2}(rand_flat_array(Val(5)))
+        @test (@inferred copyto!((@inferred similar(A)), A)) == A
+    end
+
+
     @testset "flatview" begin
         A = rand_nested_similar_arrays(Val(3), Val(2))
         B = ArrayOfSimilarArrays(A)
