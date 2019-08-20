@@ -100,6 +100,16 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!
     end
 
 
+    @testset "copy" begin
+        A = ref_AoA3(Float32, 3);
+        B = VectorOfArrays(A);
+
+        @test typeof(@inferred copy(A)) == typeof(A)
+        @test copy(A) == A
+        @test copy(A) == B
+    end
+
+
     @testset "examples" begin
         VA = VectorOfArrays{Float64, 2}()
 

@@ -345,6 +345,11 @@ function Base.vcat(Vs::(VectorOfArrays{U,N} where U)...) where {N}
 end
 
 
+function Base.copy(V::VectorOfArrays)
+    VectorOfArrays(copy(V.data), copy(V.elem_ptr), copy(V.kernel_size), no_consistency_checks)
+end
+
+
 Base.@propagate_inbounds function Base.unsafe_view(A::VectorOfArrays, idxs::AbstractUnitRange{<:Integer})
     from = first(idxs)
     to = last(idxs)
