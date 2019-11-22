@@ -161,6 +161,7 @@ end
 function Base.similar(A::ArrayOfSimilarArrays{T,M,N}, ::Type{<:AbstractArray{U}}, dims::Dims) where {T,M,N,U}
     data = A.data
     size_inner, size_outer = split_tuple(size(data), Val{M}())
+    # ToDo: Don't use similar if data is an ElasticArray?
     ArrayOfSimilarArrays{T,M,N}(similar(data, U, size_inner..., dims...))
 end
 
@@ -312,6 +313,17 @@ end
 
 # Will need equivalent of resize! that resizes in front of data instead of in back:
 # popfirst!(V::ArrayOfSimilarArrays) = ...
+
+function Base.empty(A::VectorOfSimilarArrays{T,M}, ::Type{<:AbstractArray{U}}) where {T,M,U}
+    data = A.data
+    size_inner, size_outer = split_tuple(size(data), Val{1}())
+    empty_size_outer = map(x -> zero(x), size_outer)
+
+    # ToDo: Don't use similar if data is an ElasticArray?
+    VectorOfSimilarArrays{T,M}(similar(data, U, size_inner..., empty_size_outer...))
+end
+
+Base.empty(A::VectorOfSimilarArrays{T,M}) where {T,M} = empty(A, Array{T})
 
 
 

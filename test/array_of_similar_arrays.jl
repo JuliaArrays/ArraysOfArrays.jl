@@ -184,6 +184,14 @@ using UnsafeArrays
     end
 
 
+    @testset "empty" begin
+        A = [rand(2,3), rand(2,3), rand(2,3)]
+        B = ArrayOfSimilarArrays(A)
+        @test typeof(@inferred empty(B)) == typeof(B)
+        @test empty(A) == empty(B)
+    end
+
+
     @testset "examples" begin
         A_flat = rand(2,3,4,5,6)
         A_nested = nestedview(A_flat, 2)

@@ -379,6 +379,14 @@ function Base.push!(A::VectorOfArrays{T,N}, x::AbstractArray{U,N}) where {T,N,U}
 end
 
 
+function Base.empty(A::VectorOfArrays{T,N}) where {T,N}
+    empty_data = empty(A.data)
+    empty_elem_ptr = push!(empty(A.elem_ptr), firstindex(empty_data))
+    empty_kernel_size = empty(A.kernel_size)
+    VectorOfArrays(empty_data, empty_elem_ptr, empty_kernel_size, no_consistency_checks)
+end
+
+
 function UnsafeArrays.uview(A::VectorOfArrays)
     VectorOfArrays(
         uview(A.data),

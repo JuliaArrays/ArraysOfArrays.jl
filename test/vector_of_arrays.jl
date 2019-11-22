@@ -104,9 +104,18 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!
         A = ref_AoA3(Float32, 3);
         B = VectorOfArrays(A);
 
-        @test typeof(@inferred copy(A)) == typeof(A)
+        @test typeof(@inferred copy(B)) == typeof(B)
         @test copy(A) == A
         @test copy(A) == B
+    end
+
+
+    @testset "empty" begin
+        A = ref_AoA3(Float32, 3);
+        B = VectorOfArrays(A);
+
+        @test typeof(@inferred empty(B)) == typeof(B)
+        @test empty(A) == empty(B)
     end
 
 
