@@ -12,7 +12,7 @@ using StaticArrays
         A21 = [4 5 6; 7 8 9]
         A12 = [10 11; 12 13; 14 15]
         A22 = [16 17; 18 19]
-        hcat(Array[A11, A21], Array[A12, A22])
+        hcat([A11, A21], [A12, A22])
     end
 
 
