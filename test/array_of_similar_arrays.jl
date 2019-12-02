@@ -121,6 +121,13 @@ using UnsafeArrays
     end
 
 
+    @testset "deepcopy" begin
+        A = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
+        @test (@inferred deepcopy(A)) == A
+        @test typeof(deepcopy(A)) == typeof(A)
+    end
+
+
     @testset "flatview" begin
         A = rand_nested_similar_arrays(Val(3), Val(2))
         B = ArrayOfSimilarArrays(A)

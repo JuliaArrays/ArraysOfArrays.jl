@@ -166,6 +166,11 @@ function Base.similar(A::ArrayOfSimilarArrays{T,M,N}, ::Type{<:AbstractArray{U}}
 end
 
 
+function Base.deepcopy(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+    ArrayOfSimilarArrays{T,M,N}(deepcopy(A.data))
+end
+
+
 function Base.copyto!(dest::ArrayOfSimilarArrays{T,M,N}, src::ArrayOfSimilarArrays{U,M,N}) where {T,M,N,U}
     copyto!(dest.data, src.data)
     dest
