@@ -9,14 +9,15 @@ environment:
 platform:
   - x64 # 64-bit
 
-matrix:
-  allow_failures:
-    - julia_version: nightly
+#matrix:
+#  allow_failures:
+#    - julia_version: nightly
 
-#branches:
-#  only:
-#    - master
-#    - /release-.*/
+branches:
+  only:
+    - master
+    - dev
+    - /release-.*/
 
 notifications:
   - provider: Email
