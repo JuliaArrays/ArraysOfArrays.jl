@@ -26,5 +26,6 @@ makedocs(
 
 deploydocs(
     repo = "github.com/oschulz/ArraysOfArrays.jl.git",
-    forcepush = true
+    forcepush = true,
+    push_preview = true,
 )
