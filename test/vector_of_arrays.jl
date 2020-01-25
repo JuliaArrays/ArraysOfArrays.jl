@@ -97,6 +97,20 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!
         @test vcat(B1, B2, B3, B4) == vcat(A1, A2, A3, A4)
         @test eltype(vcat(B1, B2, B3, B4)) == Array{Float64,3}
         full_consistency_checks(vcat(B1, B2, B3, B4))
+
+        B1_copy = copy(B1); B3_copy = copy(B3)
+        append!(B1_copy, B3_copy)
+        @test B1_copy.data == vcat(B1.data, B3.data)
+
+    end
+
+    @testset "indexing" begin
+        V1 = VectorOfArrays(ref_AoA3(Float32, 3))
+        V2 = VectorOfArrays(ref_AoA3(Float32, 4))
+        V12 = vcat(V1, V2)
+        ind_style = IndexStyle(V12)
+        @test ind_style == IndexLinear()
+
     end
 
 
