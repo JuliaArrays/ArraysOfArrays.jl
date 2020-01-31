@@ -170,7 +170,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         @test VA_flat isa Vector{Float64}
 
         @test @inferred(uview(VA)) == VA
-
+        @test @inferred(Base.unsafe_view(VA, 1:size(VA)[1])) == VA
         # -------------------------------------------------------------------
 
 
