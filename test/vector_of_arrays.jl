@@ -5,7 +5,7 @@ using Test
 
 using UnsafeArrays
 
-using ArraysOfArrays: full_consistency_checks, append_elemptr!
+using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
 
 @testset "vector_of_arrays" begin
@@ -98,21 +98,44 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!
         @test eltype(vcat(B1, B2, B3, B4)) == Array{Float64,3}
         full_consistency_checks(vcat(B1, B2, B3, B4))
 
-        B1_copy = copy(B1); B3_copy = copy(B3)
+        B1_copy = @inferred(copy(B1)); B3_copy = @inferred(copy(B3))
         append!(B1_copy, B3_copy)
         @test B1_copy.data == vcat(B1.data, B3.data)
 
     end
 
     @testset "indexing" begin
-        V1 = VectorOfArrays(ref_AoA3(Float32, 3))
-        V2 = VectorOfArrays(ref_AoA3(Float32, 4))
+        V1 = @inferred(VectorOfArrays(ref_AoA3(Float32, 3)))
+        V2 = @inferred(VectorOfArrays(ref_AoA3(Float32, 3)))
         V12 = vcat(V1, V2)
-        ind_style = IndexStyle(V12)
+        ind_style = @inferred(IndexStyle(V12))
         @test ind_style == IndexLinear()
+        for i in 1:length(V12)
+            @test getindex(V12, i) == V12[i]
+        end
+        @test getindex(V12, 1:length(V12)) == V12
+        
+        @test @inferred(element_ptr(V12)) == V12.elem_ptr
+
+## _view_reshape_spec not yet implemented ##
+#       V1_copy = copy(V1)
+#       V2_copy = copy(V2)
+#       @test setindex!(V1_copy, V1, 1) == V1
+#       setindex!(V2_copy, V2, 1)
+#       @test V2_copy[1] == V2_copy[2]
+
+## function mul(s) not yet implemented ##
+#       sizehint!(v12_copy, 2, (2,2,3))
+
+        zeroed_out = deepmap(x -> 0.0, V12)
+        for i in zeroed_out
+            @test @inferred(zeros(size(i))) == i
+        end
+
+        # Not a good test of variable depth?
+        @test innermap(x -> 2*x, V12) == deepmap(x -> 2*x, V12)
 
     end
-
 
     @testset "copy" begin
         A = ref_AoA3(Float32, 3);
@@ -132,7 +155,6 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!
         @test empty(A) == empty(B)
     end
 
-
     @testset "examples" begin
         VA = VectorOfArrays{Float64, 2}()
 
@@ -144,9 +166,10 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!
 
         # -------------------------------------------------------------------
 
-
         VA_flat = flatview(VA)
         @test VA_flat isa Vector{Float64}
+
+        @test @inferred(uview(VA)) == VA
 
         # -------------------------------------------------------------------
 
