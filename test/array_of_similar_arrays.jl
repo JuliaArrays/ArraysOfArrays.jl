@@ -6,6 +6,8 @@ using Test
 using ElasticArrays
 using UnsafeArrays
 
+using Statistics
+
 
 @testset "array_of_similar_arrays" begin
     function rand_flat_array(Val_N::Val{N}) where {N}
@@ -197,13 +199,31 @@ using UnsafeArrays
         @test empty(A) == empty(B)
     end
 
+    @testset "stats" begin
+        a1 = rand(1,5); a2 = rand(1,5); a3 = rand(1,5)
+        mu_a1 = mean(a1); mu_a2 = mean(a2); mu_a3 = mean(a3)
 
+        VA = VectorOfSimilarArrays([a1, a2, a3])
+ 
+        @testset "sum" begin
+            VA_sum = @inferred(sum(VA))
+            for i in 1:length(VA[1]) 
+                @test @inferred(VA_sum[i]) == a1[i] + a2[i] + a3[i]
+            end
+        end
+
+        a1 = a1 .- mu_a1; a2 = a2 .- mu_a2; a3 = a3 .- mu_a3
+        @testset "centered" begin
+            @test isapprox(mean(a1), 0, atol=eps(Float64))
+            @test isapprox(mean(a2), 0, atol=eps(Float64))
+            @test isapprox(mean(a3), 0, atol=eps(Float64))
+        end
+    end
     @testset "examples" begin
         A_flat = rand(2,3,4,5,6)
         A_nested = nestedview(A_flat, 2)
         @test A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
         @test flatview(A_nested) === A_flat
-#       @test VectorOfSimilarArrays(flatview(A_nested)) === A_nested
 
         # -------------------------------------------------------------------
 
