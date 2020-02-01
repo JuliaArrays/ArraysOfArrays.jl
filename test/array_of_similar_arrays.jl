@@ -212,6 +212,22 @@ using Statistics
             end
         end
 
+        @testset "mean" begin
+            VA_mean = @inferred(mean(VA))
+            for i in 1:length(VA[1])
+                diff = @inferred(VA_mean[i]) - @inferred((a1[i]+a2[i]+a3[i])/3)
+                @test isless(diff, eps(Float64)) 
+            end
+        end
+
+        @testset "var" begin
+            VA_var = @inferred(var(VA))
+            for i in 1:length(VA[1])
+                diff = @inferred(var([a1[i], a2[i], a3[i]])) - VA_var[i]
+                @test @inferred(isless(diff, eps(Float64)))
+            end
+        end
+
         a1 = a1 .- mu_a1; a2 = a2 .- mu_a2; a3 = a3 .- mu_a3
         @testset "centered" begin
             @test isapprox(mean(a1), 0, atol=eps(Float64))
