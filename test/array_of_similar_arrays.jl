@@ -111,7 +111,6 @@ using UnsafeArrays
         test_from_nested(VectorOfSimilarVectors, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
     end
 
-
     @testset "similar and copyto!" begin
         A = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
         @test (@inferred copyto!((@inferred similar(A)), A)) == A
@@ -204,10 +203,12 @@ using UnsafeArrays
         A_nested = nestedview(A_flat, 2)
         @test A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
         @test flatview(A_nested) === A_flat
+#       @test VectorOfSimilarArrays(flatview(A_nested)) === A_nested
 
         # -------------------------------------------------------------------
 
         A_nested = nestedview(ElasticArray{Float64}(undef, 2, 3, 0), 2)
+        A_nested_copy = deepcopy(A_nested)
 
         for i in 1:4
             push!(A_nested, rand(2, 3))
@@ -216,6 +217,21 @@ using UnsafeArrays
 
         resize!(A_nested, 6)
         @test size(flatview(A_nested)) == (2, 3, 6)
+
+        for i in 1:4
+            pushfirst!(A_nested, rand(2,3))
+        end
+        @test size(flatview(A_nested)) == (2, 3, 10)
+
+        for i in 1:4
+            pop!(A_nested)
+        end
+        @test size(flatview(A_nested)) == (2, 3, 6)
+
+        for i in 1:size(A_nested)[1]
+            pop!(A_nested)
+        end
+        @test_throws ArgumentError pop!(A_nested) 
 
     end
 end
