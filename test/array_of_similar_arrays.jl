@@ -110,6 +110,13 @@ using Statistics
         test_from_nested(VectorOfSimilarVectors{Float64}, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
         test_from_nested(VectorOfSimilarVectors{Float32}, VectorOfSimilarVectors{Float32,Array{Float32,2}}, Val(1), Val(1))
         test_from_nested(VectorOfSimilarVectors, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
+
+        r = @inferred(rand(5,5))
+        @test @inferred(flatview(ArrayOfSimilarVectors(r))) == r 
+    end
+
+    @testset "add remove" begin
+        A = ArrayOfSimilarArrays{Float64} 
     end
 
     @testset "similar and copyto!" begin
@@ -207,11 +214,6 @@ using Statistics
         v2 = v1.*2
         v2 = v2.+1
         VV = VectorOfSimilarVectors([v1,v2])
-#       VV = VectorOfSimilarVectors(rand(4,4))
-#       v = [1,2,3,4]
-#       for i in 1:4
-#           push!(VV, i*v)
-#       end
 
         @testset "sum" begin
             VA_sum = @inferred(sum(VA))
@@ -245,10 +247,6 @@ using Statistics
         end
         
         @testset "cor" begin
-#           v1 = [1,2,3,4]
-#           v2 = v1.*2
-#           v2 = v2.+1
-#           VV_cor = @inferred(cor(VectorOfSimilarVectors([v1,v2])))
             VV_cor = @inferred(cor(VV))
             diff = sum(VV_cor - (zeros(size(VV_cor)).+1))
             @test VV_cor' == VV_cor
@@ -296,5 +294,21 @@ using Statistics
         end
         @test_throws ArgumentError pop!(A_nested) 
 
+    end
+    @testset "misc" begin
+        r1 = rand(1,4); r2 = rand(1,4); r3 = rand(1,4); r4 = rand(1,4)
+        r = vcat(r1,r2,r3,r4)
+        VSV = VectorOfSimilarVectors(r)
+        VSA = VectorOfSimilarArrays(r)
+        ASA = ArrayOfSimilarArrays([r1,r2,r3,r4])
+
+        f = x -> x.*2
+         
+        @test @inferred(IndexStyle(VSV)) == IndexLinear()
+        @test VSA == VSV
+        @test flatview(VSA) == flatview(VSV)
+
+        @test @inferred(deepmap(f, ASA)).data == ASA.data.*2
+        @test @inferred(innermap(f, ASA)).data == ASA.data.*2
     end
 end
