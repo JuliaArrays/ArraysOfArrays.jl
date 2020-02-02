@@ -8,7 +8,6 @@ using UnsafeArrays
 
 using Statistics
 
-
 @testset "array_of_similar_arrays" begin
     function rand_flat_array(Val_N::Val{N}) where {N}
         sz_max = (2,3,2,4,5)
@@ -204,7 +203,16 @@ using Statistics
         mu_a1 = mean(a1); mu_a2 = mean(a2); mu_a3 = mean(a3)
 
         VA = VectorOfSimilarArrays([a1, a2, a3])
- 
+        v1 = [1,2,3,4]
+        v2 = v1.*2
+        v2 = v2.+1
+        VV = VectorOfSimilarVectors([v1,v2])
+#       VV = VectorOfSimilarVectors(rand(4,4))
+#       v = [1,2,3,4]
+#       for i in 1:4
+#           push!(VV, i*v)
+#       end
+
         @testset "sum" begin
             VA_sum = @inferred(sum(VA))
             for i in 1:length(VA[1]) 
@@ -226,6 +234,25 @@ using Statistics
                 diff = @inferred(var([a1[i], a2[i], a3[i]])) - VA_var[i]
                 @test @inferred(isless(diff, eps(Float64)))
             end
+        end
+
+        @testset "cov" begin
+            VV_cov = @inferred(cov(VV))
+            VV_var = @inferred(var(VV))
+            diff = VV_cov[1] + VV_cov[6] + VV_cov[11] + VV_cov[16] - sum(VV_var)
+            @test @inferred(isless(diff, eps(Float64)))
+            @test VV_cov == VV_cov'
+        end
+        
+        @testset "cor" begin
+#           v1 = [1,2,3,4]
+#           v2 = v1.*2
+#           v2 = v2.+1
+#           VV_cor = @inferred(cor(VectorOfSimilarVectors([v1,v2])))
+            VV_cor = @inferred(cor(VV))
+            diff = sum(VV_cor - (zeros(size(VV_cor)).+1))
+            @test VV_cor' == VV_cor
+            @test @inferred(isless(diff, eps(Float64)))
         end
 
         a1 = a1 .- mu_a1; a2 = a2 .- mu_a2; a3 = a3 .- mu_a3
