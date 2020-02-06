@@ -116,7 +116,16 @@ using Statistics
     end
 
     @testset "add remove" begin
-        A = ArrayOfSimilarArrays{Float64} 
+        A1 = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
+        A2 = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
+       #B = ArrayOfSimilarArrays{Float64,2}(rand_flat_array(Val(2)))
+        A1_data = copy(A1.data)
+        A2_data = copy(A2.data)
+        append!(A1, A2)
+        @test A1.data == vcat(A1_data, A2_data)
+        prepend!(A1, A1)
+        len = @inferred(length(A1.data))
+        @test A1.data[1:Int(len/2)] == A1.data[Int(len/2 + 1):end]
     end
 
     @testset "similar and copyto!" begin
@@ -296,6 +305,7 @@ using Statistics
 
     end
     @testset "misc" begin
+        N = 4
         r1 = rand(1,4); r2 = rand(1,4); r3 = rand(1,4); r4 = rand(1,4)
         r = vcat(r1,r2,r3,r4)
         VSV = VectorOfSimilarVectors(r)
@@ -305,10 +315,14 @@ using Statistics
         f = x -> x.*2
          
         @test @inferred(IndexStyle(VSV)) == IndexLinear()
+        @test @inferred(IndexStyle(VSA)) == IndexLinear()
+        @test @inferred(IndexStyle(ASA)) == IndexLinear()
         @test VSA == VSV
         @test flatview(VSA) == flatview(VSV)
 
         @test @inferred(deepmap(f, ASA)).data == ASA.data.*2
         @test @inferred(innermap(f, ASA)).data == ASA.data.*2
+        
+        @test @inferred(ArraysOfArrays._innerlength(VSV)) == N
     end
 end
