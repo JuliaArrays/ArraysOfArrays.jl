@@ -116,9 +116,23 @@ using Statistics
     end
 
     @testset "add remove" begin
+        EA_ref1 = rand_flat_array(Val(3)) 
+        EA_ref2 = rand_flat_array(Val(3)) 
+        EA1 = ElasticArray{Float64, 3}(EA_ref1)
+        EA2 = ElasticArray{Float64, 3}(EA_ref2)
+        AEA1 = ArrayOfSimilarArrays{Float64, 3}(EA1)
+        AEA2 = ArrayOfSimilarArrays{Float64, 3}(EA2)
+        AEA1_ref = copy(AEA1)
+        AEA2_ref = copy(AEA2)
+        append!(AEA1, AEA2)
+        prepend!(AEA2, AEA1_ref)
+        N = size(AEA1.data)[end]
+        for i in 1:N
+            @test @inferred(reverse(AEA2.data, dims=3)[:,:,i]) == @inferred(AEA1.data[:,:,N+1-i])
+        end
+
         A1 = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
         A2 = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
-       #B = ArrayOfSimilarArrays{Float64,2}(rand_flat_array(Val(2)))
         A1_data = copy(A1.data)
         A2_data = copy(A2.data)
         append!(A1, A2)
@@ -134,6 +148,14 @@ using Statistics
 
         A = ArrayOfSimilarArrays{Float64,2}(rand_flat_array(Val(5)))
         @test (@inferred copyto!((@inferred similar(A)), A)) == A
+
+        A_ref = rand_flat_array(Val(4))
+        A = ArrayOfSimilarArrays{Float64, 2}(A_ref)
+        A_similar = similar(A, Array{Float64, 2}, size(A))
+        @test @inferred(size(A)) == @inferred(size(A_similar))
+        @test @inferred(size(A.data)) == @inferred(size(A_similar.data))
+        @test @inferred(isapprox(sum(A_similar.data), 0, atol=eps(Float64)))
+        @test @inferred(prod(A_similar.data)) == 0
     end
 
 
