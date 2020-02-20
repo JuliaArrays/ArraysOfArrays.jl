@@ -149,13 +149,13 @@ using Statistics
         A = ArrayOfSimilarArrays{Float64,2}(rand_flat_array(Val(5)))
         @test (@inferred copyto!((@inferred similar(A)), A)) == A
 
-        A_ref = rand_flat_array(Val(4))
-        A = ArrayOfSimilarArrays{Float64, 2}(A_ref)
+        A_data = rand_flat_array(Val(4))
+        A = ArrayOfSimilarArrays{Float64, 2}(A_data)
         A_similar = similar(A, Array{Float64, 2}, size(A))
         @test @inferred(size(A)) == @inferred(size(A_similar))
         @test @inferred(size(A.data)) == @inferred(size(A_similar.data))
-        @test @inferred(isapprox(sum(A_similar.data), 0, atol=eps(Float64)))
-        @test @inferred(prod(A_similar.data)) == 0
+        @test typeof(A_similar.data) == typeof(A_data)
+        @test typeof(A_similar) == typeof(A)
     end
 
 
