@@ -112,12 +112,12 @@ using Statistics
         test_from_nested(VectorOfSimilarVectors, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
 
         r = @inferred(rand(5,5))
-        @test @inferred(flatview(ArrayOfSimilarVectors(r))) == r 
+        @test @inferred(flatview(ArrayOfSimilarVectors(r))) == r
     end
 
     @testset "add remove" begin
-        EA_ref1 = rand_flat_array(Val(3)) 
-        EA_ref2 = rand_flat_array(Val(3)) 
+        EA_ref1 = rand_flat_array(Val(3))
+        EA_ref2 = rand_flat_array(Val(3))
         EA1 = ElasticArray{Float64, 3}(EA_ref1)
         EA2 = ElasticArray{Float64, 3}(EA_ref2)
         AEA1 = ArrayOfSimilarArrays{Float64, 3}(EA1)
@@ -248,7 +248,7 @@ using Statistics
 
         @testset "sum" begin
             VA_sum = @inferred(sum(VA))
-            for i in 1:length(VA[1]) 
+            for i in 1:length(VA[1])
                 @test @inferred(VA_sum[i]) == a1[i] + a2[i] + a3[i]
             end
         end
@@ -257,7 +257,7 @@ using Statistics
             VA_mean = @inferred(mean(VA))
             for i in 1:length(VA[1])
                 diff = @inferred(VA_mean[i]) - @inferred((a1[i]+a2[i]+a3[i])/3)
-                @test isless(diff, eps(Float64)) 
+                @test isless(diff, eps(Float64))
             end
         end
 
@@ -276,7 +276,7 @@ using Statistics
             @test @inferred(isless(diff, eps(Float64)))
             @test VV_cov == VV_cov'
         end
-        
+
         @testset "cor" begin
             VV_cor = @inferred(cor(VV))
             diff = sum(VV_cor - (zeros(size(VV_cor)).+1))
@@ -323,7 +323,7 @@ using Statistics
         for i in 1:size(A_nested)[1]
             pop!(A_nested)
         end
-        @test_throws ArgumentError pop!(A_nested) 
+        @test_throws ArgumentError pop!(A_nested)
 
     end
     @testset "misc" begin
@@ -335,7 +335,7 @@ using Statistics
         ASA = ArrayOfSimilarArrays([r1,r2,r3,r4])
 
         f = x -> x.*2
-         
+
         @test @inferred(IndexStyle(VSV)) == IndexLinear()
         @test @inferred(IndexStyle(VSA)) == IndexLinear()
         @test @inferred(IndexStyle(ASA)) == IndexLinear()
@@ -344,7 +344,7 @@ using Statistics
 
         @test @inferred(deepmap(f, ASA)).data == ASA.data.*2
         @test @inferred(innermap(f, ASA)).data == ASA.data.*2
-        
+
         @test @inferred(ArraysOfArrays._innerlength(VSV)) == N
     end
 end
