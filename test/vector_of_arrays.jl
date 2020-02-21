@@ -4,8 +4,6 @@ using ArraysOfArrays
 using StatsBase
 using Statistics
 using Test
-using StatsBase
-using Statistics
 
 using UnsafeArrays
 
