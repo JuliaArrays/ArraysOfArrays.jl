@@ -2,6 +2,8 @@
 
 using ArraysOfArrays
 using Test
+using StatsBase
+using Statistics
 
 using UnsafeArrays
 
@@ -104,6 +106,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
     end
 
+
     @testset "indexing" begin
         V1 = @inferred(VectorOfArrays(ref_AoA3(Float32, 3)))
         V2 = @inferred(VectorOfArrays(ref_AoA3(Float32, 3)))
@@ -137,6 +140,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
     end
 
+
     @testset "copy" begin
         A = ref_AoA3(Float32, 3);
         B = VectorOfArrays(A);
@@ -154,6 +158,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         @test typeof(@inferred empty(B)) == typeof(B)
         @test empty(A) == empty(B)
     end
+
 
     @testset "examples" begin
         VA = VectorOfArrays{Float64, 2}()
