@@ -6,6 +6,7 @@ using Test
 using ElasticArrays
 using UnsafeArrays
 
+using Statistics
 
 @testset "array_of_similar_arrays" begin
     function rand_flat_array(Val_N::Val{N}) where {N}
@@ -109,8 +110,37 @@ using UnsafeArrays
         test_from_nested(VectorOfSimilarVectors{Float64}, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
         test_from_nested(VectorOfSimilarVectors{Float32}, VectorOfSimilarVectors{Float32,Array{Float32,2}}, Val(1), Val(1))
         test_from_nested(VectorOfSimilarVectors, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
+
+        r = @inferred(rand(5,5))
+        @test @inferred(flatview(ArrayOfSimilarVectors(r))) == r
     end
 
+    @testset "add remove" begin
+        EA_ref1 = rand_flat_array(Val(3))
+        EA_ref2 = rand_flat_array(Val(3))
+        EA1 = ElasticArray{Float64, 3}(EA_ref1)
+        EA2 = ElasticArray{Float64, 3}(EA_ref2)
+        AEA1 = ArrayOfSimilarArrays{Float64, 3}(EA1)
+        AEA2 = ArrayOfSimilarArrays{Float64, 3}(EA2)
+        AEA1_ref = copy(AEA1)
+        AEA2_ref = copy(AEA2)
+        append!(AEA1, AEA2)
+        prepend!(AEA2, AEA1_ref)
+        N = size(AEA1.data)[end]
+        for i in 1:N
+            @test @inferred(reverse(AEA2.data, dims=3)[:,:,i]) == @inferred(AEA1.data[:,:,N+1-i])
+        end
+
+        A1 = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
+        A2 = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
+        A1_data = copy(A1.data)
+        A2_data = copy(A2.data)
+        append!(A1, A2)
+        @test A1.data == vcat(A1_data, A2_data)
+        prepend!(A1, A1)
+        len = @inferred(length(A1.data))
+        @test A1.data[1:Int(len/2)] == A1.data[Int(len/2 + 1):end]
+    end
 
     @testset "similar and copyto!" begin
         A = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
@@ -118,6 +148,14 @@ using UnsafeArrays
 
         A = ArrayOfSimilarArrays{Float64,2}(rand_flat_array(Val(5)))
         @test (@inferred copyto!((@inferred similar(A)), A)) == A
+
+        A_data = rand_flat_array(Val(4))
+        A = ArrayOfSimilarArrays{Float64, 2}(A_data)
+        A_similar = similar(A, Array{Float64, 2}, size(A))
+        @test @inferred(size(A)) == @inferred(size(A_similar))
+        @test @inferred(size(A.data)) == @inferred(size(A_similar.data))
+        @test typeof(A_similar.data) == typeof(A_data)
+        @test typeof(A_similar) == typeof(A)
     end
 
 
@@ -198,7 +236,61 @@ using UnsafeArrays
         @test empty(A) == empty(B)
     end
 
+    @testset "stats" begin
+        a1 = rand(1,5); a2 = rand(1,5); a3 = rand(1,5)
+        mu_a1 = mean(a1); mu_a2 = mean(a2); mu_a3 = mean(a3)
 
+        VA = VectorOfSimilarArrays([a1, a2, a3])
+        v1 = [1,2,3,4]
+        v2 = v1.*2
+        v2 = v2.+1
+        VV = VectorOfSimilarVectors([v1,v2])
+
+        @testset "sum" begin
+            VA_sum = @inferred(sum(VA))
+            for i in 1:length(VA[1])
+                @test @inferred(VA_sum[i]) == a1[i] + a2[i] + a3[i]
+            end
+        end
+
+        @testset "mean" begin
+            VA_mean = @inferred(mean(VA))
+            for i in 1:length(VA[1])
+                diff = @inferred(VA_mean[i]) - @inferred((a1[i]+a2[i]+a3[i])/3)
+                @test isless(diff, eps(Float64))
+            end
+        end
+
+        @testset "var" begin
+            VA_var = @inferred(var(VA))
+            for i in 1:length(VA[1])
+                diff = @inferred(var([a1[i], a2[i], a3[i]])) - VA_var[i]
+                @test @inferred(isless(diff, eps(Float64)))
+            end
+        end
+
+        @testset "cov" begin
+            VV_cov = @inferred(cov(VV))
+            VV_var = @inferred(var(VV))
+            diff = VV_cov[1] + VV_cov[6] + VV_cov[11] + VV_cov[16] - sum(VV_var)
+            @test @inferred(isless(diff, eps(Float64)))
+            @test VV_cov == VV_cov'
+        end
+
+        @testset "cor" begin
+            VV_cor = @inferred(cor(VV))
+            diff = sum(VV_cor - (zeros(size(VV_cor)).+1))
+            @test VV_cor' == VV_cor
+            @test @inferred(isless(diff, eps(Float64)))
+        end
+
+        a1 = a1 .- mu_a1; a2 = a2 .- mu_a2; a3 = a3 .- mu_a3
+        @testset "centered" begin
+            @test isapprox(mean(a1), 0, atol=eps(Float64))
+            @test isapprox(mean(a2), 0, atol=eps(Float64))
+            @test isapprox(mean(a3), 0, atol=eps(Float64))
+        end
+    end
     @testset "examples" begin
         A_flat = rand(2,3,4,5,6)
         A_nested = nestedview(A_flat, 2)
@@ -208,6 +300,7 @@ using UnsafeArrays
         # -------------------------------------------------------------------
 
         A_nested = nestedview(ElasticArray{Float64}(undef, 2, 3, 0), 2)
+        A_nested_copy = deepcopy(A_nested)
 
         for i in 1:4
             push!(A_nested, rand(2, 3))
@@ -217,5 +310,41 @@ using UnsafeArrays
         resize!(A_nested, 6)
         @test size(flatview(A_nested)) == (2, 3, 6)
 
+        for i in 1:4
+            pushfirst!(A_nested, rand(2,3))
+        end
+        @test size(flatview(A_nested)) == (2, 3, 10)
+
+        for i in 1:4
+            pop!(A_nested)
+        end
+        @test size(flatview(A_nested)) == (2, 3, 6)
+
+        for i in 1:size(A_nested)[1]
+            pop!(A_nested)
+        end
+        @test_throws ArgumentError pop!(A_nested)
+
+    end
+    @testset "misc" begin
+        N = 4
+        r1 = rand(1,4); r2 = rand(1,4); r3 = rand(1,4); r4 = rand(1,4)
+        r = vcat(r1,r2,r3,r4)
+        VSV = VectorOfSimilarVectors(r)
+        VSA = VectorOfSimilarArrays(r)
+        ASA = ArrayOfSimilarArrays([r1,r2,r3,r4])
+
+        f = x -> x.*2
+
+        @test @inferred(IndexStyle(VSV)) == IndexLinear()
+        @test @inferred(IndexStyle(VSA)) == IndexLinear()
+        @test @inferred(IndexStyle(ASA)) == IndexLinear()
+        @test VSA == VSV
+        @test flatview(VSA) == flatview(VSV)
+
+        @test @inferred(deepmap(f, ASA)).data == ASA.data.*2
+        @test @inferred(innermap(f, ASA)).data == ASA.data.*2
+
+        @test @inferred(ArraysOfArrays._innerlength(VSV)) == N
     end
 end
