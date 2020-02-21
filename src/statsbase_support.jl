@@ -9,6 +9,12 @@ Statistics.mean(X::AbstractVectorOfSimilarArrays{T,M}, w::StatsBase.AbstractWeig
 Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}, w::StatsBase.AbstractWeights; corrected::Bool = true) where {T,M} =
     vec(var(flatview(X), w, M + 1; corrected = corrected))
 
+Statistics.std(X::AbstractVectorOfSimilarArrays{T,M}, w::StatsBase.AbstractWeights; corrected::Bool = true) where {T,M} =
+    vec(std(flatview(X), w, M+1; corrected = corrected))
+
+Statistics.std(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true) where {T,M} =
+    std(flatview(X); corrected = corrected)
+
 Statistics.cov(X::AbstractVectorOfSimilarVectors, w::StatsBase.AbstractWeights; corrected::Bool = true) =
     cov(flatview(X), w, 2; corrected = corrected)
 
