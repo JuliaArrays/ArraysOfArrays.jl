@@ -103,7 +103,6 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         B1_copy = @inferred(copy(B1)); B3_copy = @inferred(copy(B3))
         append!(B1_copy, B3_copy)
         @test B1_copy.data == vcat(B1.data, B3.data)
-
     end
 
 
@@ -119,6 +118,10 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         @test getindex(V12, 1:length(V12)) == V12
         
         @test @inferred(element_ptr(V12)) == V12.elem_ptr
+
+        result = @inferred(Base._getindex(ind_style, V12, 1:length(V12)))
+        @test result == V12 
+        
 
 ## _view_reshape_spec not yet implemented ##
 #       V1_copy = copy(V1)
@@ -233,5 +236,12 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         @test flatview(result.a) === data.a
         @test flatview(result.b) === data.b
         @test flatview(result.c) === data.c
+
+        nestedV = @inferred(AbstractVector{AbstractArray{Float64, 4}}([rand(4,2,3,1), rand(5,3,1,3), rand(6,4,3,1), rand(9,2,1,2)]))
+        VoA1 = @inferred(convert(VectorOfArrays, nestedV)) 
+        @test @inferred(flatview(VoA1)) == VoA1.data
+        VoA2 = @inferred(convert(VectorOfArrays{Float32, 4}, nestedV))
+        @test @inferred(map(Float32, VoA1.data)) == VoA2.data
+        
     end
 end
