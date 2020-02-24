@@ -111,18 +111,29 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         V2 = @inferred(VectorOfArrays(ref_AoA3(Float32, 3)))
         V12 = vcat(V1, V2)
         ind_style = @inferred(IndexStyle(V12))
+
         @test ind_style == IndexLinear()
+
         for i in 1:length(V12)
             @test getindex(V12, i) == V12[i]
         end
+
         @test getindex(V12, 1:length(V12)) == V12
         
         @test @inferred(element_ptr(V12)) == V12.elem_ptr
 
-        result = @inferred(Base._getindex(ind_style, V12, 1:length(V12)))
-        @test result == V12 
+        getindex_of_UR = @inferred(Base._getindex(ind_style, V12, 1:length(V12)))
+        getindex_of_vector = @inferred(Base._getindex(ind_style, V12, collect(1:length(V12))))
+        @test getindex_of_UR == V12 
+        @test getindex_of_vector == getindex_of_UR
         
-
+        VV = @inferred(VectorOfVectors{Float64}())
+        data = @inferred(rand(5))
+        @inferred(push!(VV, data))
+        @test @inferred(getindex(VV, 1)) == data 
+        @test @inferred(size(getindex(VV, 1))) == (5,)
+     
+        
 ## _view_reshape_spec not yet implemented ##
 #       V1_copy = copy(V1)
 #       V2_copy = copy(V2)
@@ -196,13 +207,28 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
 
     @testset "examples" begin
-        VA = VectorOfArrays{Float64, 2}()
+        VA = @inferred(VectorOfArrays{Float64, 2}())
 
-        push!(VA, rand(2, 3))
-        push!(VA, rand(4, 2))
+        @inferred(push!(VA, rand(2, 3)))
+        @inferred(push!(VA, rand(4, 2)))
 
-        @test size(VA[1]) == (2,3)
-        @test size(VA[2]) == (4,2)
+        @test @inferred(size(VA[1]) == (2,3))
+        @test @inferred(size(VA[2]) == (4,2))
+
+        # -------------------------------------------------------------------
+
+        VV = @inferred(VectorOfVectors{Float64}())
+        d1 = @inferred(rand(5))
+        d2 = @inferred(rand(4)) 
+
+        @inferred(push!(VV, d1))
+        @inferred(push!(VV, d2))
+
+        @test VV[1] == d1
+        @test VV[2] == d2
+
+        @test @inferred(size(VV[1])) == (5,)
+        @test @inferred(size(VV[2])) == (4,)
 
         # -------------------------------------------------------------------
 
@@ -211,6 +237,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
         @test @inferred(uview(VA)) == VA
         @test @inferred(Base.unsafe_view(VA, 1:size(VA)[1])) == VA
+
         # -------------------------------------------------------------------
 
 
