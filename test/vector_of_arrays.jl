@@ -177,6 +177,8 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 ## function mul(s) not yet implemented ##
 #       sizehint!(v12_copy, 2, (2,2,3))
 
+        # -------------------------------------------------------------------
+
         zeroed_out = deepmap(x -> 0.0, V12)
         for i in zeroed_out
             @test @inferred(zeros(size(i))) == i
@@ -185,7 +187,21 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         # Not a good test of variable depth?
         @test innermap(x -> 2*x, V12) == deepmap(x -> 2*x, V12)
 
+        f = x -> 0
+        A = @inferred(AbstractArray{AbstractArray{Float64, 3},1}([rand(3,3,3), rand(3,3,3), rand(3,3,3), rand(3,3,3)]))
+        A_inner = innermap(f,A)
+        A_deep = deepmap(f, A)
+
+        @test A_inner == A_deep
+
+        @test @inferred(size(A_inner)) == @inferred(size(A_deep))
+        @test innersize(A,1) == innersize(A,2)
+        @test innersize(A,1) == innersize(A,3)
+        for i in 1:length(A_deep)
+            @test A_deep[i] == zeros(3,3,3) 
+        end
     end
+
 
     @testset "copy" begin
         A = ref_AoA3(Float32, 3);
