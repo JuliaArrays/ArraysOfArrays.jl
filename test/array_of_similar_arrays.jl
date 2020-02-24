@@ -291,11 +291,21 @@ using Statistics
             @test isapprox(mean(a3), 0, atol=eps(Float64))
         end
     end
+
+
     @testset "examples" begin
         A_flat = rand(2,3,4,5,6)
         A_nested = nestedview(A_flat, 2)
+
         @test A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
         @test flatview(A_nested) === A_flat
+
+        A_flat = rand(4,4)
+        A_nested = @inferred(nestedview(A_flat))
+
+        @test A_nested.data == A_flat
+        @test @inferred(size(A_nested))[1] == @inferred(size(A_flat))[1]
+        @test @inferred(innersize(A_nested,1)) == @inferred(size(A_flat))[1]
 
         # -------------------------------------------------------------------
 
