@@ -308,10 +308,10 @@ using Statistics
         @test @inferred(innersize(A_nested,1)) == @inferred(size(A_flat))[1]
 
         # -------------------------------------------------------------------
-        
+
         A_flat = rand(2,3,4,5)
         ASA = @inferred(ArrayOfSimilarArrays{Float64,2,2}(A_flat))
-        @test ASA.data == A_flat 
+        @test ASA.data == A_flat
 
         # -------------------------------------------------------------------
         A_nested = nestedview(ElasticArray{Float64}(undef, 2, 3, 0), 2)

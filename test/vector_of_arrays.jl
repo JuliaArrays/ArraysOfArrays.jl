@@ -119,21 +119,21 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         end
 
         @test getindex(V12, 1:length(V12)) == V12
-        
+
         @test @inferred(element_ptr(V12)) == V12.elem_ptr
 
         getindex_of_UR = @inferred(Base._getindex(ind_style, V12, 1:length(V12)))
         getindex_of_vector = @inferred(Base._getindex(ind_style, V12, collect(1:length(V12))))
-        @test getindex_of_UR == V12 
+        @test getindex_of_UR == V12
         @test getindex_of_vector == getindex_of_UR
-        
+
         VV = @inferred(VectorOfVectors{Float64}())
         data = @inferred(rand(5))
         @inferred(push!(VV, data))
-        @test @inferred(getindex(VV, 1)) == data 
+        @test @inferred(getindex(VV, 1)) == data
         @test @inferred(size(getindex(VV, 1))) == (5,)
-     
-        
+
+
 ## _view_reshape_spec not yet implemented ##
 #       V1_copy = copy(V1)
 #       V2_copy = copy(V2)
@@ -164,7 +164,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
             @test getindex(V12, i) == V12[i]
         end
         @test getindex(V12, 1:length(V12)) == V12
-        
+
         @test @inferred(element_ptr(V12)) == V12.elem_ptr
 
 ## _view_reshape_spec not yet implemented ##
@@ -198,7 +198,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         @test innersize(A,1) == innersize(A,2)
         @test innersize(A,1) == innersize(A,3)
         for i in 1:length(A_deep)
-            @test A_deep[i] == zeros(3,3,3) 
+            @test A_deep[i] == zeros(3,3,3)
         end
     end
 
@@ -235,7 +235,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
         VV = @inferred(VectorOfVectors{Float64}())
         d1 = @inferred(rand(5))
-        d2 = @inferred(rand(4)) 
+        d2 = @inferred(rand(4))
 
         @inferred(push!(VV, d1))
         @inferred(push!(VV, d2))
@@ -313,10 +313,10 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         @test flatview(result.c) === data.c
 
         nestedV = @inferred(AbstractVector{AbstractArray{Float64, 4}}([rand(4,2,3,1), rand(5,3,1,3), rand(6,4,3,1), rand(9,2,1,2)]))
-        VoA1 = @inferred(convert(VectorOfArrays, nestedV)) 
+        VoA1 = @inferred(convert(VectorOfArrays, nestedV))
         @test @inferred(flatview(VoA1)) == VoA1.data
         VoA2 = @inferred(convert(VectorOfArrays{Float32, 4}, nestedV))
         @test @inferred(map(Float32, VoA1.data)) == VoA2.data
-        
+
     end
 end
