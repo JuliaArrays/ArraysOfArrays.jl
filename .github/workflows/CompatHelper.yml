@@ -2,7 +2,12 @@ name: CompatHelper
 
 on:
   schedule:
-    - cron: '00 * * * *'
+    - cron: '00 00 * * *'
+  issues:
+    types: [opened, reopened]
+  push:
+    branches:
+      - actions/trigger/CompatHelper
 
 jobs:
   CompatHelper:
