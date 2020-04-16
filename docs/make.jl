@@ -12,7 +12,7 @@ makedocs(
     modules = [ArraysOfArrays],
     format = Documenter.HTML(
         prettyurls = !("local" in ARGS),
-        canonical = "https://oschulz.github.io/ArraysOfArrays.jl/stable/"
+        canonical = "https://JuliaArrays.github.io/ArraysOfArrays.jl/stable/"
     ),
     pages=[
         "Home" => "index.md",
@@ -25,7 +25,7 @@ makedocs(
 )
 
 deploydocs(
-    repo = "github.com/oschulz/ArraysOfArrays.jl.git",
+    repo = "github.com/JuliaArrays/ArraysOfArrays.jl.git",
     forcepush = true,
     push_preview = true,
 )
