@@ -393,7 +393,8 @@ Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector
 Compute the sum of the elements vectors of `X`. Equivalent to `sum` of
 `flatview(X)` along the last dimension.
 """
-Base.sum(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} = sum(flatview(X); dims = M + 1)
+Base.sum(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} =
+    sum(flatview(X); dims = M + 1)[_ncolons(Val{M}())...]
 
 
 """
@@ -404,7 +405,7 @@ Compute the mean of the elements vectors of `X`. Equivalent to `mean` of
 `flatview(X)` along the last dimension.
 """
 Statistics.mean(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} =
-    mean(flatview(X); dims = M + 1)
+    mean(flatview(X); dims = M + 1)[_ncolons(Val{M}())...]
 
 
 """
@@ -415,7 +416,19 @@ Compute the sample variance of the elements vectors of `X`. Equivalent to
 `var` of `flatview(X)` along the last dimension.
 """
 Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true) where {T,M} =
-    var(flatview(X); dims = M + 1, corrected = corrected)
+    var(flatview(X); dims = M + 1, corrected = corrected)[_ncolons(Val{M}())...]
+
+
+"""
+    var(X::AbstractVectorOfSimilarArrays; corrected::Bool = true)
+    var(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights; corrected::Bool = true)
+
+Compute the sample standard deviation of the elements vectors of `X`.
+Compute the sample variance of the elements vectors of `X`. Equivalent to
+`std` of `flatview(X)` along the last dimension.
+"""
+Statistics.std(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true) where {T,M} =
+    std(flatview(X); dims = M + 1, corrected = corrected)[_ncolons(Val{M}())...]
 
 
 """

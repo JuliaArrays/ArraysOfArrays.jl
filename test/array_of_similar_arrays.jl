@@ -7,6 +7,7 @@ using ElasticArrays
 using UnsafeArrays
 
 using Statistics
+using StatsBase: cov2cor
 
 @testset "array_of_similar_arrays" begin
     function rand_flat_array(Val_N::Val{N}) where {N}
@@ -237,60 +238,43 @@ using Statistics
     end
 
     @testset "stats" begin
-        a1 = rand(1,5); a2 = rand(1,5); a3 = rand(1,5)
-        mu_a1 = mean(a1); mu_a2 = mean(a2); mu_a3 = mean(a3)
+        VV = [rand(3) for i in 1:10]
+        VV_aosa = ArrayOfSimilarArrays(VV)
 
-        VA = VectorOfSimilarArrays([a1, a2, a3])
-        v1 = [1,2,3,4]
-        v2 = v1.*2
-        v2 = v2.+1
-        VV = VectorOfSimilarVectors([v1,v2])
+        VA = [rand(2,3,3) for i in 1:10]
+        VA_aosa = ArrayOfSimilarArrays(VA)
 
-        @testset "sum" begin
-            VA_sum = @inferred(sum(VA))
-            for i in 1:length(VA[1])
-                @test @inferred(VA_sum[i]) == a1[i] + a2[i] + a3[i]
+        array_cmp(A, B) = (A ≈ B) && (size(A) == size(B))
+
+        function test_statistics_op(op::Function)
+            @testset "$op" begin
+                @test array_cmp(@inferred(op(VV_aosa)), op(VV))
+
+                if op in (var, cov)
+                    @test array_cmp(@inferred(op(VV_aosa, corrected = false)), op(VV, corrected = false))
+                end
+
+                if (op in (sum, mean, var))
+                    @test array_cmp(@inferred(op(VA_aosa)), op(VA))
+                end
             end
         end
 
-        @testset "mean" begin
-            VA_mean = @inferred(mean(VA))
-            for i in 1:length(VA[1])
-                diff = @inferred(VA_mean[i]) - @inferred((a1[i]+a2[i]+a3[i])/3)
-                @test isless(diff, eps(Float64))
-            end
-        end
-
-        @testset "var" begin
-            VA_var = @inferred(var(VA))
-            for i in 1:length(VA[1])
-                diff = @inferred(var([a1[i], a2[i], a3[i]])) - VA_var[i]
-                @test @inferred(isless(diff, eps(Float64)))
-            end
-        end
-
-        @testset "cov" begin
-            VV_cov = @inferred(cov(VV))
-            VV_var = @inferred(var(VV))
-            diff = VV_cov[1] + VV_cov[6] + VV_cov[11] + VV_cov[16] - sum(VV_var)
-            @test @inferred(isless(diff, eps(Float64)))
-            @test VV_cov == VV_cov'
-        end
+        test_statistics_op(sum)
+        test_statistics_op(mean)
+        test_statistics_op(var)
+        test_statistics_op(std)
+        test_statistics_op(cov)
 
         @testset "cor" begin
-            VV_cor = @inferred(cor(VV))
-            diff = sum(VV_cor - (zeros(size(VV_cor)).+1))
-            @test VV_cor' == VV_cor
-            @test @inferred(isless(diff, eps(Float64)))
-        end
-
-        a1 = a1 .- mu_a1; a2 = a2 .- mu_a2; a3 = a3 .- mu_a3
-        @testset "centered" begin
-            @test isapprox(mean(a1), 0, atol=eps(Float64))
-            @test isapprox(mean(a2), 0, atol=eps(Float64))
-            @test isapprox(mean(a3), 0, atol=eps(Float64))
+            # Statistics.cor currently results in an error for Vector{Vector},
+            # this should be considered a bug, though, since Statistics.cov
+            # works fine.
+            @test array_cmp(@inferred(cor(VV_aosa)), cov2cor(cov(VV), std(VV)))
         end
     end
+
+
     @testset "examples" begin
         A_flat = rand(2,3,4,5,6)
         A_nested = nestedview(A_flat, 2)
