@@ -6,6 +6,7 @@ using StatsBase
 using Statistics
 
 using UnsafeArrays
+using Adapt
 
 using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
@@ -157,6 +158,17 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
         @test typeof(@inferred empty(B)) == typeof(B)
         @test empty(A) == empty(B)
+    end
+
+
+    @testset "adapt" begin
+        A1 = VectorOfArrays(ref_AoA1(Float32, 3))
+        @test @inferred(adapt(identity, A1)) == A1
+        @test typeof(adapt(identity, A1)) == typeof(A1)
+
+        A3 = VectorOfArrays(ref_AoA3(Float32, 3))
+        @test @inferred(adapt(identity, A3)) == A3
+        @test typeof(adapt(identity, A3)) == typeof(A3)
     end
 
 

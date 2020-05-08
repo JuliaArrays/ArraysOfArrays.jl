@@ -4,6 +4,7 @@ __precompile__(true)
 
 module ArraysOfArrays
 
+using Adapt
 using Requires
 using Statistics
 using UnsafeArrays

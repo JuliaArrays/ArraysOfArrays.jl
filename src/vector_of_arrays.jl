@@ -397,6 +397,16 @@ function UnsafeArrays.uview(A::VectorOfArrays)
 end
 
 
+function Adapt.adapt_structure(to, A::VectorOfArrays)
+    VectorOfArrays(
+        adapt(to, A.data),
+        adapt(to, A.elem_ptr),
+        adapt(to, A.kernel_size),
+        no_consistency_checks
+    )
+end
+
+
 function innermap(f::Base.Callable, A::VectorOfArrays)
     new_data = map(f, A.data)
     VectorOfArrays(new_data, A.elem_ptr, A.kernel_size, simple_consistency_checks)
