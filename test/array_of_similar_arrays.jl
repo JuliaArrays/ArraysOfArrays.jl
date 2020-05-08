@@ -5,6 +5,7 @@ using Test
 
 using ElasticArrays
 using UnsafeArrays
+using Adapt
 
 using Statistics
 using StatsBase: cov2cor
@@ -160,6 +161,14 @@ using StatsBase: cov2cor
     end
 
 
+    @testset "adapt" begin
+        A_flat = rand(2,3,4,5,6)
+        A_nested = nestedview(A_flat, 2)
+        @test @inferred(adapt(identity, A_nested)) == A_nested
+        @test typeof(adapt(identity, A_nested)) == typeof(A_nested)
+    end
+
+
     @testset "deepcopy" begin
         A = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
         @test (@inferred deepcopy(A)) == A
@@ -274,7 +283,6 @@ using StatsBase: cov2cor
         end
     end
 
-
     @testset "examples" begin
         A_flat = rand(2,3,4,5,6)
         A_nested = nestedview(A_flat, 2)
@@ -323,6 +331,7 @@ using StatsBase: cov2cor
         @test_throws ArgumentError pop!(A_nested)
 
     end
+
     @testset "misc" begin
         N = 4
         r1 = rand(1,4); r2 = rand(1,4); r3 = rand(1,4); r4 = rand(1,4)

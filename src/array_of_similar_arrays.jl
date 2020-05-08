@@ -201,6 +201,12 @@ UnsafeArrays.unsafe_uview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} =
     ArrayOfSimilarArrays{T,M,N}(uview(A.data))
 
 
+function Adapt.adapt_structure(to, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+    adapted_data = adapt(to, A.data)
+    ArrayOfSimilarArrays{eltype(adapted_data),M,N}(adapted_data)
+end
+
+
 function innermap(f::Base.Callable, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     new_data = map(f, A.data)
     U = eltype(new_data)
