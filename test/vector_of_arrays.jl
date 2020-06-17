@@ -1,9 +1,9 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 using ArraysOfArrays
-using Test
 using StatsBase
 using Statistics
+using Test
 
 using UnsafeArrays
 
@@ -103,7 +103,6 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         B1_copy = @inferred(copy(B1)); B3_copy = @inferred(copy(B3))
         append!(B1_copy, B3_copy)
         @test B1_copy.data == vcat(B1.data, B3.data)
-
     end
 
 
@@ -112,13 +111,28 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         V2 = @inferred(VectorOfArrays(ref_AoA3(Float32, 3)))
         V12 = vcat(V1, V2)
         ind_style = @inferred(IndexStyle(V12))
+
         @test ind_style == IndexLinear()
+
         for i in 1:length(V12)
             @test getindex(V12, i) == V12[i]
         end
+
         @test getindex(V12, 1:length(V12)) == V12
-        
+
         @test @inferred(element_ptr(V12)) == V12.elem_ptr
+
+        getindex_of_UR = @inferred(Base._getindex(ind_style, V12, 1:length(V12)))
+        getindex_of_vector = @inferred(Base._getindex(ind_style, V12, collect(1:length(V12))))
+        @test getindex_of_UR == V12
+        @test getindex_of_vector == getindex_of_UR
+
+        VV = @inferred(VectorOfVectors{Float64}())
+        data = @inferred(rand(5))
+        @inferred(push!(VV, data))
+        @test @inferred(getindex(VV, 1)) == data
+        @test @inferred(size(getindex(VV, 1))) == (5,)
+
 
 ## _view_reshape_spec not yet implemented ##
 #       V1_copy = copy(V1)
@@ -138,6 +152,54 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         # Not a good test of variable depth?
         @test innermap(x -> 2*x, V12) == deepmap(x -> 2*x, V12)
 
+    end
+
+    @testset "indexing" begin
+        V1 = @inferred(VectorOfArrays(ref_AoA3(Float32, 3)))
+        V2 = @inferred(VectorOfArrays(ref_AoA3(Float32, 3)))
+        V12 = vcat(V1, V2)
+        ind_style = @inferred(IndexStyle(V12))
+        @test ind_style == IndexLinear()
+        for i in 1:length(V12)
+            @test getindex(V12, i) == V12[i]
+        end
+        @test getindex(V12, 1:length(V12)) == V12
+
+        @test @inferred(element_ptr(V12)) == V12.elem_ptr
+
+## _view_reshape_spec not yet implemented ##
+#       V1_copy = copy(V1)
+#       V2_copy = copy(V2)
+#       @test setindex!(V1_copy, V1, 1) == V1
+#       setindex!(V2_copy, V2, 1)
+#       @test V2_copy[1] == V2_copy[2]
+
+## function mul(s) not yet implemented ##
+#       sizehint!(v12_copy, 2, (2,2,3))
+
+        # -------------------------------------------------------------------
+
+        zeroed_out = deepmap(x -> 0.0, V12)
+        for i in zeroed_out
+            @test @inferred(zeros(size(i))) == i
+        end
+
+        # Not a good test of variable depth?
+        @test innermap(x -> 2*x, V12) == deepmap(x -> 2*x, V12)
+
+        f = x -> 0
+        A = @inferred(AbstractArray{AbstractArray{Float64, 3},1}([rand(3,3,3), rand(3,3,3), rand(3,3,3), rand(3,3,3)]))
+        A_inner = innermap(f,A)
+        A_deep = deepmap(f, A)
+
+        @test A_inner == A_deep
+
+        @test @inferred(size(A_inner)) == @inferred(size(A_deep))
+        @test innersize(A,1) == innersize(A,2)
+        @test innersize(A,1) == innersize(A,3)
+        for i in 1:length(A_deep)
+            @test A_deep[i] == zeros(3,3,3)
+        end
     end
 
 
@@ -161,13 +223,28 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
 
     @testset "examples" begin
-        VA = VectorOfArrays{Float64, 2}()
+        VA = @inferred(VectorOfArrays{Float64, 2}())
 
-        push!(VA, rand(2, 3))
-        push!(VA, rand(4, 2))
+        @inferred(push!(VA, rand(2, 3)))
+        @inferred(push!(VA, rand(4, 2)))
 
-        @test size(VA[1]) == (2,3)
-        @test size(VA[2]) == (4,2)
+        @test @inferred(size(VA[1]) == (2,3))
+        @test @inferred(size(VA[2]) == (4,2))
+
+        # -------------------------------------------------------------------
+
+        VV = @inferred(VectorOfVectors{Float64}())
+        d1 = @inferred(rand(5))
+        d2 = @inferred(rand(4))
+
+        @inferred(push!(VV, d1))
+        @inferred(push!(VV, d2))
+
+        @test VV[1] == d1
+        @test VV[2] == d2
+
+        @test @inferred(size(VV[1])) == (5,)
+        @test @inferred(size(VV[2])) == (4,)
 
         # -------------------------------------------------------------------
 
@@ -176,6 +253,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
         @test @inferred(uview(VA)) == VA
         @test @inferred(Base.unsafe_view(VA, 1:size(VA)[1])) == VA
+
         # -------------------------------------------------------------------
 
 
@@ -233,5 +311,12 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         @test flatview(result.a) === data.a
         @test flatview(result.b) === data.b
         @test flatview(result.c) === data.c
+
+        nestedV = @inferred(AbstractVector{AbstractArray{Float64, 4}}([rand(4,2,3,1), rand(5,3,1,3), rand(6,4,3,1), rand(9,2,1,2)]))
+        VoA1 = @inferred(convert(VectorOfArrays, nestedV))
+        @test @inferred(flatview(VoA1)) == VoA1.data
+        VoA2 = @inferred(convert(VectorOfArrays{Float32, 4}, nestedV))
+        @test @inferred(map(Float32, VoA1.data)) == VoA2.data
+
     end
 end
