@@ -14,13 +14,13 @@ makedocs(
         prettyurls = !("local" in ARGS),
         canonical = "https://JuliaArrays.github.io/ArraysOfArrays.jl/stable/"
     ),
-    pages=[
+    pages = [
         "Home" => "index.md",
         "API" => "api.md",
         "LICENSE" => "LICENSE.md",
     ],
     doctest = ("fixdoctests" in ARGS) ? :fix : true,
-    linkcheck = ("linkcheck" in ARGS),
+    linkcheck = !("nonstrict" in ARGS),
     strict = !("nonstrict" in ARGS),
 )
 
