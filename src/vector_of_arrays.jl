@@ -26,7 +26,7 @@ VectorOfArrays{T,N}(A::AbstractVector{<:AbstractArray})
 
 VectorOfArrays(
     data::AbstractVector,
-    elem_ptr::AbstractVector{Int},
+    elem_ptr::AbstractVector{<:Integer},
     kernel_size::AbstractVector{<:Dims}
     checks::Function = ArraysOfArrays.full_consistency_checks
 )
@@ -44,7 +44,7 @@ and `ArraysOfArrays.no_consistency_checks`.
 struct VectorOfArrays{
     T, N, M,
     VT<:AbstractVector{T},
-    VI<:AbstractVector{Int},
+    VI<:AbstractVector{<:Integer},
     VD<:AbstractVector{Dims{M}}
 } <: AbstractVector{Array{T,N}}
     data::VT
@@ -73,7 +73,7 @@ struct VectorOfArrays{
     ) where {
         T, M,
         VT<:AbstractVector{T},
-        VI<:AbstractVector{Int},
+        VI<:AbstractVector{<:Integer},
         VD<:AbstractVector{Dims{M}}
     }
         N = length((ntuple(_ -> 0, Val{M}())..., 0))
@@ -429,7 +429,7 @@ VectorOfVectors(A::AbstractVector{<:AbstractVector})
 VectorOfVectors{T}(A::AbstractVector{<:AbstractVector}) where {T}
 
 VectorOfVectors(
-    data::AbstractVector, elem_ptr::AbstractVector{Int},
+    data::AbstractVector, elem_ptr::AbstractVector{<:Integer},
     checks::Function = full_consistency_checks
 )
 
@@ -439,7 +439,7 @@ See also [VectorOfArrays](@ref).
 const VectorOfVectors{
     T,
     VT<:AbstractVector{T},
-    VI<:AbstractVector{Int},
+    VI<:AbstractVector{<:Integer},
     VD<:AbstractVector{Dims{0}}
 } = VectorOfArrays{T,1,0,VT,VI,VD}
 
@@ -452,9 +452,9 @@ VectorOfVectors(A::AbstractVector{<:AbstractVector}) = VectorOfArrays(A)
 
 VectorOfVectors(
     data::AbstractVector,
-    elem_ptr::AbstractVector{Int},
+    elem_ptr::AbstractVector{I},
     checks::Function = full_consistency_checks
-) = VectorOfArrays(
+) where I <: Integer= VectorOfArrays(
     data,
     elem_ptr,
     similar(elem_ptr, Dims{0}, size(elem_ptr, 1) - 1),
