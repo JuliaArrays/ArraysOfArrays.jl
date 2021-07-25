@@ -301,11 +301,14 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         A = [1, 1, 2, 3, 3, 2, 2, 2]
         A_grouped_ref = [[1, 1], [2], [3, 3], [2, 2, 2]]
         elem_ptr = consgrouped_ptrs(A)
+        elem_ptr32 = Int32.(consgrouped_ptrs(A))
         @test first.(@inferred(VectorOfVectors(A, elem_ptr))) == [1, 2, 3, 2]
+        @test first.(@inferred(VectorOfVectors(A, elem_ptr32))) == [1, 2, 3, 2]
 
         B = [1, 2, 3, 4, 5, 6, 7, 8]
         B_grouped_ref = [[1, 2], [3], [4, 5], [6, 7, 8]]
         @test @inferred(VectorOfVectors(B, elem_ptr)) == B_grouped_ref
+        @test @inferred(VectorOfVectors(B, elem_ptr32)) == B_grouped_ref
 
         C = [1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8]
         C_grouped_ref = [[1.1, 2.2], [3.3], [4.4, 5.5], [6.6, 7.7, 8.8]]
