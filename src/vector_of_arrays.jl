@@ -490,7 +490,7 @@ function consgrouped_ptrs end
 export consgrouped_ptrs
 
 function consgrouped_ptrs(A::AbstractVector)
-    elem_ptr = sizehint!(Int32[], length(A))
+    elem_ptr = Vector{Int}()
     idxs = eachindex(A)
     push!(elem_ptr, first(idxs))
     if !isempty(A)
