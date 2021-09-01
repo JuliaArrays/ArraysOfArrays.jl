@@ -180,7 +180,7 @@ flatview(A::VectorOfArrays) = A.data
 
 Base.size(A::VectorOfArrays) = size(A.kernel_size)
 
-Base.IndexStyle(A::VectorOfArrays) = IndexLinear()
+Base.IndexStyle(::Type{<:VectorOfArrays}) = IndexLinear()
 
 
 Base.@propagate_inbounds _reshape_dataview(dataview::AbstractArray, s::NTuple{1,Integer}) = dataview

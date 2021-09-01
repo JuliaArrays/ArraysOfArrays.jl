@@ -300,7 +300,7 @@ Base.convert(R::Type{VectorOfSimilarArrays{T}}, A::AbstractVector{<:AbstractArra
 Base.convert(R::Type{VectorOfSimilarArrays}, A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} = R(A)
 
 
-@inline Base.IndexStyle(A::VectorOfSimilarArrays) = IndexLinear()
+@inline Base.IndexStyle(::Type{<:VectorOfSimilarArrays}) = IndexLinear()
 
 
 function Base.push!(V::VectorOfSimilarArrays{T,M}, x::AbstractArray{U,M}) where {T,M,U}
@@ -387,9 +387,6 @@ Base.convert(R::Type{VectorOfSimilarVectors{T}}, flat_data::AbstractArray{U,2}) 
 Base.convert(R::Type{VectorOfSimilarVectors}, flat_data::AbstractArray{T,2}) where {T} = R(flat_data)
 Base.convert(R::Type{VectorOfSimilarVectors{T}}, A::AbstractVector{<:AbstractVector{U}}) where {T,U} = R(A)
 Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector{T}}) where {T} = R(A)
-
-
-@inline Base.IndexStyle(A::VectorOfSimilarVectors) = IndexLinear()
 
 
 """
