@@ -334,4 +334,14 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         @test @inferred(map(Float32, VoA1.data)) == VoA2.data
 
     end
+
+    @testset "map and broadcast" begin
+        A = VectorOfArrays(ref_AoA2(Float32, 4))
+
+        for do_map in (map, broadcast)
+            @test @inferred(do_map(identity, A)) == A
+            do_map(identity, A) isa VectorOfArrays
+            @test do_map(identity, A) !== A
+        end
+    end
 end

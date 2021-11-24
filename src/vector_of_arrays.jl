@@ -419,6 +419,11 @@ function deepmap(f::Base.Callable, A::VectorOfArrays)
 end
 
 
+Base.map(::typeof(identity), A::VectorOfArrays) = deepcopy(A)
+Base.Broadcast.broadcasted(::typeof(identity), A::VectorOfArrays) = deepcopy(A)
+
+
+
 """
     VectorOfVectors{T,...} = VectorOfArrays{T,1,...}
 

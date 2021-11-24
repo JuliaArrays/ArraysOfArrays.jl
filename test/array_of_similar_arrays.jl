@@ -353,4 +353,15 @@ using StatsBase: cov2cor
 
         @test @inferred(ArraysOfArrays._innerlength(VSV)) == N
     end
+
+    @testset "map and broadcast" begin
+        A_flat = rand(2,3,4,5,6)
+        A = nestedview(A_flat, 2)
+
+        for do_map in (map, broadcast)
+            @test @inferred(do_map(identity, A)) == A
+            do_map(identity, A) isa ArrayOfSimilarArrays
+            @test do_map(identity, A) !== A
+        end
+    end
 end
