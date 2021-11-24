@@ -339,9 +339,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         A = VectorOfArrays(ref_AoA2(Float32, 4))
 
         for do_map in (map, broadcast)
-            @test @inferred(do_map(identity, A)) == A
-            do_map(identity, A) isa VectorOfArrays
-            @test do_map(identity, A) !== A
+            @test @inferred(do_map(identity, A)) === A
         end
     end
 end

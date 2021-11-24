@@ -419,8 +419,8 @@ function deepmap(f::Base.Callable, A::VectorOfArrays)
 end
 
 
-Base.map(::typeof(identity), A::VectorOfArrays) = deepcopy(A)
-Base.Broadcast.broadcasted(::typeof(identity), A::VectorOfArrays) = deepcopy(A)
+Base.map(::typeof(identity), A::VectorOfArrays) = A
+Base.Broadcast.broadcasted(::typeof(identity), A::VectorOfArrays) = A
 
 
 

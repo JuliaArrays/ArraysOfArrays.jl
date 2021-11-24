@@ -359,9 +359,7 @@ using StatsBase: cov2cor
         A = nestedview(A_flat, 2)
 
         for do_map in (map, broadcast)
-            @test @inferred(do_map(identity, A)) == A
-            do_map(identity, A) isa ArrayOfSimilarArrays
-            @test do_map(identity, A) !== A
+            @test @inferred(do_map(identity, A)) === A
         end
     end
 end

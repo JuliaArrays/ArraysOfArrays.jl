@@ -221,8 +221,8 @@ function deepmap(f::Base.Callable, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
 end
 
 
-Base.map(::typeof(identity), A::ArrayOfSimilarArrays) = deepcopy(A)
-Base.Broadcast.broadcasted(::typeof(identity), A::ArrayOfSimilarArrays) = deepcopy(A)
+Base.map(::typeof(identity), A::ArrayOfSimilarArrays) = A
+Base.Broadcast.broadcasted(::typeof(identity), A::ArrayOfSimilarArrays) = A
 
 
 Base.@pure _result_is_nested(idxs_outer::Tuple, idxs_inner::Tuple) =
