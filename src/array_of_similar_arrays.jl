@@ -421,8 +421,8 @@ Statistics.mean(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} =
 Compute the sample variance of the elements vectors of `X`. Equivalent to
 `var` of `flatview(X)` along the last dimension.
 """
-Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true) where {T,M} =
-    var(flatview(X); dims = M + 1, corrected = corrected)[_ncolons(Val{M}())...]
+Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true, mean = nothing) where {T,M} =
+    var(flatview(X); dims = M + 1, corrected = corrected. mean = nothing)[_ncolons(Val{M}())...]
 
 
 """
@@ -433,8 +433,8 @@ Compute the sample standard deviation of the elements vectors of `X`.
 Compute the sample variance of the elements vectors of `X`. Equivalent to
 `std` of `flatview(X)` along the last dimension.
 """
-Statistics.std(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true) where {T,M} =
-    std(flatview(X); dims = M + 1, corrected = corrected)[_ncolons(Val{M}())...]
+Statistics.std(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true, mean = nothing) where {T,M} =
+    std(flatview(X); dims = M + 1, corrected = corrected, mean = mean)[_ncolons(Val{M}())...]
 
 
 """
@@ -444,8 +444,8 @@ Statistics.std(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true) wh
 Compute the covariance matrix between the elements of the elements of `X`
 along `X`. Equivalent to `cov` of `flatview(X)` along dimension 2.
 """
-Statistics.cov(X::AbstractVectorOfSimilarVectors; corrected::Bool = true) =
-    cov(flatview(X); dims = 2, corrected = corrected)
+Statistics.cov(X::AbstractVectorOfSimilarVectors; corrected::Bool = true, mean = nothing) =
+    cov(flatview(X); dims = 2, corrected = corrected, mean = mean)
 
 
 """
