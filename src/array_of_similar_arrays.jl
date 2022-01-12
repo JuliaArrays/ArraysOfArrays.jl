@@ -415,19 +415,19 @@ Statistics.mean(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} =
 
 
 """
-    var(X::AbstractVectorOfSimilarArrays; corrected::Bool = true)
-    var(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights; corrected::Bool = true)
+    var(X::AbstractVectorOfSimilarArrays; corrected::Bool = true, mean = nothing)
+    var(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights; corrected::Bool = true, mean = nothing)
 
 Compute the sample variance of the elements vectors of `X`. Equivalent to
 `var` of `flatview(X)` along the last dimension.
 """
 Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true, mean = nothing) where {T,M} =
-    var(flatview(X); dims = M + 1, corrected = corrected, mean = nothing)[_ncolons(Val{M}())...]
+    var(flatview(X); dims = M + 1, corrected = corrected, mean = mean)[_ncolons(Val{M}())...]
 
 
 """
-    var(X::AbstractVectorOfSimilarArrays; corrected::Bool = true)
-    var(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights; corrected::Bool = true)
+    var(X::AbstractVectorOfSimilarArrays; corrected::Bool = true, mean = nothing)
+    var(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights; corrected::Bool = true, mean = nothing)
 
 Compute the sample standard deviation of the elements vectors of `X`.
 Compute the sample variance of the elements vectors of `X`. Equivalent to
