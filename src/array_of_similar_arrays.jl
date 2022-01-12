@@ -422,7 +422,7 @@ Compute the sample variance of the elements vectors of `X`. Equivalent to
 `var` of `flatview(X)` along the last dimension.
 """
 Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true, mean = nothing) where {T,M} =
-    var(flatview(X); dims = M + 1, corrected = corrected. mean = nothing)[_ncolons(Val{M}())...]
+    var(flatview(X); dims = M + 1, corrected = corrected, mean = nothing)[_ncolons(Val{M}())...]
 
 
 """
