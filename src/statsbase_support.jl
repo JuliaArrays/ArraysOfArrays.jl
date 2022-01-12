@@ -13,8 +13,8 @@ Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}, w::StatsBase.AbstractWeigh
 Statistics.std(X::AbstractVectorOfSimilarArrays{T,M}, w::StatsBase.AbstractWeights; mean = nothing, corrected::Bool = true) where {T,M} =
     std(flatview(X), w, M + 1; mean = mean, corrected = corrected)[_ncolons(Val{M}())...]
 
-Statistics.cov(X::AbstractVectorOfSimilarVectors, w::StatsBase.AbstractWeights; mean = nothing, corrected::Bool = true) =
-    cov(flatview(X), w, 2; mean = mean, corrected = corrected)
+Statistics.cov(X::AbstractVectorOfSimilarVectors, w::StatsBase.AbstractWeights; corrected::Bool = true) =
+    cov(flatview(X), w, 2; mean = corrected = corrected)
 
 Statistics.cor(X::AbstractVectorOfSimilarVectors, w::StatsBase.AbstractWeights) =
     cor(flatview(X), w, 2)

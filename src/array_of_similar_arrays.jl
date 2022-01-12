@@ -444,8 +444,8 @@ Statistics.std(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true, me
 Compute the covariance matrix between the elements of the elements of `X`
 along `X`. Equivalent to `cov` of `flatview(X)` along dimension 2.
 """
-Statistics.cov(X::AbstractVectorOfSimilarVectors; corrected::Bool = true, mean = nothing) =
-    cov(flatview(X); dims = 2, corrected = corrected, mean = mean)
+Statistics.cov(X::AbstractVectorOfSimilarVectors; corrected::Bool = true) =
+    cov(flatview(X); dims = 2, corrected = corrected)
 
 
 """
