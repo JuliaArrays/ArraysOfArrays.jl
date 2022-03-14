@@ -3,8 +3,8 @@
 [![Documentation for stable version](https://img.shields.io/badge/docs-stable-blue.svg)](https://JuliaArrays.github.io/ArraysOfArrays.jl/stable)
 [![Documentation for development version](https://img.shields.io/badge/docs-dev-blue.svg)](https://JuliaArrays.github.io/ArraysOfArrays.jl/dev)
 [![License](http://img.shields.io/badge/license-MIT-brightgreen.svg?style=flat)](LICENSE.md)
-[![Build Status](https://github.com/oschulz/ArraysOfArrays.jl/workflows/CI/badge.svg?branch=master)](https://github.com/oschulz/ArraysOfArrays.jl/actions?query=workflow%3ACI)
-[![Codecov](https://codecov.io/gh/JuliaArrays/ArraysOfArrays.jl/branch/master/graph/badge.svg)](https://codecov.io/gh/JuliaArrays/ArraysOfArrays.jl)
+[![Build Status](https://github.com/oschulz/ArraysOfArrays.jl/workflows/CI/badge.svg?branch=main)](https://github.com/oschulz/ArraysOfArrays.jl/actions?query=workflow%3ACI)
+[![Codecov](https://codecov.io/gh/JuliaArrays/ArraysOfArrays.jl/branch/main/graph/badge.svg)](https://codecov.io/gh/JuliaArrays/ArraysOfArrays.jl)
 
 
 A Julia package for efficient storage and handling of nested arrays.
