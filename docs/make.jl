@@ -7,6 +7,14 @@
 using Documenter
 using ArraysOfArrays
 
+# Doctest setup
+DocMeta.setdocmeta!(
+    ArraysOfArrays,
+    :DocTestSetup,
+    :(using ArraysOfArrays);
+    recursive=true,
+)
+
 makedocs(
     sitename = "ArraysOfArrays",
     modules = [ArraysOfArrays],

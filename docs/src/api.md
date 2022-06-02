@@ -1,27 +1,26 @@
 # API
 
-```@meta
-CurrentModule = ArraysOfArrays
-DocTestSetup  = quote
-    using ArraysOfArrays
-end
-```
-
-## Types
+## Modules
 
 ```@index
-Order = [:type]
+Order = [:module]
 ```
 
-## Functions
+## Types and constants
 
 ```@index
-Order = [:function]
+Order = [:type, :constant]
+```
+
+## Functions and macros
+
+```@index
+Order = [:macro, :function]
 ```
 
 # Documentation
 
 ```@autodocs
 Modules = [ArraysOfArrays]
-Order = [:type, :function]
+Order = [:module, :type, :constant, :macro, :function]
 ```
