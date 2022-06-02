@@ -17,6 +17,7 @@ using Adapt
 using Requires
 using Statistics
 using UnsafeArrays
+using ChainRulesCore
 
 include("util.jl")
 include("functions.jl")
