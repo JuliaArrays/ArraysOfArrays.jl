@@ -6,6 +6,7 @@ using Test
 using ElasticArrays
 using UnsafeArrays
 using Adapt
+using ChainRulesTestUtils
 
 using Statistics
 using StatsBase: cov2cor
@@ -86,6 +87,8 @@ using StatsBase: cov2cor
         test_from_flat(VectorOfSimilarArrays{Float32}, VectorOfSimilarArrays{Float32,2,3,Array{Float32,3}}, Val(3))
         test_from_flat(VectorOfSimilarVectors{Float32}, VectorOfSimilarVectors{Float32,Array{Float32,2}}, Val(2))
         test_from_flat(VectorOfSimilarVectors{Float32}, VectorOfSimilarVectors{Float32,Array{Float32,2}}, Val(2))
+
+        test_rrule(ArrayOfSimilarArrays{Float64,2,2}, rand(2,3,4,5))
     end
 
 
@@ -115,6 +118,8 @@ using StatsBase: cov2cor
 
         r = @inferred(rand(5,5))
         @test @inferred(flatview(ArrayOfSimilarVectors(r))) == r
+
+        test_rrule(ArrayOfSimilarArrays{Float64,2,2}, [rand(2,3) for i in 1:5, j in 1:6])
     end
 
     @testset "add remove" begin

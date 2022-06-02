@@ -70,27 +70,38 @@ struct ArrayOfSimilarArrays{
     data::P
 
     function ArrayOfSimilarArrays{T,M,N}(flat_data::AbstractArray{U,L}) where {T,M,N,L,U}
-        size_inner, size_outer = split_tuple(size(flat_data), Val{M}())
         require_ndims(flat_data, _add_vals(Val{M}(), Val{N}()))
-        conv_parent = _convert_elype(T, flat_data)
-        P = typeof(conv_parent)
-        new{T,M,N,L,P}(conv_parent)
-    end
-
-    function ArrayOfSimilarArrays{T,M}(flat_data::AbstractArray{U,L}) where {T,M,L,U}
-        size_inner, size_outer = split_tuple(size(flat_data), Val{M}())
-        N = length(size_outer)
         conv_parent = _convert_elype(T, flat_data)
         P = typeof(conv_parent)
         new{T,M,N,L,P}(conv_parent)
     end
 end
 
+function ArrayOfSimilarArrays{T,M}(flat_data::AbstractArray{U,L}) where {T,M,L,U}
+    _, size_outer = split_tuple(size(flat_data), Val{M}())
+    N = length(size_outer)
+    ArrayOfSimilarArrays{T,M,N}(flat_data)
+end
+
 export ArrayOfSimilarArrays
+
+function _aosa_ctor_fromflat_pullback(ΔΩ)
+    NoTangent(), flatview(convert(ArrayOfSimilarArrays, unthunk(ΔΩ)))
+end
+
+function ChainRulesCore.rrule(::Type{ArrayOfSimilarArrays{T,M,N}}, flat_data::AbstractArray{U,L}) where {T,M,N,L,U}
+    return ArrayOfSimilarArrays{T,M,N}(flat_data), _aosa_ctor_fromflat_pullback
+end
 
 function ArrayOfSimilarArrays{T,M,N}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
     B = ArrayOfSimilarArrays{T,M,N}(Array{T}(undef, innersize(A)..., size(A)...))
     copyto!(B, A)
+end
+
+_aosa_ctor_fromnested_pullback(ΔΩ) = NoTangent(), ΔΩ
+
+function ChainRulesCore.rrule(::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
+    return ArrayOfSimilarArrays{T,M,N}(A), _aosa_ctor_fromnested_pullback
 end
 
 ArrayOfSimilarArrays{T}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
