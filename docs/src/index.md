@@ -75,7 +75,7 @@ There is a full duality between the nested and the flat view of the data. `A_fla
 `AbstractVectorOfSimilarArrays` supports the functions `sum`, `mean` and `var`, `AbstractVectorOfSimilarVectors` additionally support `cov` and `cor`.
 
 Methods for these function are defined both without and with weights (via `StatsBase.AbstractWeights`). Because of this, `ArraysOfArrays` currently requires `StatsBase`. It's possible that this requirement can be dropped in the future, though (see
-[Julia issue #29974](https://github.com/JuliaLang/julia/issues/29974)).
+[Julia Statistics issue #4](https://github.com/JuliaLang/Statistics.jl/issues/4)).
 
 ## [VectorOfArrays](@id section_VectorOfArrays)
 
@@ -133,25 +133,3 @@ resize!(VA, 4)
 will fail.
 
 Note: The vector returned by `flatview(VA)` *must not* be resized directly, doing so would break the internal consistency of `VA`.
-
-
-## Allocation free element access
-
-Element access via `getindex` returns (possibly reshaped) instances of `SubArray` for both `ArrayOfSimilarArrays` and `VectorOfArrays`. Usually this is not a problem, but frequent allocation of a large number of views can become a limiting factor in multi-threaded applications.
-
-Both types support `UnsafeArrays.@uviews` for allocation-free getindex:
-
-```julia
-using UnsafeArrays
-
-A = nestedview(rand(2,3,4,5), 2)
-
-isbits(A[2,2]) == false
-
-@uviews A begin
-    isbits(A[2,2]) == true
-end
-```
-
-As always, `UnsafeArray`s should be used with great care: The pointer-based bitstype
-views *must not* be allowed to escape the `@uviews` scope, and internal data of `A` *must not* be reallocated (e.g. due to a `push!` or `append!` on `A`) while the `@uviews` scope is active.
