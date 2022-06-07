@@ -141,7 +141,16 @@ Returns the array of dimensionality `L = M + N` wrapped by `A`. The shape of
 the result may be freely changed without breaking the inner consistency of
 `A`.
 """
-flatview(A::ArrayOfSimilarArrays) = A.data
+flatview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = A.data
+
+function ChainRulesCore.rrule(::typeof(flatview), A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+    function flatview_pullback(ΔΩ)
+        data = unthunk(ΔΩ)
+        NoTangent(), ArrayOfSimilarArrays{eltype(data),M,N}(data)
+    end
+    
+    return flatview(A), flatview_pullback
+end
 
 
 Base.size(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = split_tuple(size(A.data), Val{M}())[2]
