@@ -4,7 +4,6 @@ using ArraysOfArrays
 using Test
 
 using ElasticArrays
-using UnsafeArrays
 using Adapt
 using ChainRulesTestUtils
 

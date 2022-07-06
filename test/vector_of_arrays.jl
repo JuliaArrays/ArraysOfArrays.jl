@@ -5,7 +5,6 @@ using StatsBase
 using Statistics
 using Test
 
-using UnsafeArrays
 using Adapt
 
 using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
@@ -260,14 +259,6 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
         # -------------------------------------------------------------------
 
-        VA_flat = flatview(VA)
-        @test VA_flat isa Vector{Float64}
-
-        @test @inferred(uview(VA)) == VA
-        @test @inferred(Base.unsafe_view(VA, 1:size(VA)[1])) == VA
-
-        # -------------------------------------------------------------------
-
 
         VA_flat = flatview(VA)
         @test view(VA_flat, 7:14) == vec(VA[2])
@@ -283,18 +274,6 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
         @test length(@inferred resize!(VA, 1)) == 1
         @test_throws ArgumentError resize!(VA, 4)
-
-        # -------------------------------------------------------------------
-
-        using UnsafeArrays
-
-        A = nestedview(rand(2,3,4,5), 2)
-
-        @test isbits(A[2,2]) == false
-
-        @test @uviews A begin
-            isbits(A[2,2]) == true
-        end
 
         # -------------------------------------------------------------------
 

@@ -15,7 +15,6 @@ module ArraysOfArrays
 
 using Adapt
 using Statistics
-using UnsafeArrays
 using ChainRulesCore
 
 import StaticArraysCore

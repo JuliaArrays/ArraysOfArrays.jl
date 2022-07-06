@@ -387,16 +387,6 @@ function Base.empty(A::VectorOfArrays{T,N}) where {T,N}
 end
 
 
-function UnsafeArrays.uview(A::VectorOfArrays)
-    VectorOfArrays(
-        uview(A.data),
-        uview(A.elem_ptr),
-        uview(A.kernel_size),
-        no_consistency_checks
-    )
-end
-
-
 function Adapt.adapt_structure(to, A::VectorOfArrays)
     VectorOfArrays(
         adapt(to, A.data),
