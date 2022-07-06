@@ -70,12 +70,6 @@ size(flatview(A_nested)) == (2, 3, 6)
 
 There is a full duality between the nested and the flat view of the data. `A_flat` may be resized freely without breaking the inner consistency of `A_nested`: Changes in the shape of one will result in changes in the shape of the other.
 
-### Statistics functions
-
-`AbstractVectorOfSimilarArrays` supports the functions `sum`, `mean` and `var`, `AbstractVectorOfSimilarVectors` additionally support `cov` and `cor`.
-
-Methods for these function are defined both without and with weights (via `StatsBase.AbstractWeights`). Because of this, `ArraysOfArrays` currently requires `StatsBase`. It's possible that this requirement can be dropped in the future, though (see
-[Julia Statistics issue #4](https://github.com/JuliaLang/Statistics.jl/issues/4)).
 
 ## [VectorOfArrays](@id section_VectorOfArrays)
 

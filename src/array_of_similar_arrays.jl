@@ -408,68 +408,20 @@ Base.convert(R::Type{VectorOfSimilarVectors{T}}, A::AbstractVector{<:AbstractVec
 Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector{T}}) where {T} = R(A)
 
 
-"""
-    sum(X::AbstractVectorOfSimilarArrays)
-    sum(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights)
-
-Compute the sum of the elements vectors of `X`. Equivalent to `sum` of
-`flatview(X)` along the last dimension.
-"""
 Base.sum(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} =
     sum(flatview(X); dims = M + 1)[_ncolons(Val{M}())...]
 
-
-"""
-    mean(X::AbstractVectorOfSimilarArrays)
-    mean(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights)
-
-Compute the mean of the elements vectors of `X`. Equivalent to `mean` of
-`flatview(X)` along the last dimension.
-"""
 Statistics.mean(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} =
     mean(flatview(X); dims = M + 1)[_ncolons(Val{M}())...]
 
-
-"""
-    var(X::AbstractVectorOfSimilarArrays; corrected::Bool = true, mean = nothing)
-    var(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights; corrected::Bool = true, mean = nothing)
-
-Compute the sample variance of the elements vectors of `X`. Equivalent to
-`var` of `flatview(X)` along the last dimension.
-"""
 Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true, mean = nothing) where {T,M} =
     var(flatview(X); dims = M + 1, corrected = corrected, mean = mean)[_ncolons(Val{M}())...]
 
-
-"""
-    var(X::AbstractVectorOfSimilarArrays; corrected::Bool = true, mean = nothing)
-    var(X::AbstractVectorOfSimilarArrays, w::StatsBase.AbstractWeights; corrected::Bool = true, mean = nothing)
-
-Compute the sample standard deviation of the elements vectors of `X`.
-Compute the sample variance of the elements vectors of `X`. Equivalent to
-`std` of `flatview(X)` along the last dimension.
-"""
 Statistics.std(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true, mean = nothing) where {T,M} =
     std(flatview(X); dims = M + 1, corrected = corrected, mean = mean)[_ncolons(Val{M}())...]
 
-
-"""
-    cov(X::AbstractVectorOfSimilarVectors; corrected::Bool = true)
-    cov(X::AbstractVectorOfSimilarVectors, w::StatsBase.AbstractWeights; corrected::Bool = true)
-
-Compute the covariance matrix between the elements of the elements of `X`
-along `X`. Equivalent to `cov` of `flatview(X)` along dimension 2.
-"""
 Statistics.cov(X::AbstractVectorOfSimilarVectors; corrected::Bool = true) =
     cov(flatview(X); dims = 2, corrected = corrected)
 
-
-"""
-    cor(X::AbstractVectorOfSimilarVectors)
-    cor(X::AbstractVectorOfSimilarVectors, w::StatsBase.AbstractWeights)
-
-Compute the Pearson correlation matrix between the elements of the elements of
- `X` along `X`. Equivalent to `cor` of `flatview(X)` along dimension 2.
-"""
 Statistics.cor(X::AbstractVectorOfSimilarVectors) =
     cor(flatview(X); dims = 2)

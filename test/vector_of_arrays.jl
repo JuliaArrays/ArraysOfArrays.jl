@@ -1,7 +1,6 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 using ArraysOfArrays
-using StatsBase
 using Statistics
 using Test
 
