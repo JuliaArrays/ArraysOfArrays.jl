@@ -217,7 +217,11 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         B = VectorOfArrays(A);
 
         @test typeof(@inferred empty(B)) == typeof(B)
-        @test empty(A) == empty(B)
+        @test @inferred(empty(B)) == empty(A)
+        @test @inferred(empty!(deepcopy(B))) == empty(A)
+        @test @inferred(empty(B)) == @inferred(empty!(deepcopy(B)))
+        @test append!(empty(B), B) == A
+        @test append!(empty!(deepcopy(B)), B) == A
     end
 
 

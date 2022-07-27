@@ -248,6 +248,13 @@ using StatsBase: cov2cor
         B = ArrayOfSimilarArrays(A)
         @test typeof(@inferred empty(B)) == typeof(B)
         @test empty(A) == empty(B)
+
+        C = VectorOfSimilarArrays{Float64,2}(ElasticArray(B.data))
+        @test @inferred(empty(C)) == empty(A)
+        @test @inferred(empty!(deepcopy(C))) == empty(A)
+        @test @inferred(empty(C)) == @inferred(empty!(deepcopy(C)))
+        @test append!(empty(C), C) == A
+        @test append!(empty!(deepcopy(C)), C) == A
     end
 
     @testset "stats" begin

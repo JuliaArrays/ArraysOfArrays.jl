@@ -344,16 +344,23 @@ end
 # Will need equivalent of resize! that resizes in front of data instead of in back:
 # popfirst!(V::ArrayOfSimilarArrays) = ...
 
-function Base.empty(A::VectorOfSimilarArrays{T,M}, ::Type{<:AbstractArray{U}}) where {T,M,U}
-    data = A.data
-    size_inner, size_outer = split_tuple(size(data), Val{1}())
-    empty_size_outer = map(x -> zero(x), size_outer)
 
-    # ToDo: Don't use similar if data is an ElasticArray?
-    VectorOfSimilarArrays{T,M}(similar(data, U, size_inner..., empty_size_outer...))
+function _empty_data_size(A::VectorOfSimilarArrays{T,M}) where {T,M}
+    size_inner, size_outer = split_tuple(size(A.data), Val{M}())
+    empty_size_outer = map(x -> zero(x), size_outer)
+    (size_inner..., empty_size_outer...)
 end
 
-Base.empty(A::VectorOfSimilarArrays{T,M}) where {T,M} = empty(A, Array{T})
+function Base.empty(A::VectorOfSimilarArrays{T,M}, ::Type{<:AbstractArray{U}}) where {T,M,U}
+    new_data_size = _empty_data_size(A)
+    # ToDo: Don't use similar if data is an ElasticArray?
+    VectorOfSimilarArrays{T,M}(similar(A.data, U, new_data_size...))
+end
+
+function Base.empty!(A::VectorOfSimilarArrays{T,M}) where {T,M}
+    resize!(A.data, _empty_data_size(A))
+    A
+end
 
 
 
