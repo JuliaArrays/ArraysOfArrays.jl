@@ -363,7 +363,7 @@ end
 
 
 function Base.sizehint!(A::VectorOfArrays{T,N}, n, s::Dims{N}) where {T,N}
-    sizehint!(A.data, n * mul(s))
+    sizehint!(A.data, n * prod(s))
     sizehint!(A.elem_ptr, n + 1)
     sizehint!(A.kernel_size, n)
     A
