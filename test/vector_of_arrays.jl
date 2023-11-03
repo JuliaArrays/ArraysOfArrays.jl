@@ -325,7 +325,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         end
     end
 
-     @testset "resize" begin
+    @testset "resize" begin
         A1 = VectorOfArrays{Float64, 1}(ref_AoA1(Float64, 3))
         sizehint!(A1, 5, (10000,))
         @test ccall(:jl_array_size, Int, (Any, UInt), A1.data, 1) == 5*10000
