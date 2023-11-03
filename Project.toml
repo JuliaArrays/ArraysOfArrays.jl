@@ -12,6 +12,7 @@ Statistics = "10745b16-79ce-11e8-11f9-7d13ad32a3b2"
 Adapt = "1, 2, 3"
 ChainRulesCore = "1"
 StaticArraysCore = "1"
+Statistics = "1"
 julia = "1.6"
 
 [extras]
