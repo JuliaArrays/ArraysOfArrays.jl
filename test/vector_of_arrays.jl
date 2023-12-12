@@ -10,6 +10,8 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
 
 @testset "vector_of_arrays" begin
+    ref_flatview(A::AbstractVector{<:AbstractArray}) = vcat(map(vec, Array(A))...)
+
     ref_AoA1(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 5)][1:0] : [rand(T, rand(1:9)) for i in 1:n]
     ref_AoA2(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 4, 2)][1:0] : [rand(T, rand(1:4), rand(1:4)) for i in 1:n]
     ref_AoA3(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 3, 2, 4)][1:0] : [rand(T, rand(1:3), rand(1:3), rand(1:3)) for i in 1:n]
@@ -311,7 +313,8 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
         nestedV = @inferred(AbstractVector{AbstractArray{Float64, 4}}([rand(4,2,3,1), rand(5,3,1,3), rand(6,4,3,1), rand(9,2,1,2)]))
         VoA1 = @inferred(convert(VectorOfArrays, nestedV))
-        @test @inferred(flatview(VoA1)) == VoA1.data
+        @test @inferred(flatview(VoA1)) === VoA1.data == ref_flatview(VoA1)
+        @test @inferred(flatview(view(VoA1, 2:3))) == ref_flatview(view(VoA1, 2:3))
         VoA2 = @inferred(convert(VectorOfArrays{Float32, 4}, nestedV))
         @test @inferred(map(Float32, VoA1.data)) == VoA2.data
 

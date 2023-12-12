@@ -176,7 +176,11 @@ Returns the internal serialized representation of all element arrays of `A` as
 a single vector. Do *not* change the length of the returned vector, as it
 would break the inner consistency of `A`.
 """
-flatview(A::VectorOfArrays) = A.data
+flatview(A::VectorOfArrays{<:Any,N,M,<:Any}) where {N,M} = A.data
+
+function flatview(A::VectorOfArrays{<:Any,N,M,<:Any,<:SubArray}) where {N,M}
+    view(A.data, A.elem_ptr[begin]:A.elem_ptr[end]-1)
+end
 
 Base.size(A::VectorOfArrays) = size(A.kernel_size)
 
