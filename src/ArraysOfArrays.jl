@@ -13,16 +13,17 @@ ArraysOfArrays provides two different types of nested arrays:
 """
 module ArraysOfArrays
 
-using Adapt
 using Statistics
-using ChainRulesCore
-
-import StaticArraysCore
 
 include("util.jl")
 include("functions.jl")
 include("array_of_similar_arrays.jl")
 include("vector_of_arrays.jl")
-include("arrays_of_static_arrays.jl")
+
+@static if !isdefined(Base, :get_extension)
+    include("../ext/ArraysOfArraysAdaptExt.jl")
+    include("../ext/ArraysOfArraysChainRulesCoreExt.jl")
+    include("../ext/ArraysOfArraysStaticArraysCoreExt.jl")
+end
 
 end # module

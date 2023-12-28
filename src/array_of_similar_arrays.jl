@@ -85,23 +85,9 @@ end
 
 export ArrayOfSimilarArrays
 
-function _aosa_ctor_fromflat_pullback(ΔΩ)
-    NoTangent(), flatview(convert(ArrayOfSimilarArrays, unthunk(ΔΩ)))
-end
-
-function ChainRulesCore.rrule(::Type{ArrayOfSimilarArrays{T,M,N}}, flat_data::AbstractArray{U,L}) where {T,M,N,L,U}
-    return ArrayOfSimilarArrays{T,M,N}(flat_data), _aosa_ctor_fromflat_pullback
-end
-
 function ArrayOfSimilarArrays{T,M,N}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
     B = ArrayOfSimilarArrays{T,M,N}(Array{T}(undef, innersize(A)..., size(A)...))
     copyto!(B, A)
-end
-
-_aosa_ctor_fromnested_pullback(ΔΩ) = NoTangent(), ΔΩ
-
-function ChainRulesCore.rrule(::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
-    return ArrayOfSimilarArrays{T,M,N}(A), _aosa_ctor_fromnested_pullback
 end
 
 ArrayOfSimilarArrays{T}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
@@ -142,15 +128,6 @@ the result may be freely changed without breaking the inner consistency of
 `A`.
 """
 flatview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = A.data
-
-function ChainRulesCore.rrule(::typeof(flatview), A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
-    function flatview_pullback(ΔΩ)
-        data = unthunk(ΔΩ)
-        NoTangent(), ArrayOfSimilarArrays{eltype(data),M,N}(data)
-    end
-    
-    return flatview(A), flatview_pullback
-end
 
 
 Base.size(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = split_tuple(size(A.data), Val{M}())[2]
@@ -215,13 +192,6 @@ end
 
 Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
     prepend!(dest, ArrayOfSimilarArrays(src))
-
-
-function Adapt.adapt_structure(to, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
-    adapted_data = adapt(to, A.data)
-    ArrayOfSimilarArrays{eltype(adapted_data),M,N}(adapted_data)
-end
-
 
 function innermap(f::Base.Callable, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     new_data = map(f, A.data)
