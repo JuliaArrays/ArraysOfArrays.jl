@@ -19,6 +19,7 @@ include("util.jl")
 include("functions.jl")
 include("array_of_similar_arrays.jl")
 include("vector_of_arrays.jl")
+include("broadcasting.jl")
 
 @static if !isdefined(Base, :get_extension)
     include("../ext/ArraysOfArraysAdaptExt.jl")
