@@ -251,10 +251,10 @@ end
 
 
 Base.@propagate_inbounds function Base.setindex!(A::VectorOfArrays{T,N}, x::AbstractArray{U,N}, i::Integer) where {T,N,U}
-    r, s = _view_reshape_spec(A, i)
-    @boundscheck s == size(x) || throw(DimensionMismatch("Can't assign array to element $i of VectorOfArrays, array size is incompatible"))
-    A.data[rng] = x
-    A
+    a = A[i]
+    # @boundscheck size(a) == size(x) || throw(DimensionMismatch("Can't assign array to element $i of VectorOfArrays, array size is incompatible"))
+    a[:] = x
+    return A
 end
 
 Base.length(A::VectorOfArrays) = length(A.kernel_size)
