@@ -107,6 +107,9 @@ end
 @inline innersize(A::AbstractArray{<:AbstractArray}, dim::Integer) =
     innersize(A)[dim]
 
+@inline innersize(tpl::Tuple{T}) where T = size(only(tpl))
+@inline innersize(ref::Ref) = size(only(ref))
+
 
 """
     deepgetindex(A::AbstractArray, idxs...)
