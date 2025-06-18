@@ -212,8 +212,13 @@ Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArray
 end
 
 
-Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArrays, idxs::AbstractVector{<:Integer})
-    @boundscheck checkbounds(A, idxs)
+@inline _explicit_idxs(::AbstractVector, idxs::AbstractVector{<:Integer}) = idxs
+@inline _explicit_idxs(eachidx::AbstractVector, idxs::Base.LogicalIndex) = eachidx[idxs]
+
+Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArrays, raw_idxs::AbstractVector{<:Integer})
+    @boundscheck checkbounds(A, raw_idxs)
+
+    idxs = _explicit_idxs(eachindex(A), raw_idxs)
 
     A_ep = A.elem_ptr
     A_data = A.data

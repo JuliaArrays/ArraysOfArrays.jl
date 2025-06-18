@@ -168,6 +168,10 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
         @test @inferred(element_ptr(V12)) == V12.elem_ptr
 
+        boolidxs = rand(Bool, length(V1))
+        @test @inferred(V1[boolidxs]) == V1[eachindex(V1)[boolidxs]]
+        
+
 ## _view_reshape_spec not yet implemented ##
 #       V1_copy = copy(V1)
 #       V2_copy = copy(V2)
