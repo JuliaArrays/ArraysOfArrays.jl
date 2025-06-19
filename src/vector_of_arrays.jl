@@ -165,9 +165,12 @@ Base.@propagate_inbounds function _elem_range_size(A::VectorOfArrays, i::Integer
 end
 
 
-import Base.==
-(==)(A::VectorOfArrays, B::VectorOfArrays) =
+Base.:(==)(A::VectorOfArrays, B::VectorOfArrays) =
     A.data == B.data && A.elem_ptr == B.elem_ptr && A.kernel_size == B.kernel_size
+
+Base.isapprox(A::VectorOfArrays, B::VectorOfArrays; kwargs...) =
+    isapprox(A.data, B.data; kwargs...) && A.elem_ptr == B.elem_ptr && A.kernel_size == B.kernel_size
+
 
 """
     flatview(A::VectorOfArrays{T})::Vector{T}

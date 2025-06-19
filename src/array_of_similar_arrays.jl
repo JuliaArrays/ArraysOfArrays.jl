@@ -115,9 +115,11 @@ end
 end
 
 
-import Base.==
-(==)(A::ArrayOfSimilarArrays{T,M,N}, B::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} =
+@inline Base.:(==)(A::ArrayOfSimilarArrays{<:Any,M,N}, B::ArrayOfSimilarArrays{<:Any,M,N}) where {M,N} =
     (A.data == B.data)
+
+@inline Base.isapprox(A::ArrayOfSimilarArrays{<:Any,M,N}, B::ArrayOfSimilarArrays{<:Any,M,N}; kwargs...) where {M,N} =
+    isapprox(A.data, B.data; kwargs...)
 
 
 """
