@@ -76,6 +76,37 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
     end
 
 
+    @testset "mapreduce maximum/minimum shortcut" begin
+        A1 = ref_AoA3(Float32, 3); A2 = ref_AoA3(Float32, 0)
+        A3 = ref_AoA3(Float32, 4); A4 = ref_AoA3(Float64, 2)
+
+        B1 = VectorOfArrays(A1); B2 = VectorOfArrays(A2);
+        B3 = VectorOfArrays(A3); B4 = VectorOfArrays(A4);
+
+        @testset "maximum - correctness" begin
+            @test mapreduce(maximum, max, B1) == maximum(B1.data)
+            @test mapreduce(maximum, max, B2; init=Float32(0.)) == maximum(B2.data; init=Float32(0.))
+            @test mapreduce(maximum, max, B3) == maximum(B3.data)
+            @test mapreduce(maximum, max, B4) == maximum(B4.data)
+        end
+
+        @testset "maximum - performance" begin
+            @test (@allocated mapreduce(maximum, max, B1)) == (@allocated maximum(B1.data))
+        end
+
+        @testset "minimum - correctness" begin
+            @test mapreduce(minimum, min, B1) == minimum(B1.data)
+            @test mapreduce(minimum, min, B2; init=Float32(0.)) == minimum(B2.data; init=Float32(0.))
+            @test mapreduce(minimum, min, B3) == minimum(B3.data)
+            @test mapreduce(minimum, min, B4) == minimum(B4.data)
+        end
+
+        @testset "minimum - performance" begin
+            @test (@allocated mapreduce(minimum, min, B1)) == (@allocated minimum(B1.data))
+        end
+    end
+
+
     @testset "append! and vcat" begin
         A1 = ref_AoA3(Float32, 3); A2 = ref_AoA3(Float32, 0)
         A3 = ref_AoA3(Float32, 4); A4 = ref_AoA3(Float64, 2)
