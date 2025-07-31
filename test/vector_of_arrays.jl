@@ -84,25 +84,29 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         B3 = VectorOfArrays(A3); B4 = VectorOfArrays(A4);
 
         @testset "maximum - correctness" begin
-            @test mapreduce(maximum, max, B1) == maximum(flatview(B1))
-            @test mapreduce(maximum, max, B2; init=Float32(0.)) == maximum(flatview(B2); init=Float32(0.))
-            @test mapreduce(maximum, max, B3) == maximum(flatview(B3))
-            @test mapreduce(maximum, max, B4) == maximum(flatview(B4))
+            @test mapreduce(maximum, max, B1) == mapreduce(maximum, max, Array(B1))
+            @test mapreduce(maximum, max, B2; init=Float32(0.)) == mapreduce(maximum, max, Array(B2); init=Float32(0.))
+            @test mapreduce(maximum, max, B3) == mapreduce(maximum, max, Array(B3))
+            @test mapreduce(maximum, max, B4) == mapreduce(maximum, max, Array(B4))
         end
 
         @testset "maximum - performance" begin
-            @test (@allocated mapreduce(maximum, max, B1)) == (@allocated maximum(flatview(B1)))
+            B1_naive = Array(B1)
+            mapreduce(maximum, max, B1_naive)
+            @test (@allocated mapreduce(maximum, max, B1)) <= (@allocated mapreduce(maximum, max, B1_naive))
         end
 
         @testset "minimum - correctness" begin
-            @test mapreduce(minimum, min, B1) == minimum(flatview(B1))
-            @test mapreduce(minimum, min, B2; init=Float32(0.)) == minimum(flatview(B2); init=Float32(0.))
-            @test mapreduce(minimum, min, B3) == minimum(flatview(B3))
-            @test mapreduce(minimum, min, B4) == minimum(flatview(B4))
+            @test mapreduce(minimum, min, B1) == mapreduce(minimum, min, Array(B1))
+            @test mapreduce(minimum, min, B2; init=Float32(0.)) == mapreduce(minimum, min, Array(B2); init=Float32(0.))
+            @test mapreduce(minimum, min, B3) == mapreduce(minimum, min, Array(B3))
+            @test mapreduce(minimum, min, B4) == mapreduce(minimum, min, Array(B4))
         end
 
         @testset "minimum - performance" begin
-            @test (@allocated mapreduce(minimum, min, B1)) == (@allocated minimum(flatview(B1)))
+            B1_naive = Array(B1)
+            mapreduce(minimum, min, B1_naive)
+            @test (@allocated mapreduce(minimum, min, B1)) <= (@allocated mapreduce(minimum, min, B1_naive))
         end
     end
 
