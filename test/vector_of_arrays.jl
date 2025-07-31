@@ -110,10 +110,10 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         V3 = VectorOfVectors(ref_AoA1(Float32, 3))
         V4 = VectorOfVectors(ref_AoA1(Float32, 4))
 
-        @test reduce(vcat, V1) == flatview(V1)
-        @test reduce(vcat, V2) == flatview(V2)
-        @test reduce(vcat, V3) == flatview(V3)
-        @test reduce(vcat, V4) == flatview(V4)
+        @test reduce(vcat, V1) == reduce(vcat, Array(V1))
+        @test reduce(vcat, V2) == reduce(vcat, Array(V2))
+        @test reduce(vcat, V3) == reduce(vcat, Array(V3))
+        @test reduce(vcat, V4) == reduce(vcat, Array(V4))
 
         @test (@allocated reduce(vcat, V1)) == 0
         @test (@allocated reduce(vcat, V2)) == 0
