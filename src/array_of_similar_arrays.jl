@@ -262,6 +262,9 @@ Base.@propagate_inbounds function _deepview_impl_aosa(A::ArrayOfSimilarArrays, i
 end
 
 
+Base.mapreduce(::typeof(maximum), ::typeof(max), A::ArrayOfSimilarArrays; kw...) = maximum(flatview(A); kw...)
+Base.mapreduce(::typeof(minimum), ::typeof(min), A::ArrayOfSimilarArrays; kw...) = minimum(flatview(A); kw...)
+
 
 const VectorOfSimilarArrays{
     T, M, L,
