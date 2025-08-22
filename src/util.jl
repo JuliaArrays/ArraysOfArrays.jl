@@ -32,7 +32,7 @@ Base.@propagate_inbounds swap_front_back_tuple(x::NTuple{N,Any}, ::Val{M}) where
 
 _convert_elype(::Type{T}, A::AbstractArray{T}) where {T} = A
 
-_convert_elype(::Type{T}, A::AbstractArray{U}) where {T,U} = broadcast(x -> convert(T, x), A)
+_convert_elype(::Type{T}, A::AbstractArray{U}) where {T,U} = broadcast(Base.Fix1(convert, T), A)
 
 
 Base.@pure _add_vals(Val_M::Val{M}, Val_N::Val{N}) where {M,N} =
