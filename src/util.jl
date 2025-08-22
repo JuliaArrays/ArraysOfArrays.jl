@@ -35,9 +35,7 @@ _convert_elype(::Type{T}, A::AbstractArray{T}) where {T} = A
 _convert_elype(::Type{T}, A::AbstractArray{U}) where {T,U} = broadcast(Base.Fix1(convert, T), A)
 
 
-Base.@pure _add_vals(Val_M::Val{M}, Val_N::Val{N}) where {M,N} =
-    Val{length((ntuple(identity, Val_M)..., ntuple(identity, Val_N)...))}()
-
+Base.@pure _add_vals(::Val{A}, ::Val{B}) where {A,B} = Val{A + B}()
 
 Base.@pure require_ndims(A::AbstractArray{T,N}, Val_N::Val{N}) where {T,N} =
     nothing
