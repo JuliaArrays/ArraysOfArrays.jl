@@ -36,8 +36,7 @@ deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray}) =
 
 View array `A` in a suitable flattened form. The shape of the flattened form
 will depend on the type of `A`. If the `A` is not a nested array, the return
-value is `A` itself. When no type-specific method is available, `flatview`
-will fall back to `Base.Iterators.flatten`.
+value is `A` itself. Only specific types of nested arrays are supported.
 """
 function flatview end
 export flatview
@@ -45,8 +44,8 @@ export flatview
 @inline flatview(A::AbstractArray) = A
 
 # TODO: Implement flatview on generic nested arrays via new `FlatView`, using
-# deepgetindex to implement getindex, etc.
-@inline flatview(A::AbstractArray{<:AbstractArray}) = Base.Iterators.flatten(A)
+# deepgetindex to implement getindex, etc?
+@inline flatview(A::AbstractArray{<:AbstractArray}) = throw(ArgumentError("flatview not implemented for generic AbstractArray{<:AbstractArray}"))
 
 
 """
