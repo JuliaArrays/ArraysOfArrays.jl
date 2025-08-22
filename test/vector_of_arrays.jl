@@ -104,6 +104,21 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         B1_copy = @inferred(copy(B1)); B3_copy = @inferred(copy(B3))
         append!(B1_copy, B3_copy)
         @test B1_copy.data == vcat(B1.data, B3.data)
+
+        V1 = VectorOfVectors(ref_AoA1(Float32, 1))
+        V2 = VectorOfVectors(ref_AoA1(Float32, 2))
+        V3 = VectorOfVectors(ref_AoA1(Float32, 3))
+        V4 = VectorOfVectors(ref_AoA1(Float32, 4))
+
+        @test reduce(vcat, V1) == reduce(vcat, Array(V1))
+        @test reduce(vcat, V2) == reduce(vcat, Array(V2))
+        @test reduce(vcat, V3) == reduce(vcat, Array(V3))
+        @test reduce(vcat, V4) == reduce(vcat, Array(V4))
+
+        @test (@allocated reduce(vcat, V1)) == 0
+        @test (@allocated reduce(vcat, V2)) == 0
+        @test (@allocated reduce(vcat, V3)) == 0
+        @test (@allocated reduce(vcat, V4)) == 0
     end
 
 
