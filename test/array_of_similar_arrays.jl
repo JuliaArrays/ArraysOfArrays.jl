@@ -38,8 +38,19 @@ using StatsBase: cov2cor
     }
         @testset "$TT from Array{Float64,$L}" begin
             A = rand_flat_array(Val_L)
-            @test typeof(@inferred TT(A)) == RT
-            @test typeof(@inferred convert(TT, A)) == RT
+            @test typeof(@inferred TT(A)) <: RT
+            @test typeof(@inferred convert(TT, A)) <: RT
+            
+            AosA = TT(A)
+            @test typeof(AosA) == typeof(convert(TT, A))
+            @test @inferred(eltype(AosA)) == typeof(AosA[1])
+            @test @inferred(parent(AosA)) === @inferred(flatview(AosA))
+            if eltype(eltype(AosA)) == eltype(A)
+                @test @inferred(flatview(AosA)) === A
+            else
+                @test @inferred(flatview(AosA)) ≈ A
+            end
+            @test @inferred(stack(AosA)) === flatview(AosA)
         end
     end
 
@@ -57,11 +68,11 @@ using StatsBase: cov2cor
 
             A_U = Array{Array{U,M},N}(A)
 
-            @test typeof(A2_ctor) == RT
+            @test typeof(A2_ctor) <: RT
             @test A2_ctor == A_U
 
             A2_conv = @inferred convert(TT, A)
-            @test typeof(A2_conv) == RT
+            @test typeof(A2_conv) <: RT
             @test A2_conv == A2_ctor
 
             U = eltype(flatview(A2_ctor))
@@ -119,6 +130,19 @@ using StatsBase: cov2cor
         @test @inferred(flatview(ArrayOfSimilarVectors(r))) == r
 
         test_rrule(ArrayOfSimilarArrays{Float64,2,2}, [rand(2,3) for i in 1:5, j in 1:6])
+    end
+
+    @testset "AbstractSlices interface" begin
+        @test @inferred(ArrayOfSimilarArrays{Float32,2,3}(rand(3,4,5,6,7))) isa AbstractSlices
+        let A = ArrayOfSimilarArrays{Float32,2,3}(rand(3,4,5,6,7))
+            @test @inferred(A[2, 3, 4]) isa AbstractArray{Float32,2}
+            ref_ET = typeof(A[2, 3, 4])
+            @test A isa AbstractSlices{ref_ET, 3}
+            @test @inferred(eltype(A)) == ref_ET
+            @test @inferred(innersize(A)) == (3, 4)
+            @test @inferred(getslicemap(A)) == (:, :, 1, 2, 3)
+            @test @inferred(parent(A)) === A.data
+        end
     end
 
     @testset "add remove" begin
