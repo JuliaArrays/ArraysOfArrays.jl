@@ -7,6 +7,9 @@ using StaticArrays
 
 
 @testset "functions" begin
+    Aes1 = eachslice(rand(5,6,7,8,9); dims = (4,5))
+    Aes2 = eachslice(rand(5,6,7,8,9); dims = (4,2))
+
     function gen_nested()
         A11 = [1 2; 3 4]
         A21 = [4 5 6; 7 8 9]
@@ -22,6 +25,15 @@ using StaticArrays
 
         B = rand(3, 2, 4)
         @test @inferred(nestedview(flatview(B), SVector{3})) == @inferred(nestedview(B, Val(1)))
+
+        @test @inferred flatview(Aes1) == parent(Aes1)
+        @test_throws ArgumentError @inferred flatview(Aes2)
+    end
+
+
+    @testset "getslicemap" begin
+        @test @inferred(getslicemap(Aes1)) == (:, :, :, 1, 2)
+        @test @inferred(getslicemap(Aes2)) == (:, 2, :, 1, :)
     end
 
 
@@ -32,6 +44,9 @@ using StaticArrays
         @test @inferred(innersize((2:5,))) == (4,)
         @test @inferred(innersize(Ref(2:5))) == (4,)
         @test_throws DimensionMismatch @inferred(innersize([[1, 2, 3], [4, 5]]))
+
+        @test @inferred(innersize(Aes1)) == (5, 6, 7)
+        @test @inferred(innersize(Aes2)) == (5, 7, 9)
     end
 
 

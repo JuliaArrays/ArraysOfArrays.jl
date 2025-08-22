@@ -15,6 +15,10 @@ end
 
 
 Base.@pure _ncolons(::Val{N}) where N = ntuple(_ -> Colon(), Val{N}())
+Base.@pure _nColons(::Val{N}) where N = ntuple(_ -> Colon, Val{N}())
+
+@inline _oneto_tpl(::Val{N}) where N = ntuple(identity, Val{N}())
+Base.@pure _nInts(::Val{N}) where N = ntuple(_ -> Int, Val{N}())
 
 
 Base.@propagate_inbounds front_tuple(x::NTuple{N,Any}, ::Val{M}) where {N,M} =
@@ -42,3 +46,35 @@ Base.@pure require_ndims(A::AbstractArray{T,N}, Val_N::Val{N}) where {T,N} =
 
 Base.@pure require_ndims(A::AbstractArray{T,M}, Val_N::Val{N}) where {T,M,N} =
     throw(ArgumentError("Require an array with $N dimensions"))
+
+@inline @generated function _extract_innerdims(obj::Tuple, slicemap::Tuple{Vararg{Union{Colon,Integer}}})
+    # slicemap may be something like (Colon(), 2, Colon(), 1, Colon()),
+    # extract only the elements of obj where the slicemap is a Colon.
+    expr = Expr(:tuple)
+    slicepars = slicemap.parameters
+    for i in 1:length(slicepars)
+        if slicepars[i] <: Colon
+            push!(expr.args, :(obj[$i]))
+        end
+    end
+    return expr
+end
+
+@inline @generated function _extract_outerdims(obj::Tuple, slicemap::Tuple{Vararg{Union{Colon,Integer}}})
+    # slicemap may be something like (Colon(), 2, Colon(), 1, Colon()),
+    # extract only the elements of obj where the slicemap is a Colon.
+    expr = Expr(:tuple)
+    slicepars = slicemap.parameters
+    for i in 1:length(slicepars)
+        if slicepars[i] <: Integer
+            push!(expr.args, :(obj[$i]))
+        end
+    end
+    return expr
+end
+
+
+function _is_aoa_slicemap(slicemap::Tuple{Vararg{Union{Colon,Integer}}})
+    dims = _oneto_tpl(Val(length(slicemap)))
+    issorted((_extract_innerdims(dims, slicemap)..., _extract_outerdims(dims, slicemap)...))
+end
