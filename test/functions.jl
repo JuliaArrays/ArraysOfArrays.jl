@@ -3,48 +3,89 @@
 using ArraysOfArrays
 using Test
 
-using StaticArrays
+using ArraysOfArrays: getinnerdims, getouterdims
 
 
 @testset "functions" begin
-    Aes1 = eachslice(rand(5,6,7,8,9); dims = (4,5))
-    Aes2 = eachslice(rand(5,6,7,8,9); dims = (4,2))
+    A_0 = fill(Float32(42))
+    A_1 = Float32[3, 8, 4, 6]
+    A_1e = Float32[]
+    A_2 = [Float32[3 8; 4 6], Float32[1 2; 5 7; 9 0]]
+    A_2e = Matrix{Float32}[]
+    A_2b = [Float32[3 8; 4 6], Float32[1 2; 9 0]]
+    A_3 = [[Float32[3, 8, 4], Float32[1, 2, 5]], [Float32[6, 7], Float32[9, 0]]]
 
-    function gen_nested()
-        A11 = [1 2; 3 4]
-        A21 = [4 5 6; 7 8 9]
-        A12 = [10 11; 12 13; 14 15]
-        A22 = [16 17; 18 19]
-        hcat([A11, A21], [A12, A22])
+    @testset "Nested array API" begin
+        for A in [A_0, A_1, A_1e, A_2, A_2e, A_2b, A_3]
+            non_nested = eltype(A) <: Number
+
+            @test @inferred(getsplitmode(A)) isa if non_nested
+                NonSplitMode{ndims(A)}
+            else
+                UnknownSplitMode{typeof(A)}
+            end
+
+            smode = getsplitmode(A)
+
+            dimdixs = ntuple(identity, ndims(A))
+            if smode  isa UnknownSplitMode
+                @test @inferred(is_memordered_splitmode(smode)) == false
+                @test_throws ArgumentError getinnerdims(dimdixs, smode)
+                @test_throws ArgumentError getouterdims(dimdixs, smode)
+            else
+                @test @inferred(is_memordered_splitmode(smode)) == true
+                @test getinnerdims(dimdixs, smode) == ()
+                @test getouterdims(dimdixs, smode) == dimdixs
+            end
+
+            if non_nested
+                @test_throws ArgumentError joinedview(A)
+                @test_throws ArgumentError flatview(A)
+            end
+
+            stacked_A = try stack(A); catch; nothing; end
+            if isnothing(stacked_A)
+                @test_throws DimensionMismatch stacked(A)
+            else
+                @inferred(stacked(A)) == stacked_A
+                @test_throws ArgumentError splitview(stacked_A, smode)
+            end
+        end
     end
-
-
-    @testset "flatview and nestedview" begin
-        A = [(@SArray randn(3, 2, 4)) for i in 1:2, j in 1:2]
-        @test @inferred(nestedview(flatview(A), Val(3))) == A
-
-        B = rand(3, 2, 4)
-        @test @inferred(nestedview(flatview(B), SVector{3})) == @inferred(nestedview(B, Val(1)))
-
-        @test @inferred flatview(Aes1) == parent(Aes1)
-        @test_throws ArgumentError @inferred flatview(Aes2)
-    end
-
-
-    @testset "getslicemap" begin
-        @test @inferred(getslicemap(Aes1)) == (:, :, :, 1, 2)
-        @test @inferred(getslicemap(Aes2)) == (:, 2, :, 1, :)
-    end
-
 
     @testset "innersize" begin
-        @test @inferred(innersize(rand(3,4,5))) == ()
-        @test @inferred(innersize([[1, 2, 3], [4, 5, 6]])) == (3,)
-        @test @inferred(innersize([[]])) == (0,)
-        @test @inferred(innersize([2:5])) == (4,)
-        @test_throws DimensionMismatch @inferred(innersize([[1, 2, 3], [4, 5]]))
+        @test @inferred(innersize(A_0)) == ()
+        @test @inferred(innersize(A_1)) == ()
+        @test @inferred(innersize(A_1e)) == ()
+        @test_throws DimensionMismatch innersize(A_2)
+        @test @inferred(innersize(A_2e)) == (0, 0)
+        @test @inferred(innersize(A_2b)) == (2, 2)
+        @test @inferred(innersize(A_3)) == (2,)
+    end
 
-        @test @inferred(innersize(Aes1)) == (5, 6, 7)
-        @test @inferred(innersize(Aes2)) == (5, 7, 9)
+    @testset "innermap" begin
+        f = x -> x^2
+        @test @inferred(innermap(f, A_0)) == fill(1764)
+        @test @inferred(innermap(f, A_1)) == Float32[9, 64, 16, 36]
+        @test @inferred(innermap(f, A_2)) == [Float32[9 64; 16 36], Float32[1 4; 25 49; 81 0]]
+        @test_throws MethodError innermap(f, A_3)
+
+        @test @inferred(innermap(length, A_0)) == fill(1)
+        @test @inferred(innermap(length, A_1)) == fill(1, 4)
+        @test @inferred(innermap(length, A_2)) == [fill(1, 2, 2), fill(1, 3, 2)]
+        @test @inferred(innermap(length, A_3)) == [fill(3, 2), fill(2, 2)]
+    end
+
+    @testset "deepmap" begin
+        f = x -> x^2
+        @test @inferred(deepmap(f, A_0)) == fill(1764)
+        @test @inferred(deepmap(f, A_1)) == Float32[9, 64, 16, 36]
+        @test @inferred(deepmap(f, A_2)) == [Float32[9 64; 16 36], Float32[1 4; 25 49; 81 0]]
+        @test @inferred(deepmap(f, A_3)) == [[Float32[9, 64, 16], Float32[1, 4, 25]], [Float32[36, 49], Float32[81, 0]]]
+
+        @test @inferred(deepmap(length, A_0)) == fill(1)
+        @test @inferred(deepmap(length, A_1)) == fill(1, 4)
+        @test @inferred(deepmap(length, A_2)) == [fill(1, 2, 2), fill(1, 3, 2)]
+        @test @inferred(deepmap(length, A_3)) == [[fill(1, 3), fill(1, 3)], [fill(1, 2), fill(1, 2)]]
     end
 end

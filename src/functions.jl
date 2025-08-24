@@ -15,13 +15,13 @@ export AbstractSplitMode
 
 
 """
-    struct NonSplitMode <: AbstractSplitMode
+    struct NonSplitMode{N} <: AbstractSplitMode
 
-The split mode of unsplit arrays.
+The split mode of unsplit collections that have `N` dimensions.
 
-Constructor: `NonSplitMode()`
+Constructor: `NonSplitMode{N}()`
 """
-struct NonSplitMode <: AbstractSplitMode end
+struct NonSplitMode{N} <: AbstractSplitMode end
 export NonSplitMode
 
 
@@ -72,7 +72,7 @@ export getsplitmode
 
 @inline getsplitmode(::T) where T = UnknownSplitMode{T}()
 
-@inline getsplitmode(::AbstractArray) = NonSplitMode()
+@inline getsplitmode(::AbstractArray{<:Any,N}) where N = NonSplitMode{N}()
 
 @inline getsplitmode(A::AbstractArray{<:AbstractArray}) = UnknownSplitMode{typeof(A)}()
 
@@ -103,6 +103,12 @@ mode `smode`, in the order specified by `smode`.
 """
 function getinnerdims end
 
+@inline getinnerdims(::Tuple, ::NonSplitMode) = ()
+
+function getinnerdims(::Tuple, ::UnknownSplitMode)
+    throw(ArgumentError("getinnerdims cannot be used with UnknownSplitMode"))
+end
+
 
 """
     ArraysOfArrays.getouterdims(tpl::Tuple, smode::AbstractSlicing)
@@ -111,6 +117,12 @@ Get the entries of `tpl` corresponding to the outer dimensions of slicing
 mode `smode`, in the order specified by `smode`.
 """
 function getouterdims end
+
+@inline getouterdims(x::Tuple, ::NonSplitMode) = x
+
+function getouterdims(::Tuple, ::UnknownSplitMode)
+    throw(ArgumentError("getouterdims cannot be used with UnknownSplitMode"))
+end
 
 
 """
@@ -227,7 +239,7 @@ are not of equal size.
 function innersize end
 export innersize
 
-innersize(::AbstractArray) = ()
+innersize(::AbstractArray{<:Number}) = ()
 
 function innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
     s = if !isempty(A)

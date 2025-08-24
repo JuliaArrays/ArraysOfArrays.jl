@@ -98,6 +98,9 @@ using ArraysOfArrays: getinnerdims, getouterdims
         @test_throws ArgumentError flatview(A)
         @test_throws ArgumentError splitview(A_unsplit_ref, smode)
     else
+        if A isa Slices
+            @test joinedview(A) === parent(A)
+        end
         @test @inferred(joinedview(A)) === A_unsplit_ref
         A_unsplit = joinedview(A)
         @test typeof(splitview(A_unsplit_ref, smode)) == typeof(A)
