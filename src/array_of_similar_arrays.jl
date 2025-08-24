@@ -125,11 +125,6 @@ end
 end
 
 
-@inline function _innerlength(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
-    prod(innersize(A))
-end
-
-
 import Base.==
 (==)(A::ArrayOfSimilarArrays{T,M,N}, B::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} =
     (A.data == B.data)

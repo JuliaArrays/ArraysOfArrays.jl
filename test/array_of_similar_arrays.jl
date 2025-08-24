@@ -330,7 +330,7 @@ using StatsBase: cov2cor
         @test @inferred(deepmap(f, ASA)).data == ASA.data.*2
         @test @inferred(innermap(f, ASA)).data == ASA.data.*2
 
-        @test @inferred(ArraysOfArrays._innerlength(VSV)) == N
+        @test @inferred(prod(ArraysOfArrays.innersize(VSV))) == N
     end
 
     @testset "map and broadcast" begin
