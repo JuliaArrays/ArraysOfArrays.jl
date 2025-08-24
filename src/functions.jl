@@ -43,13 +43,14 @@ export UnknownSplitMode
 
 
 """
-    abstract type AbstractSlicingMode <: AbstractSplitMode
+    abstract type AbstractSlicingMode{M,N} <: AbstractSplitMode
 
-Abstract supertype for array split modes.
+Abstract supertype for array slicing modes with `M` inner dimensions and `N`
+outer dimensions.
 
 Use `getsplitmode` to get the split mode of an split array.
 """
-abstract type AbstractSlicingMode <: AbstractSplitMode end
+abstract type AbstractSlicingMode{M,N} <: AbstractSplitMode end
 export AbstractSlicingMode
 
 
@@ -67,6 +68,7 @@ the same type as `A` if at all possible, except if `getsplitmode(A)` is an
 `getsplitmode` should be a zero-copy O(1) operation, if at all possible.
 """
 function getsplitmode end
+export getsplitmode
 
 @inline getsplitmode(::T) where T = UnknownSplitMode{T}()
 
@@ -87,9 +89,28 @@ reordering).
 If true, `flatview` and `joinedview` are equivalent.
 """
 function is_memordered_splitmode end
+export is_memordered_splitmode
 
 is_memordered_splitmode(::NonSplitMode) = true
 is_memordered_splitmode(::UnknownSplitMode) = false
+
+
+"""
+    ArraysOfArrays.getinnerdims(tpl::Tuple, smode::AbstractSlicing)
+
+Get the entries of `tpl` corresponding to the inner dimensions of slicing
+mode `smode`, in the order specified by `smode`.
+"""
+function getinnerdims end
+
+
+"""
+    ArraysOfArrays.getouterdims(tpl::Tuple, smode::AbstractSlicing)
+
+Get the entries of `tpl` corresponding to the outer dimensions of slicing
+mode `smode`, in the order specified by `smode`.
+"""
+function getouterdims end
 
 
 """

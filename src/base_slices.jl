@@ -15,21 +15,19 @@ BaseSlicing(slicemap::Tuple{Vararg{Union{Colon,Int}}}})
 
 See also [`AbstractSlicingMode`](@ref).
 """
-struct BaseSlicing{N,TPL<:Tuple{Vararg{Union{Colon,Int},N}}} <: AbstractSlicingMode
+struct BaseSlicing{M,N,TPL<:Tuple{Vararg{Union{Colon,Int}}}} <: AbstractSlicingMode{M,N}
     slicemap::TPL
+end
+export BaseSlicing
+
+function is_memordered_splitmode(smode::BaseSlicing)
+    slicemap = smode.slicemap
+    dims = _oneto_tpl(Val(length(slicemap)))
+    issorted((getinnerdims(dims, slicemap)..., _extract_outerdims(dims, slicemap)...))
 end
 
 
-@inline getsplitmode(A::Slices) = BaseSlicing(A.slicemap)
-@inline joinedview(A::Slices) = parent(A)
-
-
-@inline stacked(A::Slices) = reshape(parent(A), (length(A), prod(size(parent(A))) ÷ length(A)))
-
-@inline innersize(A::AbstractSlices) = getinnnerdims(size(flatview(A)), getsplitmode(A))
-
-
-@inline @generated function getinnnerdims(obj::Tuple, smode::BaseSlicing{N,SliceMapT}) where {N,SliceMapT}
+@inline @generated function getinnerdims(obj::Tuple, smode::BaseSlicing{N,SliceMapT}) where {N,SliceMapT}
     # slicemap may be something like (Colon(), 2, Colon(), 1, Colon()),
     # extract only the elements of obj where the slicemap is a Colon.
     expr = Expr(:tuple)
@@ -67,8 +65,19 @@ end
 end
 
 
-function is_memordered_splitmode(smode::BaseSlicing)
-    slicemap = smode.slicemap
-    dims = _oneto_tpl(Val(length(slicemap)))
-    issorted((getinnnerdims(dims, slicemap)..., _extract_outerdims(dims, slicemap)...))
+@inline function getsplitmode(A::Slices{<:AbstractArray{T,M},N}) where {T,M,N}
+    slicemap = A.slicemap
+    BaseSlicing{M,ndims(A.parent)-M,typeof(slicemap)}(slicemap)
 end
+
+function splitview(A::AbstractArray, smode::BaseSlicing)
+    slicemap = smode.slicemap
+    axs = getouterdims(axes(A), smode)
+    return Slices(A, slicemap, axs)
+end
+
+@inline joinedview(A::Slices) = parent(A)
+
+@inline stacked(A::Slices) = reshape(parent(A), (length(A), prod(size(parent(A))) ÷ length(A)))
+
+@inline innersize(A::AbstractSlices) = getinnerdims(size(flatview(A)), getsplitmode(A))

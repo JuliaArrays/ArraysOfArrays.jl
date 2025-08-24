@@ -11,6 +11,8 @@ Base.@pure _nColons(::Val{N}) where N = ntuple(_ -> Colon, Val{N}())
 @inline _oneto_tpl(::Val{N}) where N = ntuple(identity, Val{N}())
 Base.@pure _nInts(::Val{N}) where N = ntuple(_ -> Int, Val{N}())
 
+@inline _dimstpl(::AbstractArray{T,N}) where {T,N} = _nInts(Val(N))
+
 
 Base.@propagate_inbounds front_tuple(x::NTuple{N,Any}, ::Val{M}) where {N,M} =
     Base.ntuple(i -> x[i], Val{M}())
