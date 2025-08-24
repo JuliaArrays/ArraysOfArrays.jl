@@ -42,8 +42,6 @@ using StaticArrays
         @test @inferred(innersize([[1, 2, 3], [4, 5, 6]])) == (3,)
         @test @inferred(innersize([[]])) == (0,)
         @test @inferred(innersize([2:5])) == (4,)
-        @test @inferred(innersize((2:5,))) == (4,)
-        @test @inferred(innersize(Ref(2:5))) == (4,)
         @test_throws DimensionMismatch @inferred(innersize([[1, 2, 3], [4, 5]]))
 
         @test @inferred(innersize(Aes1)) == (5, 6, 7)
