@@ -134,7 +134,7 @@ end
 
 """
     joinedview(A::AbstractArray)
-    joinedview(A::AbstractArray{<:AbstractArray{<:...}})
+    joinedview(A::AbstractArray{<:AbstractArray})
 
 View array `A` in unsplit form.
 
@@ -168,7 +168,7 @@ end
 
 """
     flatview(A::AbstractArray)
-    flatview(A::AbstractArray{<:AbstractArray{<:...}})
+    flatview(A::AbstractArray{<:AbstractArray})
 
 View array `A` in a flattened form, with inner dimensions first. The shape of
 the flattened form will depend on the type of `A`. If the `A` is not a
@@ -200,6 +200,22 @@ function flatview(A::AbstractSlices)
         throw(ArgumentError("flatview required memory-ordered split/slicing, but array has split mode $smode"))
     end
 end
+
+"""
+    stacked(A::AbstractArray)
+    stacked(A::AbstractArray{<:AbstractArray})
+
+Join stacked arrays of a nested array into a single array along one or more
+new dimensions, return non-nested arrays unchanged.
+
+Similar to `Base.stack`, but can return the original underlying array of
+sliced arrays in more cases.
+"""
+function stacked end
+export stacked
+
+@inline stacked(A::AbstractArray) = A
+@inline stacked(A::AbstractArray{<:AbstractArray}) = stack(A)
 
 
 """

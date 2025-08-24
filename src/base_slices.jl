@@ -76,6 +76,16 @@ end
 
 @inline joinedview(A::Slices) = parent(A)
 
-@inline stacked(A::Slices) = reshape(parent(A), (length(A), prod(size(parent(A))) ÷ length(A)))
+
+@inline stacked(A::Slices) = _stacked_slices_impl(A, getsplitmode(A))
+
+_stacked_slices_impl(A::Slices, ::BaseSlicing{1,1,Tuple{Colon,Int}}) = unsliced(A)
+
+function _stacked_slices_impl(A::Slices, smode::BaseSlicing{M,N,SliceMapT}) where {M,N,SliceMapT}
+    A_unsliced = unsliced(A)
+    dimorder = (getinnerdims(_dimstpl(A_unsliced), smode)..., getouterdims(_dimstpl(A_unsliced), smode)...)
+    return permutedims(A_unsliced, dimorder)
+end
+
 
 @inline innersize(A::AbstractSlices) = getinnerdims(size(flatview(A)), getsplitmode(A))

@@ -67,11 +67,11 @@ using ArraysOfArrays: getinnerdims, getouterdims
         @test M == ndims(eltype(A))
         @test N == ndims(A)
 
-        @test stack(A) == A_array_stacked
+        @test Array(stack(A)) == A_array_stacked
 
         if is_memordered_splitmode(smode)
             if A isa Slices
-                # stack(A) never returns parent for Slices even if possible:
+                # stack(A) never returns parent for Slices, even if possible:
                 @test @inferred(stack(A)) == A_unsplit_ref
             else
                 @test @inferred(stack(A)) === A_unsplit_ref
