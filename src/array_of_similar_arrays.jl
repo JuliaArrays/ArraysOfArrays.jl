@@ -67,7 +67,7 @@ flatview(A_nested) === A_flat
 struct ArrayOfSimilarArrays{
     T, M, N,
     P<:AbstractArray{T},
-    ET<:AbstractArray{T}
+    ET<:AbstractArray{T,M}
 } <: AbstractArrayOfSimilarArrays{T,M,N,ET}
     data::P
 
