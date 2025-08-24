@@ -107,8 +107,8 @@ Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractAr
 Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
 Base.convert(R::Type{ArrayOfSimilarArrays}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = R(A)
 
-unsplitview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = A.data
-Base.stack(A::ArrayOfSimilarArrays) = unsplitview(A)
+joinedview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = A.data
+Base.stack(A::ArrayOfSimilarArrays) = joinedview(A)
 
 function Base.Array(A::ArrayOfSimilarArrays{T,M,N,P,ET}) where {T,M,N,P,ET}
     new_ET = Base.promote_op(similar, ET)

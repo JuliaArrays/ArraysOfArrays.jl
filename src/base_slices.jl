@@ -21,7 +21,7 @@ end
 
 
 @inline getsplitmode(A::Slices) = BaseSlicing(A.slicemap)
-@inline unsplitview(A::Slices) = parent(A)
+@inline joinedview(A::Slices) = parent(A)
 
 
 @inline stacked(A::Slices) = reshape(parent(A), (length(A), prod(size(parent(A))) ÷ length(A)))

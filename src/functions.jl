@@ -8,7 +8,7 @@ Abstract supertype for array split modes.
 
 Use [`getsplitmode`](@ref) to get the split mode of an array.
 
-See also [`splitview`](@ref) and [`unsplitview`](@ref).
+See also [`splitview`](@ref) and [`joinedview`](@ref).
 """
 abstract type AbstractSplitMode end
 export AbstractSplitMode
@@ -38,11 +38,11 @@ export AbstractSlicingMode
 
 """
     getsplitmode(A::AbstractArray)::NonSplitMode
-    getsplitmode(A::AbstractArray{<:AbstractArray})::AbstractSlicingMode
+    getsplitmode(A::AbstractArray{<:AbstractArray})::AbstractSplitMode
 
 Get the split mode of `A`.
 
-`splitview(unsplitview(A), getsplitmode(A))` must equal `A`, and should have
+`splitview(joinedview(A), getsplitmode(A))` must equal `A`, and should have
 the same type as `A` if at all possible.
 
 `getsplitmode` should be a zero-copy O(1) operation, if at all possible.
@@ -57,7 +57,7 @@ end
 
 
 """
-    is_memordered_splitmode(smode::AbstractSlicingMode)::Bool
+    is_memordered_splitmode(smode::AbstractSplitMode)::Bool
 
 Check if `smode` splits in memory-order.
     
@@ -65,7 +65,7 @@ If true, inner arrays are stored contiguously in memory in Julia-native
 dimension order, and the same is true for the outer dimensions (no dimention
 reordering).
 
-If true, `flatview` and `unsplitview` are equivalent.
+If true, `flatview` and `joinedview` are equivalent.
 """
 function is_memordered_splitmode end
 
@@ -73,16 +73,13 @@ is_memordered_splitmode(::NonSplitMode) = true
 
 
 """
-    splitview(A::AbstractArray, smode::AbstractSlicingMode)
+    splitview(A::AbstractArray, smode::AbstractSplitMode)
 
 View array `A` in split form, as an array of arrays.
 
-If `A` is not a nested array return `A` itself. If `A` is a split array,
-return the original unsplit array.
-
 `splitview` should be a zero-copy O(1) operation, if at all possible.
 
-See also [`unsplitview`](@ref) and [`getsplitmode`](@ref).
+See also [`joinedview`](@ref) and [`getsplitmode`](@ref).
 """
 function splitview end
 export splitview
@@ -91,29 +88,29 @@ export splitview
 
 
 """
-    unsplitview(A::AbstractArray)
-    unsplitview(A::AbstractArray{<:AbstractArray{<:...}})
+    joinedview(A::AbstractArray)
+    joinedview(A::AbstractArray{<:AbstractArray{<:...}})
 
 View array `A` in unsplit form.
 
-`splitview(unsplitview(A), getsplitmode(A))` must equal `A`, and should have
+`splitview(joinedview(A), getsplitmode(A))` must equal `A`, and should have
 the same type as `A` if at all possible.
 
 If `A` is not a nested array return `A` itself. If `A` is a split array,
 return the original unsplit array.
 
-If `is_memordered_splitmode(getsplitmode(A))` is true, `unsplitview(A)` is
+If `is_memordered_splitmode(getsplitmode(A))` is true, `joinedview(A)` is
 equivalent to [`flatview(A)`](@ref).
 
-`unsplitview` should be a zero-copy O(1) operation, if at all possible.
+`joinedview` should be a zero-copy O(1) operation, if at all possible.
 """
-function unsplitview end
-export unsplitview
+function joinedview end
+export joinedview
 
-@inline unsplitview(A::AbstractArray) = A
+@inline joinedview(A::AbstractArray) = A
 
-function unsplitview(A::AbstractArray{<:AbstractArray})
-    throw(ArgumentError("unsplitview not implemented for nested arrays of type $(nameof(typeof(A)))"))
+function joinedview(A::AbstractArray{<:AbstractArray})
+    throw(ArgumentError("joinedview not implemented for nested arrays of type $(nameof(typeof(A)))"))
 end
 
 
@@ -127,13 +124,13 @@ nested array, the return value is `A` itself. Only specific types of nested
 arrays are supported.
 
 If `is_memordered_splitmode(getsplitmode(A))` is true, `flatview(A)` is
-equivalent to [`unsplitview(A)`](@ref).
+equivalent to [`joinedview(A)`](@ref).
 
 The result of `flatview(A)` will equal either `stack(A)`
 (resp. [`stacked(A)`](@ref)) or `reduce(vcat, A)`, depending on the type of
 `A` (sliced-array-like or ragged-array-like).
 
-`unsplitview` should be a zero-copy O(1) operation, if at all possible.
+`joinedview` should be a zero-copy O(1) operation, if at all possible.
 """
 function flatview end
 export flatview
@@ -146,26 +143,11 @@ end
 function flatview(A::AbstractSlices)
     smode = getsplitmode(A)
     if is_memordered_splitmode(smode)
-        return unsplitview(A)
+        return joinedview(A)
     else
         throw(ArgumentError("flatview required memory-ordered split/slicing, but array has split mode $smode"))
     end
 end
-
-
-"""
-    deepmap(f::Base.Callable, x::Any)
-    deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray{<:...}})
-
-Applies `map` at the deepest possible layer of nested arrays. If `A` is not
-a nested array, `deepmap` behaves identical to `Base.map`.
-"""
-function deepmap end
-export deepmap
-
-deepmap(f::Base.Callable, x::Any) = map(f, x)
-
-deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray}) = map(X -> deepmap(f, X), A)
 
 
 """
@@ -228,3 +210,20 @@ end
 
 @inline innersize(A::AbstractArray{<:AbstractArray}, dim::Integer) =
     innersize(A)[dim]
+
+
+
+
+"""
+    deepmap(f::Base.Callable, x::Any)
+    deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray{<:...}})
+
+Applies `map` at the deepest possible layer of nested arrays. If `A` is not
+a nested array, `deepmap` behaves identical to `Base.map`.
+"""
+function deepmap end
+export deepmap
+
+deepmap(f::Base.Callable, x::Any) = map(f, x)
+
+deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray}) = map(X -> deepmap(f, X), A)
