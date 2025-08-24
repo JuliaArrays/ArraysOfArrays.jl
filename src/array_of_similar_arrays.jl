@@ -119,6 +119,7 @@ function getslicemap(::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     return (_ncolons(Val{M}())..., _oneto_tpl(Val{N}())...)
 end
 
+#!!!!!
 @inline function innersize(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     front_tuple(size(A.data), Val{M}())
 end
