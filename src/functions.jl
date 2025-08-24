@@ -187,7 +187,6 @@ end
 Returns the size of the element arrays of `A`. Fails if the element arrays
 are not of equal size.
 """
-```
 function innersize end
 export innersize
 

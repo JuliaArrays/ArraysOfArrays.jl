@@ -70,5 +70,5 @@ end
 function is_memordered_splitmode(smode::BaseSlicing)
     slicemap = smode.slicemap
     dims = _oneto_tpl(Val(length(slicemap)))
-    issorted((_extract_innerdims(dims, slicemap)..., _extract_outerdims(dims, slicemap)...))
+    issorted((getinnnerdims(dims, slicemap)..., _extract_outerdims(dims, slicemap)...))
 end
