@@ -205,6 +205,8 @@ are not of equal size.
 function innersize end
 export innersize
 
+innersize(::AbstractArray) = ()
+
 function innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
     s = if !isempty(A)
         let sz_A = size(first(A))
@@ -220,7 +222,7 @@ function innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
         end
     end
 
-    s
+    return s
 end
 
 
