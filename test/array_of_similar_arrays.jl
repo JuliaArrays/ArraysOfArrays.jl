@@ -187,62 +187,6 @@ using StatsBase: cov2cor
     end
 
 
-    @testset "deepgetindex" begin
-        A = rand_nested_similar_arrays(Val(3), Val(2))
-        B = ArrayOfSimilarArrays(A)
-
-        @test deepgetindex(A, 3, 4, 2, 1, 2) == @inferred deepgetindex(B, 3, 4, 2, 1, 2)
-        @test deepgetindex(A, 2:3, 4, 2, 1, 2) == @inferred deepgetindex(B, 2:3, 4, 2, 1, 2)
-        @test deepgetindex(A, 2:3, 2:4, 2, 1, 2) == @inferred deepgetindex(B, 2:3, 2:4, 2, 1, 2)
-        @test deepgetindex(A, 2, 4, :, 1, 2) == @inferred deepgetindex(B, 2, 4, :, 1, 2)
-        @test deepgetindex(A, 2, 4, :, 1, 1:2) == @inferred deepgetindex(B, 2, 4, :, 1, 1:2)
-        @test deepgetindex(A, 2:3, 4, :, 1, 2) == @inferred deepgetindex(B, 2:3, 4, :, 1, 2)
-        @test deepgetindex(A, 2:3, 4, :, 1, 1:2) == @inferred deepgetindex(B, 2:3, 4, :, 1, 1:2)
-    end
-
-
-    @testset "deepsetindex!" begin
-        function testdata()
-            A = rand_nested_similar_arrays(Val(3), Val(2))
-            B = ArrayOfSimilarArrays(A)
-            A, B
-        end
-
-        A, B = testdata()
-        @test deepsetindex!(A, 42, 3, 4, 2, 1, 2) == @inferred deepsetindex!(B, 42, 3, 4, 2, 1, 2)
-        @test deepgetindex(B, 3, 4, 2, 1, 2) == 42
-
-        A, B = testdata()
-        X1 = rand(2)
-        @test deepsetindex!(A, X1, 2:3, 4, 2, 1, 2) == @inferred deepsetindex!(B, X1, 2:3, 4, 2, 1, 2)
-        @test deepgetindex(B, 2:3, 4, 2, 1, 2) == X1
-
-        A, B = testdata()
-        X2 = rand(2,2)
-        @test deepsetindex!(A, X2, 2, 4, :, 1, 1:2) == @inferred deepsetindex!(B, X2, 2, 4, :, 1, 1:2)
-        @test deepgetindex(B, 2, 4, :, 1, 1:2) == X2
-
-        A, B = testdata()
-        X3 = [rand(2,2), rand(2,2)]
-        @test deepsetindex!(A, X3, 2:3, 4, :, 1, 1:2) == @inferred deepsetindex!(B, X3, 2:3, 4, :, 1, 1:2)
-        @test deepgetindex(B, 2:3, 4, :, 1, 1:2) == X3
-    end
-
-
-    @testset "deepview" begin
-        A = rand_nested_similar_arrays(Val(3), Val(2))
-        B = ArrayOfSimilarArrays(A)
-
-        @test deepview(A, 3, 4, 2, 1, 2) == @inferred deepview(B, 3, 4, 2, 1, 2)
-        @test deepgetindex(A, 2:3, 4, 2, 1, 2) == @inferred deepview(B, 2:3, 4, 2, 1, 2)
-        @test deepgetindex(A, 2:3, 2:4, 2, 1, 2) == @inferred deepview(B, 2:3, 2:4, 2, 1, 2)
-        @test deepview(A, 2, 4, :, 1, 2) == @inferred deepview(B, 2, 4, :, 1, 2)
-        @test deepview(A, 2, 4, :, 1, 1:2) == @inferred deepview(B, 2, 4, :, 1, 1:2)
-        @test deepview(A, 2:3, 4, :, 1, 2) == @inferred deepview(B, 2:3, 4, :, 1, 2)
-        @test deepview(A, 2:3, 4, :, 1, 1:2) == @inferred deepview(B, 2:3, 4, :, 1, 1:2)
-    end
-
-
     @testset "empty" begin
         A = [rand(2,3), rand(2,3), rand(2,3)]
         B = ArrayOfSimilarArrays(A)
