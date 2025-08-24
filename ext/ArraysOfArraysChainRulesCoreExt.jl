@@ -19,7 +19,7 @@ mapthunk(::Type{F}, x::T) where {F,T} = _MappedMaybeThunk{Type{F},T}(F, x)
 
 @non_differentiable getpartmode(::Any)
 @non_differentiable innersize(::Any)
-
+@non_differentiable is_memordered_partmode(::Any)
 
 
 function ChainRulesCore.rrule(::typeof(partview), A::AbstractArray, ::Unpartitioned)
@@ -31,7 +31,6 @@ function ChainRulesCore.rrule(::typeof(flatview), A::AbstractArray)
     return flatview(A), _unpart_flatview_pullback
 end
 _unpart_flatview_pullback(ΔΩ) = NoTangent(), ΔΩ
-
 
 
 function ChainRulesCore.rrule(::typeof(partview), A::AbstractArray, partmode::AbstractSlicingMode)

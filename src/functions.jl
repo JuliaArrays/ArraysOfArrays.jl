@@ -45,7 +45,7 @@ Get the partitioning mode of `A`.
 `partview(unpartview(A), getpartmode(A))` must equal `A`, and should have
 the same type as `A` if at all possible.
 
-`getpartmode` should be an allocation-free O(1) operation, if at all possible.
+`getpartmode` should be a zero-copy O(1) operation, if at all possible.
 """
 function getpartmode end
 
@@ -80,7 +80,7 @@ View array `A` in partitioned form, as an array of arrays.
 If `A` is not a nested array return `A` itself. If `A` is a partitioned array,
 return the original unpartition array.
 
-`partview` should be an allocation-free O(1) operation, if at all possible.
+`partview` should be a zero-copy O(1) operation, if at all possible.
 
 See also [`unpartview`](@ref) and [`getpartmode`](@ref).
 """
@@ -105,7 +105,7 @@ return the original unpartition array.
 If `is_memordered_partmode(getpartmode(A))` is true, `unpartview(A)` is
 equivalent to [`flatview(A)`](@ref).
 
-`unpartview` should be an allocation-free O(1) operation, if at all possible.
+`unpartview` should be a zero-copy O(1) operation, if at all possible.
 """
 function unpartview end
 export unpartview
@@ -129,7 +129,11 @@ arrays are supported.
 If `is_memordered_partmode(getpartmode(A))` is true, `flatview(A)` is
 equivalent to [`unpartview(A)`](@ref).
 
-`unpartview` should be an allocation-free O(1) operation, if at all possible.
+The result of `flatview(A)` will equal either `stack(A)`
+(resp. [`stacked(A)`](@ref)) or `reduce(vcat, A)`, depending on the type of
+`A` (sliced-array-like or ragged-array-like).
+
+`unpartview` should be a zero-copy O(1) operation, if at all possible.
 """
 function flatview end
 export flatview
