@@ -68,7 +68,7 @@ the same type as `A` if at all possible, except if `getsplitmode(A)` is an
 """
 function getsplitmode end
 
-@inline getsplitmode(::T) where T = NonSplitMode{T}()
+@inline getsplitmode(::T) where T = UnknownSplitMode{T}()
 
 @inline getsplitmode(::AbstractArray) = NonSplitMode()
 
@@ -161,7 +161,7 @@ The result of `flatview(A)` will equal either `stack(A)`
 (resp. [`stacked(A)`](@ref)) or `reduce(vcat, A)`, depending on the type of
 `A` (sliced-array-like or ragged-array-like).
 
-`joinedview` should be a zero-copy O(1) operation, if at all possible.
+`flatview` should be a zero-copy O(1) operation, if at all possible.
 """
 function flatview end
 export flatview
@@ -182,11 +182,12 @@ end
 
 
 """
-    innersize(A:AbstractArray{<:AbstractArray}, [dim])
+    innersize(A::AbstractArray{<:AbstractArray}, [dim])
 
 Returns the size of the element arrays of `A`. Fails if the element arrays
 are not of equal size.
 """
+```
 function innersize end
 export innersize
 
