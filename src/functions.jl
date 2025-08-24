@@ -13,6 +13,7 @@ See also [`splitview`](@ref) and [`joinedview`](@ref).
 abstract type AbstractSplitMode end
 export AbstractSplitMode
 
+
 """
     struct NonSplitMode <: AbstractSplitMode
 
@@ -22,6 +23,23 @@ Constructor: `NonSplitMode()`
 """
 struct NonSplitMode <: AbstractSplitMode end
 export NonSplitMode
+
+
+"""
+    struct UnknownSplitMode{AT} <: AbstractSplitMode
+
+Split mode of generic split objects of type{T} that have been split in an
+unknown way, e.g. nested arrays of type `Array{<:Array}`.
+
+Since the split parts may be (typically are) non-contiguous in memory, this
+split mode not allow for `unsplitview` or `flatview`. It is also not
+inferrable of the split object should be interpeted as a sliced array,
+a ragged array, or something else.
+
+Constructor: `UnknownSplitMode{T}()`
+"""
+struct UnknownSplitMode{AT} <: AbstractSplitMode end
+export UnknownSplitMode
 
 
 """
@@ -43,17 +61,18 @@ export AbstractSlicingMode
 Get the split mode of `A`.
 
 `splitview(joinedview(A), getsplitmode(A))` must equal `A`, and should have
-the same type as `A` if at all possible.
+the same type as `A` if at all possible, except if `getsplitmode(A)` is an
+`UnknownSplitMode`.
 
 `getsplitmode` should be a zero-copy O(1) operation, if at all possible.
 """
 function getsplitmode end
 
+@inline getsplitmode(::T) where T = NonSplitMode{T}()
+
 @inline getsplitmode(::AbstractArray) = NonSplitMode()
 
-function getsplitmode(A::AbstractArray{<:AbstractArray})
-    throw(ArgumentError("getsplitmode not implemented for nested arrays of type $(nameof(typeof(A)))"))
-end
+@inline getsplitmode(A::AbstractArray{<:AbstractArray}) = UnknownSplitMode{typeof(A)}()
 
 
 """
@@ -70,6 +89,7 @@ If true, `flatview` and `joinedview` are equivalent.
 function is_memordered_splitmode end
 
 is_memordered_splitmode(::NonSplitMode) = true
+is_memordered_splitmode(::UnknownSplitMode) = false
 
 
 """
@@ -84,7 +104,11 @@ See also [`joinedview`](@ref) and [`getsplitmode`](@ref).
 function splitview end
 export splitview
 
-@inline splitview(A::AbstractArray, ::NonSplitMode) = A
+@inline splitview(obj::Any, ::NonSplitMode) = obj
+
+function splitview(::Any, ::UnknownSplitMode)
+    throw(ArgumentError("splitview cannot be used with UnknownSplitMode"))
+end
 
 
 """
@@ -94,7 +118,8 @@ export splitview
 View array `A` in unsplit form.
 
 `splitview(joinedview(A), getsplitmode(A))` must equal `A`, and should have
-the same type as `A` if at all possible.
+the same type as `A` if at all possible, except if `getsplitmode(A)` is an
+`UnknownSplitMode`.
 
 If `A` is not a nested array return `A` itself. If `A` is a split array,
 return the original unsplit array.
@@ -107,10 +132,16 @@ equivalent to [`flatview(A)`](@ref).
 function joinedview end
 export joinedview
 
+@inline joinedview(obj) = _joinedview_impl(obj, getsplitmode(obj))
+
 @inline joinedview(A::AbstractArray) = A
 
-function joinedview(A::AbstractArray{<:AbstractArray})
-    throw(ArgumentError("joinedview not implemented for nested arrays of type $(nameof(typeof(A)))"))
+@inline joinedview(A::AbstractArray{<:AbstractArray}) = _joinedview_impl(A, getsplitmode(A))
+
+@inline _joinedview_impl(obj, ::NonSplitMode) = obj
+
+function _joinedview_impl(@nospecialize(obj), ::UnknownSplitMode)
+    throw(ArgumentError("joinedview not implemented for objects of type $(nameof(typeof(obj))) with unknown split mode"))
 end
 
 
@@ -151,34 +182,6 @@ end
 
 
 """
-    nestedview(A::AbstractArray{T,M+N}, M::Integer)
-    nestedview(A::AbstractArray{T,2})
-
-AbstractArray{<:AbstractArray{T,M},N}
-
-View array `A` in as an `N`-dimensional array of `M`-dimensional arrays by
-wrapping it into an [`ArrayOfSimilarArrays`](@ref).
-
-It's also possible to use a `StaticVector` of length `S` as the type of the
-inner arrays via
-
-    nestedview(A::AbstractArray{T}, ::Type{StaticArrays.SVector{S}})
-    nestedview(A::AbstractArray{T}, ::Type{StaticArrays.SVector{S,T}})
-"""
-function nestedview end
-export nestedview
-
-@inline nestedview(A::AbstractArray{T,L}, M::Integer) where {T,L} =
-    ArrayOfSimilarArrays{T,M}(A)
-
-@inline nestedview(A::AbstractArray{T,L}, ::Val{M}) where {T,L,M} =
-    ArrayOfSimilarArrays{T,M}(A)
-
-@inline nestedview(A::AbstractArray{T,2}) where {T} =
-    VectorOfSimilarVectors{T}(A)
-
-
-"""
     innersize(A:AbstractArray{<:AbstractArray}, [dim])
 
 Returns the size of the element arrays of `A`. Fails if the element arrays
@@ -212,18 +215,43 @@ end
     innersize(A)[dim]
 
 
+"""
+    innermap(f, A::AbstractArray)
+    innermap(f, A::AbstractArray{<:AbstractArray})
+
+Nested `map` at depth 2. Equivalent to `map(X -> map(f, X) A)` for arrays
+of arrays, otherwise equivalent to `Base.map`.
+"""
+function innermap end
+export innermap
+
+function innermap(f, obj)
+    joined_obj = joinedview(obj)
+    mapped_joined_obj = map(f, joined_obj)
+    mapped_obj = splitview(mapped_joined_obj, getsplitmode(obj))
+    return mapped_obj
+end
+
+innermap(f, A::AbstractArray) = map(f, A)
+innermap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(map, f), A)
 
 
 """
-    deepmap(f::Base.Callable, x::Any)
-    deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray{<:...}})
+    deepmap(f, A::AbstractArray)
+    deepmap(f, A::AbstractArray{<:AbstractArray{<:...}})
 
-Applies `map` at the deepest possible layer of nested arrays. If `A` is not
+Applies `map` at the deepest layer of nested arrays. If `A` is not
 a nested array, `deepmap` behaves identical to `Base.map`.
 """
 function deepmap end
 export deepmap
 
-deepmap(f::Base.Callable, x::Any) = map(f, x)
+function deepmap(f, obj)
+    joined_obj = joinedview(obj)
+    mapped_joined_obj = deepmap(f, joined_obj)
+    mapped_obj = splitview(mapped_joined_obj, getsplitmode(obj))
+    return mapped_obj
+end
 
-deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray}) = map(X -> deepmap(f, X), A)
+deepmap(f, A::AbstractArray) = map(f, A)
+deepmap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(deepmap, f), A)
