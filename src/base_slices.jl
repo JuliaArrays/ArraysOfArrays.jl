@@ -27,9 +27,7 @@ function is_memordered_splitmode(smode::BaseSlicing)
 end
 
 
-@inline @generated function getinnerdims(obj::Tuple, smode::BaseSlicing{N,SliceMapT}) where {N,SliceMapT}
-    # slicemap may be something like (Colon(), 2, Colon(), 1, Colon()),
-    # extract only the elements of obj where the slicemap is a Colon.
+@inline @generated function getinnerdims(obj::Tuple, smode::BaseSlicing{M,N,SliceMapT}) where {M,N,SliceMapT}
     expr = Expr(:tuple)
     slicepars = SliceMapT.parameters
     for i in 1:length(slicepars)
@@ -41,9 +39,7 @@ end
 end
 
 
-@inline @generated function getouterdims(obj::Tuple, smode::BaseSlicing{N,SliceMapT}) where {N,SliceMapT}
-    # slicemap may be something like (Colon(), 2, Colon(), 1, Colon()),
-    # extract only the elements of obj where the slicemap is a Colon.
+@inline @generated function getouterdims(obj::Tuple, smode::BaseSlicing{M,N,SliceMapT}) where {M,N,SliceMapT}
     slicepars = SliceMapT.parameters
     outdimidxs = Int[]
     for i in 1:length(slicepars)
@@ -65,9 +61,11 @@ end
 end
 
 
-@inline function getsplitmode(A::Slices{<:AbstractArray{T,M},N}) where {T,M,N}
+@inline function getsplitmode(A::Slices)
+    M = ndims(eltype(A))
+    N = ndims(A)
     slicemap = A.slicemap
-    BaseSlicing{M,ndims(A.parent)-M,typeof(slicemap)}(slicemap)
+    BaseSlicing{M,N,typeof(slicemap)}(slicemap)
 end
 
 function splitview(A::AbstractArray, smode::BaseSlicing)
