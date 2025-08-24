@@ -21,7 +21,8 @@ end
 
 
 @inline getpartmode(A::Slices) = BaseSlicing(A.slicemap)
-@inline flatview(A::Slices) = parent(A)
+@inline unpartview(A::Slices) = parent(A)
+
 
 @inline stacked(A::Slices) = reshape(parent(A), (length(A), prod(size(parent(A))) ÷ length(A)))
 

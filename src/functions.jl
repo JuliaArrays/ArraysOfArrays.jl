@@ -8,7 +8,7 @@ Abstract supertype for array partition modes.
 
 Use [`getpartmode`](@ref) to get the partition mode of an array.
 
-See also [`partview`](@ref) and [`flatview`](@ref).
+See also [`partview`](@ref) and [`unpartview`](@ref).
 """
 abstract type AbstractPartitionMode end
 export AbstractPartitionMode
@@ -42,7 +42,7 @@ export AbstractSlicingMode
 
 Get the partitioning mode of `A`.
 
-`partview(flatview(A), getpartmode(A))` must equal `A`, and should have
+`partview(unpartview(A), getpartmode(A))` must equal `A`, and should have
 the same type as `A` if at all possible.
 
 `getpartmode` should be an allocation-free O(1) operation, if at all possible.
@@ -66,7 +66,7 @@ return the original unpartition array.
 
 `partview` should be an allocation-free O(1) operation, if at all possible.
 
-See also [`flatview`](@ref) and [`getpartmode`](@ref).
+See also [`unpartview`](@ref) and [`getpartmode`](@ref).
 """
 function partview end
 export partview
@@ -75,29 +75,50 @@ export partview
 
 
 """
-    flatview(A::AbstractArray)
-    flatview(A::AbstractArray{<:AbstractArray{<:...}})
+    unpartview(A::AbstractArray)
+    unpartview(A::AbstractArray{<:AbstractArray{<:...}})
 
-View array `A` in a suitable flattened form.
+View array `A` in unpartitioned form.
 
-`partview(flatview(A), getpartmode(A))` must equal `A`, and should have
+`partview(unpartview(A), getpartmode(A))` must equal `A`, and should have
 the same type as `A` if at all possible.
 
 If `A` is not a nested array return `A` itself. If `A` is a partitioned array,
 return the original unpartition array.
 
-`flatview` should be an allocation-free O(1) operation, if at all possible.
+`unpartview` should be an allocation-free O(1) operation, if at all possible.
+"""
+function unpartview end
+export unpartview
+
+@inline unpartview(A::AbstractArray) = A
+
+function unpartview(A::AbstractArray{<:AbstractArray})
+    throw(ArgumentError("unpartview not implemented nested arrays of type $(nameof(typeof(A)))"))
+end
+
+"""
+    flatview(A::AbstractArray)
+    flatview(A::AbstractArray{<:AbstractArray{<:...}})
+
+View array `A` in a flattened form, with inner dimensions first. The shape of
+the flattened form will depend on the type of `A`. If the `A` is not a
+nested array, the return value is `A` itself. Only specific types of nested
+arrays are supported.
 """
 function flatview end
 export flatview
 
 @inline flatview(A::AbstractArray) = A
+@inline flatview(A::AbstractArray{<:AbstractArray}) = throw(ArgumentError("flatview not implemented nested arrays of type $(nameof(typeof(A)))"))
 
-function flatview(A::AbstractArray{<:AbstractArray})
-    throw(ArgumentError("flatview not implemented nested arrays of type $(nameof(typeof(A)))"))
+function flatview(A::AbstractSlices)
+    if _is_aoa_slicemap(A.slicemap)
+        return unpartview(A)
+    else
+        throw(ArgumentError("flatview for AbstractSlices requires inner dimensions to be first and no dimension reordering, but slicemap is $(A.slicemap)"))
+    end
 end
-
-
 
 
 """
