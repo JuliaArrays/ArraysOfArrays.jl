@@ -2,118 +2,118 @@
 
 
 """
-    abstract type AbstractPartitionMode
+    abstract type AbstractSplitMode
 
-Abstract supertype for array partition modes.
+Abstract supertype for array split modes.
 
-Use [`getpartmode`](@ref) to get the partition mode of an array.
+Use [`getsplitmode`](@ref) to get the split mode of an array.
 
-See also [`partview`](@ref) and [`unpartview`](@ref).
+See also [`splitview`](@ref) and [`unsplitview`](@ref).
 """
-abstract type AbstractPartitionMode end
-export AbstractPartitionMode
-
-"""
-    struct Unpartitioned <: AbstractPartitionMode
-
-The partitioning mode of unpartitioned arrays.
-
-Constructor: `Unpartitioned()`
-"""
-struct Unpartitioned <: AbstractPartitionMode end
-export Unpartitioned
-
+abstract type AbstractSplitMode end
+export AbstractSplitMode
 
 """
-    abstract type AbstractSlicingMode <: AbstractPartitionMode
+    struct NonSplitMode <: AbstractSplitMode
 
-Abstract supertype for array partition modes.
+The split mode of unsplit arrays.
 
-Use `getpartmode` to get the partition mode of an partitioned array.
+Constructor: `NonSplitMode()`
 """
-abstract type AbstractSlicingMode <: AbstractPartitionMode end
+struct NonSplitMode <: AbstractSplitMode end
+export NonSplitMode
+
+
+"""
+    abstract type AbstractSlicingMode <: AbstractSplitMode
+
+Abstract supertype for array split modes.
+
+Use `getsplitmode` to get the split mode of an split array.
+"""
+abstract type AbstractSlicingMode <: AbstractSplitMode end
 export AbstractSlicingMode
 
 
 
 """
-    getpartmode(A::AbstractArray)::Unpartitioned
-    getpartmode(A::AbstractArray{<:AbstractArray})::AbstractSlicingMode
+    getsplitmode(A::AbstractArray)::NonSplitMode
+    getsplitmode(A::AbstractArray{<:AbstractArray})::AbstractSlicingMode
 
-Get the partitioning mode of `A`.
+Get the split mode of `A`.
 
-`partview(unpartview(A), getpartmode(A))` must equal `A`, and should have
+`splitview(unsplitview(A), getsplitmode(A))` must equal `A`, and should have
 the same type as `A` if at all possible.
 
-`getpartmode` should be a zero-copy O(1) operation, if at all possible.
+`getsplitmode` should be a zero-copy O(1) operation, if at all possible.
 """
-function getpartmode end
+function getsplitmode end
 
-@inline getpartmode(::AbstractArray) = Unpartitioned()
+@inline getsplitmode(::AbstractArray) = NonSplitMode()
 
-function getpartmode(A::AbstractArray{<:AbstractArray})
-    throw(ArgumentError("getpartmode not implemented for nested arrays of type $(nameof(typeof(A)))"))
+function getsplitmode(A::AbstractArray{<:AbstractArray})
+    throw(ArgumentError("getsplitmode not implemented for nested arrays of type $(nameof(typeof(A)))"))
 end
 
 
 """
-    is_memordered_partmode(pmode::AbstractSlicingMode)::Bool
+    is_memordered_splitmode(smode::AbstractSlicingMode)::Bool
 
-Check if `pmode` partitions in memory-order.
+Check if `smode` splits in memory-order.
     
 If true, inner arrays are stored contiguously in memory in Julia-native
 dimension order, and the same is true for the outer dimensions (no dimention
 reordering).
 
-If true, `flatview` and `unpartview` are equivalent.
+If true, `flatview` and `unsplitview` are equivalent.
 """
-function is_memordered_partmode end
+function is_memordered_splitmode end
 
-is_memordered_partmode(::Unpartitioned) = true
-
-
-"""
-    partview(A::AbstractArray, pmode::AbstractSlicingMode)
-
-View array `A` in partitioned form, as an array of arrays.
-
-If `A` is not a nested array return `A` itself. If `A` is a partitioned array,
-return the original unpartition array.
-
-`partview` should be a zero-copy O(1) operation, if at all possible.
-
-See also [`unpartview`](@ref) and [`getpartmode`](@ref).
-"""
-function partview end
-export partview
-
-@inline partview(A::AbstractArray, ::Unpartitioned) = A
+is_memordered_splitmode(::NonSplitMode) = true
 
 
 """
-    unpartview(A::AbstractArray)
-    unpartview(A::AbstractArray{<:AbstractArray{<:...}})
+    splitview(A::AbstractArray, smode::AbstractSlicingMode)
 
-View array `A` in unpartitioned form.
+View array `A` in split form, as an array of arrays.
 
-`partview(unpartview(A), getpartmode(A))` must equal `A`, and should have
+If `A` is not a nested array return `A` itself. If `A` is a split array,
+return the original unsplit array.
+
+`splitview` should be a zero-copy O(1) operation, if at all possible.
+
+See also [`unsplitview`](@ref) and [`getsplitmode`](@ref).
+"""
+function splitview end
+export splitview
+
+@inline splitview(A::AbstractArray, ::NonSplitMode) = A
+
+
+"""
+    unsplitview(A::AbstractArray)
+    unsplitview(A::AbstractArray{<:AbstractArray{<:...}})
+
+View array `A` in unsplit form.
+
+`splitview(unsplitview(A), getsplitmode(A))` must equal `A`, and should have
 the same type as `A` if at all possible.
 
-If `A` is not a nested array return `A` itself. If `A` is a partitioned array,
-return the original unpartition array.
+If `A` is not a nested array return `A` itself. If `A` is a split array,
+return the original unsplit array.
 
-If `is_memordered_partmode(getpartmode(A))` is true, `unpartview(A)` is
+If `is_memordered_splitmode(getsplitmode(A))` is true, `unsplitview(A)` is
 equivalent to [`flatview(A)`](@ref).
 
-`unpartview` should be a zero-copy O(1) operation, if at all possible.
+`unsplitview` should be a zero-copy O(1) operation, if at all possible.
 """
-function unpartview end
-export unpartview
+function unsplitview end
+export unsplitview
 
-@inline unpartview(A::AbstractArray) = A
+@inline unsplitview(A::AbstractArray) = A
 
-function unpartview(A::AbstractArray{<:AbstractArray})
-    throw(ArgumentError("unpartview not implemented for nested arrays of type $(nameof(typeof(A)))"))
+function unsplitview(A::AbstractArray{<:AbstractArray})
+    throw(ArgumentError("unsplitview not implemented for nested arrays of type $(nameof(typeof(A)))"))
 end
 
 
@@ -126,14 +126,14 @@ the flattened form will depend on the type of `A`. If the `A` is not a
 nested array, the return value is `A` itself. Only specific types of nested
 arrays are supported.
 
-If `is_memordered_partmode(getpartmode(A))` is true, `flatview(A)` is
-equivalent to [`unpartview(A)`](@ref).
+If `is_memordered_splitmode(getsplitmode(A))` is true, `flatview(A)` is
+equivalent to [`unsplitview(A)`](@ref).
 
 The result of `flatview(A)` will equal either `stack(A)`
 (resp. [`stacked(A)`](@ref)) or `reduce(vcat, A)`, depending on the type of
 `A` (sliced-array-like or ragged-array-like).
 
-`unpartview` should be a zero-copy O(1) operation, if at all possible.
+`unsplitview` should be a zero-copy O(1) operation, if at all possible.
 """
 function flatview end
 export flatview
@@ -144,11 +144,11 @@ function flatview(A::AbstractArray{<:AbstractArray})
 end
 
 function flatview(A::AbstractSlices)
-    pmode = getpartmode(A)
-    if is_memordered_partmode(pmode)
-        return unpartview(A)
+    smode = getsplitmode(A)
+    if is_memordered_splitmode(smode)
+        return unsplitview(A)
     else
-        throw(ArgumentError("flatview required memory-ordered partitioning/slicing, but array has partition mode $pmode"))
+        throw(ArgumentError("flatview required memory-ordered split/slicing, but array has split mode $smode"))
     end
 end
 

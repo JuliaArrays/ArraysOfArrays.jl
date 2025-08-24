@@ -17,12 +17,12 @@ mapthunk(f::F, x::T) where {F,T} = _MappedMaybeThunk{F,T}(f, x)
 mapthunk(::Type{F}, x::T) where {F,T} = _MappedMaybeThunk{Type{F},T}(F, x)
 
 
-@non_differentiable getpartmode(::Any)
+@non_differentiable getsplitmode(::Any)
 @non_differentiable innersize(::Any)
-@non_differentiable is_memordered_partmode(::Any)
+@non_differentiable is_memordered_splitmode(::Any)
 
 
-function ChainRulesCore.rrule(::typeof(partview), A::AbstractArray, ::Unpartitioned)
+function ChainRulesCore.rrule(::typeof(splitview), A::AbstractArray, ::NonSplitMode)
     return flatview(A), _partview_pullback
 end
 _unpart_partview_pullback(ΔΩ) = NoTangent(), ΔΩ, NoTangent()
@@ -33,16 +33,16 @@ end
 _unpart_flatview_pullback(ΔΩ) = NoTangent(), ΔΩ
 
 
-function ChainRulesCore.rrule(::typeof(partview), A::AbstractArray, partmode::AbstractSlicingMode)
-    return partview(A, partmode), _partview_pullback
+function ChainRulesCore.rrule(::typeof(splitview), A::AbstractArray, partmode::AbstractSlicingMode)
+    return splitview(A, partmode), _partview_pullback
 end
 _partview_pullback(ΔΩ) = NoTangent(), mapthunk(flatview, ΔΩ), NoTangent()
 
 function ChainRulesCore.rrule(::typeof(flatview), A::AbstractArray{<:AbstractArray})
-    pmode = getpartmode(A)
-    return flatview(A), Base.Fix2(_flatview_pullback, pmode)
+    smode = getsplitmode(A)
+    return flatview(A), Base.Fix2(_flatview_pullback, smode)
 end
-_flatview_pullback(ΔΩ, pmode) = NoTangent(), mapthunk(Base.Fix2(partview, pmode), ΔΩ)
+_flatview_pullback(ΔΩ, smode) = NoTangent(), mapthunk(Base.Fix2(splitview, smode), ΔΩ)
 
 
 
