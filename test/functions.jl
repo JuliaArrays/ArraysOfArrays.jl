@@ -76,12 +76,12 @@ include("testdefs.jl")
     end
 
     @testset "Nested array API" begin
-        test_api(map_f, A_0, A_0_flat)
-        test_api(map_f, A_1, A_1_flat)
-        test_api(map_f, A_1e, A_1e_flat)
-        test_api(map_f, A_2, A_2_flat)
-        test_api(map_f, A_2e, A_2e_flat)
-        test_api(map_f, A_2b, A_2b_flat)
-        test_api(map_f, A_3, A_3_flat)
+        test_api(A_0, A_0, A_0_flat)
+        test_api(A_1, A_1, A_1_flat)
+        test_api(A_1e, A_1e, A_1e_flat)
+        test_api(A_2, A_2, A_2_flat)
+        test_api(A_2e, A_2e, A_2e_flat)
+        test_api(A_2b, A_2b, A_2b_flat)
+        test_api(A_3, A_3, A_3_flat)
     end
 end

@@ -5,12 +5,15 @@ if !isdefined(Main, :test_api)
     maptest_f(x::AbstractArray{<:Number}) = sum(x)^2
     maptest_f(x::AbstractArray) = length(x)^2
 
-    function test_api(A, A_unsplit_ref)
+    function test_api(A, A_array_ref, A_unsplit_ref)
         @testset "Test API for $(nameof(typeof(A)))" begin
+            @global A, A_array_ref, A_unsplit_ref = A, A_array_ref, A_unsplit_ref
+
             @test Array(A) isa Array{<:Any,ndims(A)}
             A_array = Array(A)
             @test A == A_array
             @test isequal(A, A_array)
+            @test isequal(A_array, A_array_ref)
 
             @test @infered(getsplitmode(A)) isa AbstractSplitMode
             smode = getsplitmode(A)
