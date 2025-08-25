@@ -274,15 +274,17 @@ of arrays, otherwise equivalent to `Base.map`.
 function innermap end
 export innermap
 
-function innermap(f, obj)
+innermap(f, obj) = _generic_innermap_impl(f, obj)
+innermap(f, A::AbstractArray) = map(f, A)
+innermap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(map, f), A)
+innermap(f, A::AbstractSlices) = _generic_innermap_impl(f, A)
+
+function _generic_innermap_impl(f, obj)
     joined_obj = joinedview(obj)
     mapped_joined_obj = map(f, joined_obj)
     mapped_obj = splitview(mapped_joined_obj, getsplitmode(obj))
     return mapped_obj
 end
-
-innermap(f, A::AbstractArray) = map(f, A)
-innermap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(map, f), A)
 
 
 """
@@ -295,12 +297,14 @@ a nested array, `deepmap` behaves identical to `Base.map`.
 function deepmap end
 export deepmap
 
-function deepmap(f, obj)
+deepmap(f, obj) = _generic_deepmap_impl(f, obj)
+deepmap(f, A::AbstractArray) = map(f, A)
+deepmap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(deepmap, f), A)
+deepmap(f, A::AbstractSlices) = _generic_deepmap_impl(f, A)
+
+function _generic_deepmap_impl(f, obj)
     joined_obj = joinedview(obj)
     mapped_joined_obj = deepmap(f, joined_obj)
     mapped_obj = splitview(mapped_joined_obj, getsplitmode(obj))
     return mapped_obj
 end
-
-deepmap(f, A::AbstractArray) = map(f, A)
-deepmap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(deepmap, f), A)

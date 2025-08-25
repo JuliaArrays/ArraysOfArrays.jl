@@ -1,5 +1,7 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
+using ChainRulesTestUtils: test_rrule
+
 #if !isdefined(Main, :test_api)
     maptest_f(x::Number) = x^2
     maptest_f(x::AbstractArray{<:Number}) = sum(x)^2
@@ -18,6 +20,11 @@
 
             @test @inferred(getsplitmode(A)) isa AbstractSplitMode
             smode = getsplitmode(A)
+            test_rrule(getsplitmode, A)
+    
+            @test @inferred(is_memordered_splitmode(smode)) isa Bool
+            test_rrule(is_memordered_splitmode, smode)
+
             if A isa AbstractSlices
                 let M = ndims(eltype(A)), N = ndims(A)
                     @test smode isa AbstractSlicingMode{M,N}
@@ -39,6 +46,10 @@
                 end
             end
 
+            if !(innersz isa Exception)
+                test_rrule(innersize, A)
+            end
+            
             @test innersz isa Union{Exception, Dims}
 
             if !isempty(A)
@@ -110,6 +121,9 @@
                 @test @inferred(splitview(A, smode)) === A
                 @test @inferred(getinnerdims(dimstpl, smode)) == ()
                 @test @inferred(getouterdims(dimstpl, smode)) == dimstpl
+
+                @test_rrule(joinedview, A)
+                @test_rrule(splitview, A, smode)
             else
                 if A isa Slices
                     @test joinedview(A) === parent(A)
@@ -119,6 +133,9 @@
                 @test typeof(A_unsplit) == typeof(A_unsplit_ref)
                 @test typeof(splitview(A_unsplit, smode)) == typeof(A)
                 @test splitview(A_unsplit, smode) == A
+
+                @test_rrule(joinedview, A)
+                @test_rrule(splitview, A_unsplit, smode)
             end
         end
     end

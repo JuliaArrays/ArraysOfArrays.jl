@@ -2,10 +2,11 @@
 
 module ArraysOfArraysChainRulesCoreExt
 
-using ChainRulesCore: ChainRulesCore, NoTangent, Thunk, unthunk, @thunk, @non_differentiable
+using ChainRulesCore: ChainRulesCore, NoTangent, AbstractThunk, Thunk, unthunk, @thunk, @non_differentiable
 
+using ArraysOfArrays: getsplitmode, is_memordered_splitmode, splitview, joinedview, flatview, innersize
+using ArraysOfArrays: NonSplitMode, AbstractSlicingMode
 using ArraysOfArrays: ArrayOfSimilarArrays
-using ArraysOfArrays: flatview
 
 
 struct _MappedMaybeThunk{F, T} <: AbstractThunk
@@ -23,26 +24,26 @@ mapthunk(::Type{F}, x::T) where {F,T} = _MappedMaybeThunk{Type{F},T}(F, x)
 
 
 function ChainRulesCore.rrule(::typeof(splitview), A::AbstractArray, ::NonSplitMode)
-    return flatview(A), _partview_pullback
+    return joinedview(A), _partview_pullback
 end
 _unpart_partview_pullback(ΔΩ) = NoTangent(), ΔΩ, NoTangent()
 
-function ChainRulesCore.rrule(::typeof(flatview), A::AbstractArray)
-    return flatview(A), _unpart_flatview_pullback
+function ChainRulesCore.rrule(::typeof(joinedview), A::AbstractArray)
+    return joinedview(A), _unpart_joinedview_pullback
 end
-_unpart_flatview_pullback(ΔΩ) = NoTangent(), ΔΩ
+_unpart_joinedview_pullback(ΔΩ) = NoTangent(), ΔΩ
 
 
 function ChainRulesCore.rrule(::typeof(splitview), A::AbstractArray, partmode::AbstractSlicingMode)
     return splitview(A, partmode), _partview_pullback
 end
-_partview_pullback(ΔΩ) = NoTangent(), mapthunk(flatview, ΔΩ), NoTangent()
+_partview_pullback(ΔΩ) = NoTangent(), mapthunk(joinedview, ΔΩ), NoTangent()
 
-function ChainRulesCore.rrule(::typeof(flatview), A::AbstractArray{<:AbstractArray})
+function ChainRulesCore.rrule(::typeof(joinedview), A::AbstractArray{<:AbstractArray})
     smode = getsplitmode(A)
-    return flatview(A), Base.Fix2(_flatview_pullback, smode)
+    return joinedview(A), Base.Fix2(_joinedview_pullback, smode)
 end
-_flatview_pullback(ΔΩ, smode) = NoTangent(), mapthunk(Base.Fix2(splitview, smode), ΔΩ)
+_joinedview_pullback(ΔΩ, smode) = NoTangent(), mapthunk(Base.Fix2(splitview, smode), ΔΩ)
 
 
 

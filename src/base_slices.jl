@@ -88,4 +88,4 @@ function _stacked_slices_impl(A::Slices, smode::BaseSlicing{M,N,SliceMapT}) wher
 end
 
 
-@inline innersize(A::AbstractSlices) = getinnerdims(size(flatview(A)), getsplitmode(A))
+@inline innersize(A::AbstractSlices) = getinnerdims(size(joinedview(A)), getsplitmode(A))

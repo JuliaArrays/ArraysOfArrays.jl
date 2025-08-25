@@ -31,8 +31,8 @@ include("testdefs.jl")
     @test @inferred(getinnerdims((1,2), getsplitmode(Aer))) == (2,)
     @test @inferred(getouterdims((1,2), getsplitmode(Aer))) == (1,)
 
-    test_api(map_f, Aes1, Array(Aes1), A_orig)
-    test_api(map_f, Aes2, Array(Aes2), A_orig)
-    test_api(map_f, Aec, Array(Aec), A_orig_mat)
-    test_api(map_f, Aer, Array(Aer), A_orig_mat)
+    test_api(Aes1, Array(Aes1), A_orig)
+    test_api(Aes2, Array(Aes2), A_orig)
+    test_api(Aec, Array(Aec), A_orig_mat)
+    test_api(Aer, Array(Aer), A_orig_mat)
 end
