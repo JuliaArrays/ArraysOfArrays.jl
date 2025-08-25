@@ -1,13 +1,14 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
-if !isdefined(Main, :test_api)
+#if !isdefined(Main, :test_api)
     maptest_f(x::Number) = x^2
     maptest_f(x::AbstractArray{<:Number}) = sum(x)^2
     maptest_f(x::AbstractArray) = length(x)^2
 
+    A, A_array_ref, A_unsplit_ref = nothing, nothing, nothing
     function test_api(A, A_array_ref, A_unsplit_ref)
         @testset "Test API for $(nameof(typeof(A)))" begin
-            @global A, A_array_ref, A_unsplit_ref = A, A_array_ref, A_unsplit_ref
+            global g_state = (;A, A_array_ref, A_unsplit_ref)
 
             @test Array(A) isa Array{<:Any,ndims(A)}
             A_array = Array(A)
@@ -15,7 +16,7 @@ if !isdefined(Main, :test_api)
             @test isequal(A, A_array)
             @test isequal(A_array, A_array_ref)
 
-            @test @infered(getsplitmode(A)) isa AbstractSplitMode
+            @test @inferred(getsplitmode(A)) isa AbstractSplitMode
             smode = getsplitmode(A)
             if A isa AbstractSlices
                 let M = ndims(eltype(A)), N = ndims(A)
@@ -25,12 +26,12 @@ if !isdefined(Main, :test_api)
                 @test smode isa NonSplitMode{ndims(A)}
             end
 
-            @test @inferred(eltype(A)) isa AbstractArray
+            @test @inferred(eltype(A)) <: Union{Number,AbstractArray}
             T_elem = eltype(A)
 
-            innersz = if ismode isa NonSplitMode
+            innersz = if smode isa NonSplitMode
                 @inferred(innersize(A))
-            elseif ismode isa AbstractSlicingMode
+            elseif smode isa AbstractSlicingMode
                 @inferred(innersize(A))
             else
                 let sz = (try innersize(A); catch err; err; end)
@@ -40,12 +41,11 @@ if !isdefined(Main, :test_api)
 
             @test innersz isa Union{Exception, Dims}
 
-            if !isemtpy(A)
-                @test @inferred(A[begin]) isa AbstractArray
-                A_1 == A[begin]
-                @test typeof(@inferred(A[begin])) == T_elem
+            if !isempty(A)
+                A_elem_1 = @inferred(A[first(eachindex(A))])
+                @test typeof(A_elem_1) == T_elem
                 if !(innersz isa Exception)
-                    @test all(size.(A) .== innersz)
+                    @test all(size.(A) .== Ref(innersz))
                 end
 
                 @inferred(innermap(maptest_f, A)) == innermap(maptest_f, Array(A))
@@ -57,7 +57,7 @@ if !isdefined(Main, :test_api)
 
             dimstpl = ntuple(identity, Val(ndims(A_unsplit_ref)))
 
-            if smodes isa AbstractSlicingMode
+            if smode isa AbstractSlicingMode
                 M, N = _smode_M(smode), _smode_N(smode)
                 A_array_stacked = stack(A_array)
                 @test M == ndims(eltype(A))
@@ -80,11 +80,13 @@ if !isdefined(Main, :test_api)
                     @test_throws ArgumentError flatview(A)
                 end
 
-                @test @infered(getinnerdims(dimstpl, smode)) isa NTuple{M,Int}
-                @test @infered(getouterdims(dimstpl, smode)) isa NTuple{N,Int}
+                @test @inferred(getinnerdims(dimstpl, smode)) isa NTuple{M,Int}
+                @test @inferred(getouterdims(dimstpl, smode)) isa NTuple{N,Int}
                 innerdims = getinnerdims(dimstpl, smode)
                 outerdims = getouterdims(dimstpl, smode)
                 @test Array(permutedims(A_unsplit_ref, (outerdims..., innerdims...))) == A_array_stacked
+            elseif smode isa NonSplitMode
+                @test @inferred(stacked(A)) === A
             else
                 stacked_A = try stack(A); catch err; err; end
                 if stacked_A isa Exception
@@ -105,15 +107,14 @@ if !isdefined(Main, :test_api)
                 @test @inferred(is_memordered_splitmode(smode)) == true
                 @test @inferred(joinedview(A)) === A
                 @test @inferred(flatview(A)) === A
-                @test @inferred(splitview(A), smode) === A
-                @test @inferred(stacked(A)) === A
+                @test @inferred(splitview(A, smode)) === A
                 @test @inferred(getinnerdims(dimstpl, smode)) == ()
                 @test @inferred(getouterdims(dimstpl, smode)) == dimstpl
             else
                 if A isa Slices
                     @test joinedview(A) === parent(A)
                 end
-                @test @inferred(joinedview(A)) === A_unsplit_ref
+                @test @inferred(joinedview(A)) == A_unsplit_ref
                 A_unsplit = joinedview(A)
                 @test typeof(A_unsplit) == typeof(A_unsplit_ref)
                 @test typeof(splitview(A_unsplit, smode)) == typeof(A)
@@ -121,4 +122,4 @@ if !isdefined(Main, :test_api)
             end
         end
     end
-end
+#end
