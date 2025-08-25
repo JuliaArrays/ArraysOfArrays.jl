@@ -34,8 +34,8 @@ end
 _unpart_joinedview_pullback(ΔΩ) = NoTangent(), ΔΩ
 
 
-function ChainRulesCore.rrule(::typeof(splitview), A::AbstractArray, partmode::AbstractSlicingMode)
-    return splitview(A, partmode), _partview_pullback
+function ChainRulesCore.rrule(::typeof(splitview), A::AbstractArray, smode::AbstractSlicingMode)
+    return splitview(A, smode), _partview_pullback
 end
 _partview_pullback(ΔΩ) = NoTangent(), mapthunk(joinedview, ΔΩ), NoTangent()
 

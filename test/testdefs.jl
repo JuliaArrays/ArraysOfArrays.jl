@@ -1,11 +1,18 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
-using ChainRulesTestUtils: test_rrule
+using ChainRulesTestUtils: test_rrule, rrule, NoTangent
 
 #if !isdefined(Main, :test_api)
     maptest_f(x::Number) = x^2
     maptest_f(x::AbstractArray{<:Number}) = sum(x)^2
     maptest_f(x::AbstractArray) = length(x)^2
+
+    function test_notangent_rrule(f, args::Vararg{Any,N}) where {N}
+        y, f_pullback = @inferred(rrule(f, args...))
+        @test y == f(args...)
+        dy = NoTangent()
+        @test @inferred(f_pullback(dy)) == ntuple(_ -> NoTangent(), Val(N+1))
+    end
 
     A, A_array_ref, A_unsplit_ref = nothing, nothing, nothing
     function test_api(A, A_array_ref, A_unsplit_ref)
@@ -20,10 +27,10 @@ using ChainRulesTestUtils: test_rrule
 
             @test @inferred(getsplitmode(A)) isa AbstractSplitMode
             smode = getsplitmode(A)
-            test_rrule(getsplitmode, A)
+            test_notangent_rrule(getsplitmode, A)
     
             @test @inferred(is_memordered_splitmode(smode)) isa Bool
-            test_rrule(is_memordered_splitmode, smode)
+            test_notangent_rrule(is_memordered_splitmode, smode)
 
             if A isa AbstractSlices
                 let M = ndims(eltype(A)), N = ndims(A)
@@ -47,7 +54,7 @@ using ChainRulesTestUtils: test_rrule
             end
 
             if !(innersz isa Exception)
-                test_rrule(innersize, A)
+                test_notangent_rrule(innersize, A)
             end
             
             @test innersz isa Union{Exception, Dims}
@@ -122,8 +129,8 @@ using ChainRulesTestUtils: test_rrule
                 @test @inferred(getinnerdims(dimstpl, smode)) == ()
                 @test @inferred(getouterdims(dimstpl, smode)) == dimstpl
 
-                @test_rrule(joinedview, A)
-                @test_rrule(splitview, A, smode)
+                test_rrule(joinedview, A)
+                test_rrule(splitview, A, smode)
             else
                 if A isa Slices
                     @test joinedview(A) === parent(A)
@@ -134,8 +141,8 @@ using ChainRulesTestUtils: test_rrule
                 @test typeof(splitview(A_unsplit, smode)) == typeof(A)
                 @test splitview(A_unsplit, smode) == A
 
-                @test_rrule(joinedview, A)
-                @test_rrule(splitview, A_unsplit, smode)
+                test_rrule(joinedview, A)
+                test_rrule(splitview, A_unsplit, smode)
             end
         end
     end

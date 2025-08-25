@@ -20,14 +20,13 @@ struct BaseSlicing{M,N,TPL<:Tuple{Vararg{Union{Colon,Int}}}} <: AbstractSlicingM
 end
 export BaseSlicing
 
-function is_memordered_splitmode(smode::BaseSlicing)
-    slicemap = smode.slicemap
-    dims = _oneto_tpl(Val(length(slicemap)))
-    issorted((getinnerdims(dims, slicemap)..., _extract_outerdims(dims, slicemap)...))
+function is_memordered_splitmode(smode::BaseSlicing{M,N}) where {M,N}
+    dims = _oneto_tpl(Val(M+N))
+    issorted((getinnerdims(dims, smode)..., getouterdims(dims, smode)...))
 end
 
 
-@inline @generated function getinnerdims(obj::Tuple, smode::BaseSlicing{M,N,SliceMapT}) where {M,N,SliceMapT}
+@inline @generated function getinnerdims(obj::Tuple, ::BaseSlicing{M,N,SliceMapT}) where {M,N,SliceMapT}
     expr = Expr(:tuple)
     slicepars = SliceMapT.parameters
     for i in 1:length(slicepars)
