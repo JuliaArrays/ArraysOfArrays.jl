@@ -1,6 +1,6 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
-using ChainRulesTestUtils: test_rrule, rrule, NoTangent
+using ChainRulesCore: rrule, unthunk, AbstractThunk, Thunk, NoTangent
 
 #if !isdefined(Main, :test_api)
     maptest_f(x::Number) = x^2
@@ -14,7 +14,28 @@ using ChainRulesTestUtils: test_rrule, rrule, NoTangent
         @test @inferred(f_pullback(dy)) == ntuple(_ -> NoTangent(), Val(N+1))
     end
 
-    A, A_array_ref, A_unsplit_ref = nothing, nothing, nothing
+    function test_joinedview_rrule(A)
+        @testset "Test joinedview rrule for $(nameof(typeof(A)))" begin
+            A_joined, f_pullback = @inferred(rrule(joinedview, A))
+            @test A_joined == joinedview(A)
+            dy = Thunk(Returns(A_joined))
+            tangents = @inferred(f_pullback(dy))
+            @test tangents isa Tuple{NoTangent,<:AbstractThunk}
+            @test unthunk(tangents[2]) == A
+        end
+    end
+
+    function test_splitview_rrule(A, smode)
+        @testset "Test splitview rrule for $(nameof(typeof(A)))" begin
+            A_split, f_pullback = @inferred(rrule(splitview, A, smode))
+            @test A_split == splitview(A, smode)
+            dy = Thunk(Returns(A_split))
+            tangents = @inferred(f_pullback(dy))
+            @test tangents isa Tuple{NoTangent,<:AbstractThunk,NoTangent}
+            @test unthunk(tangents[2]) == A
+        end
+    end
+
     function test_api(A, A_array_ref, A_unsplit_ref)
         @testset "Test API for $(nameof(typeof(A)))" begin
             global g_state = (;A, A_array_ref, A_unsplit_ref)
@@ -102,7 +123,7 @@ using ChainRulesTestUtils: test_rrule, rrule, NoTangent
                 @test @inferred(getouterdims(dimstpl, smode)) isa NTuple{N,Int}
                 innerdims = getinnerdims(dimstpl, smode)
                 outerdims = getouterdims(dimstpl, smode)
-                @test Array(permutedims(A_unsplit_ref, (outerdims..., innerdims...))) == A_array_stacked
+                @test permutedims(A_unsplit_ref, (innerdims..., outerdims...)) == A_array_stacked
             elseif smode isa NonSplitMode
                 @test @inferred(stacked(A)) === A
             else
@@ -129,8 +150,8 @@ using ChainRulesTestUtils: test_rrule, rrule, NoTangent
                 @test @inferred(getinnerdims(dimstpl, smode)) == ()
                 @test @inferred(getouterdims(dimstpl, smode)) == dimstpl
 
-                test_rrule(joinedview, A)
-                test_rrule(splitview, A, smode)
+                test_joinedview_rrule(A)
+                test_splitview_rrule(A, smode)
             else
                 if A isa Slices
                     @test joinedview(A) === parent(A)
@@ -141,8 +162,8 @@ using ChainRulesTestUtils: test_rrule, rrule, NoTangent
                 @test typeof(splitview(A_unsplit, smode)) == typeof(A)
                 @test splitview(A_unsplit, smode) == A
 
-                test_rrule(joinedview, A)
-                test_rrule(splitview, A_unsplit, smode)
+                test_joinedview_rrule(A)
+                test_splitview_rrule(A_unsplit, smode)
             end
         end
     end

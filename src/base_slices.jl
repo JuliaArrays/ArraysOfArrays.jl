@@ -78,12 +78,16 @@ end
 
 @inline stacked(A::Slices) = _stacked_slices_impl(A, getsplitmode(A))
 
-_stacked_slices_impl(A::Slices, ::BaseSlicing{1,1,Tuple{Colon,Int}}) = unsliced(A)
+_stacked_slices_impl(A::Slices, ::BaseSlicing{1,1,Tuple{Colon,Int}}) = joinedview(A)
 
 function _stacked_slices_impl(A::Slices, smode::BaseSlicing{M,N,SliceMapT}) where {M,N,SliceMapT}
-    A_unsliced = unsliced(A)
-    dimorder = (getinnerdims(_dimstpl(A_unsliced), smode)..., getouterdims(_dimstpl(A_unsliced), smode)...)
-    return permutedims(A_unsliced, dimorder)
+    A_joined = joinedview(A)
+    if is_memordered_splitmode(smode)
+        return A_joined
+    else
+        dimorder = (getinnerdims(_dimstpl(A_joined), smode)..., getouterdims(_dimstpl(A_joined), smode)...)
+        return permutedims(A_joined, dimorder)::typeof(A_joined)
+    end
 end
 
 
