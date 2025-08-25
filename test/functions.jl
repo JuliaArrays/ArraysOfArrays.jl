@@ -5,52 +5,38 @@ using Test
 
 using ArraysOfArrays: getinnerdims, getouterdims
 
+include("testdefs.jl")
 
 @testset "functions" begin
     A_0 = fill(Float32(42))
+    A_0_flat = fill(Float32(42))
+
     A_1 = Float32[3, 8, 4, 6]
+    A_1_flat = Float32[3, 8, 4, 6]
+
     A_1e = Float32[]
+    A_1e_flat = Float32[]
+
     A_2 = [Float32[3 8; 4 6], Float32[1 2; 5 7; 9 0]]
+    A_2_flat = Float32[3, 8, 4, 6, 1, 2, 5, 7, 9, 0]
+
     A_2e = Matrix{Float32}[]
+    A_2e_flat = Matrix{Float32}(undef, 0, 0)
+
     A_2b = [Float32[3 8; 4 6], Float32[1 2; 9 0]]
+    A_2b_flat = stack(A_2b)
+
     A_3 = [[Float32[3, 8, 4], Float32[1, 2, 5]], [Float32[6, 7], Float32[9, 0]]]
+    A_3_flat = reduce(vcat, A_3)
 
-    @testset "Nested array API" begin
-        for A in [A_0, A_1, A_1e, A_2, A_2e, A_2b, A_3]
-            non_nested = eltype(A) <: Number
-
-            @test @inferred(getsplitmode(A)) isa if non_nested
-                NonSplitMode{ndims(A)}
-            else
-                UnknownSplitMode{typeof(A)}
-            end
-
-            smode = getsplitmode(A)
-
-            dimdixs = ntuple(identity, ndims(A))
-            if smode  isa UnknownSplitMode
-                @test @inferred(is_memordered_splitmode(smode)) == false
-                @test_throws ArgumentError getinnerdims(dimdixs, smode)
-                @test_throws ArgumentError getouterdims(dimdixs, smode)
-            else
-                @test @inferred(is_memordered_splitmode(smode)) == true
-                @test getinnerdims(dimdixs, smode) == ()
-                @test getouterdims(dimdixs, smode) == dimdixs
-            end
-
-            if non_nested
-                @test_throws ArgumentError joinedview(A)
-                @test_throws ArgumentError flatview(A)
-            end
-
-            stacked_A = try stack(A); catch; nothing; end
-            if isnothing(stacked_A)
-                @test_throws DimensionMismatch stacked(A)
-            else
-                @inferred(stacked(A)) == stacked_A
-                @test_throws ArgumentError splitview(stacked_A, smode)
-            end
-        end
+    @testset "getsplitmode" begin
+        @test @inferred(getsplitmode(A_0)) isa NonSplitMode{0}
+        @test @inferred(getsplitmode(A_1)) isa NonSplitMode{1}
+        @test @inferred(getsplitmode(A_1e)) isa NonSplitMode{1}
+        @test @inferred(getsplitmode(A_2)) isa UnknownSplitMode{typeof(A_2)}
+        @test @inferred(getsplitmode(A_2e)) isa UnknownSplitMode{typeof(A_2e)}
+        @test @inferred(getsplitmode(A_2b)) isa UnknownSplitMode{typeof(A_2b)}
+        @test @inferred(getsplitmode(A_3)) isa UnknownSplitMode{typeof(A_3)}
     end
 
     @testset "innersize" begin
@@ -87,5 +73,15 @@ using ArraysOfArrays: getinnerdims, getouterdims
         @test @inferred(deepmap(length, A_1)) == fill(1, 4)
         @test @inferred(deepmap(length, A_2)) == [fill(1, 2, 2), fill(1, 3, 2)]
         @test @inferred(deepmap(length, A_3)) == [[fill(1, 3), fill(1, 3)], [fill(1, 2), fill(1, 2)]]
+    end
+
+    @testset "Nested array API" begin
+        test_api(map_f, A_0, A_0_flat)
+        test_api(map_f, A_1, A_1_flat)
+        test_api(map_f, A_1e, A_1e_flat)
+        test_api(map_f, A_2, A_2_flat)
+        test_api(map_f, A_2e, A_2e_flat)
+        test_api(map_f, A_2b, A_2b_flat)
+        test_api(map_f, A_3, A_3_flat)
     end
 end
