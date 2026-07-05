@@ -67,7 +67,7 @@ end
 end
 
 
-function is_natural_dimorder_partmode(pmode::BaseSlicing)
+function is_memordered_partmode(pmode::BaseSlicing)
     slicemap = pmode.slicemap
     dims = _oneto_tpl(Val(length(slicemap)))
     issorted((_extract_innerdims(dims, slicemap)..., _extract_outerdims(dims, slicemap)...))

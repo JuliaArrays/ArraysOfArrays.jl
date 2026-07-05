@@ -57,6 +57,22 @@ end
 
 
 """
+    is_memordered_partmode(pmode::AbstractSlicingMode)::Bool
+
+Check if `pmode` partitions in memory-order.
+    
+If true, inner arrays are stored contiguously in memory in Julia-native
+dimension order, and the same is true for the outer dimensions (no dimention
+reordering).
+
+If true, `flatview` and `unpartview` are equivalent.
+"""
+function is_memordered_partmode end
+
+is_memordered_partmode(::Unpartitioned) = true
+
+
+"""
     partview(A::AbstractArray, pmode::AbstractSlicingMode)
 
 View array `A` in partitioned form, as an array of arrays.
@@ -86,6 +102,9 @@ the same type as `A` if at all possible.
 If `A` is not a nested array return `A` itself. If `A` is a partitioned array,
 return the original unpartition array.
 
+If `is_memordered_partmode(getpartmode(A))` is true, `unpartview(A)` is
+equivalent to [`flatview(A)`](@ref).
+
 `unpartview` should be an allocation-free O(1) operation, if at all possible.
 """
 function unpartview end
@@ -94,8 +113,9 @@ export unpartview
 @inline unpartview(A::AbstractArray) = A
 
 function unpartview(A::AbstractArray{<:AbstractArray})
-    throw(ArgumentError("unpartview not implemented nested arrays of type $(nameof(typeof(A)))"))
+    throw(ArgumentError("unpartview not implemented for nested arrays of type $(nameof(typeof(A)))"))
 end
+
 
 """
     flatview(A::AbstractArray)
@@ -105,18 +125,26 @@ View array `A` in a flattened form, with inner dimensions first. The shape of
 the flattened form will depend on the type of `A`. If the `A` is not a
 nested array, the return value is `A` itself. Only specific types of nested
 arrays are supported.
+
+If `is_memordered_partmode(getpartmode(A))` is true, `flatview(A)` is
+equivalent to [`unpartview(A)`](@ref).
+
+`unpartview` should be an allocation-free O(1) operation, if at all possible.
 """
 function flatview end
 export flatview
 
 @inline flatview(A::AbstractArray) = A
-@inline flatview(A::AbstractArray{<:AbstractArray}) = throw(ArgumentError("flatview not implemented nested arrays of type $(nameof(typeof(A)))"))
+function flatview(A::AbstractArray{<:AbstractArray})
+    throw(ArgumentError("flatview not implemented for nested arrays of type $(nameof(typeof(A)))"))
+end
 
 function flatview(A::AbstractSlices)
-    if _is_aoa_slicemap(A.slicemap)
+    pmode = getpartmode(A)
+    if is_memordered_partmode(pmode)
         return unpartview(A)
     else
-        throw(ArgumentError("flatview for AbstractSlices requires inner dimensions to be first and no dimension reordering, but slicemap is $(A.slicemap)"))
+        throw(ArgumentError("flatview required memory-ordered partitioning/slicing, but array has partition mode $pmode"))
     end
 end
 
