@@ -1,6 +1,6 @@
 # ArraysOfArrays.jl
 
-A Julia package for efficient storage and handling of nested arrays. ArraysOfArrays provides two different types of nested arrays: [`ArrayOfSimilarArrays`](@ref section_ArrayOfSimilarArrays) and [`VectorOfArrays`](@ref section_VectorOfArrays).
+A Julia package for efficient storage and handling of nested arrays. ArraysOfArrays provides two different types of nested arrays: [`SlicedView`](@ref section_ArrayOfSimilarArrays) and [`VectorOfArrays`](@ref section_VectorOfArrays).
 
 This package also defines and exports the following new functions applicable to nested arrays in general:
 
@@ -10,9 +10,9 @@ This package also defines and exports the following new functions applicable to 
 * [`consgroupedview`](@ref) computes a grouping of equal consecutive elements on a vector and applies it to another vector or (named or unnamed) tuple of vectors.
 
 
-## [ArrayOfSimilarArrays](@id section_ArrayOfSimilarArrays)
+## [SlicedView](@id section_ArrayOfSimilarArrays)
 
-An `ArrayOfSimilarArrays` offers a duality of view between representing the same data as both a flat multi-dimensional array and as an array of equally-sized arrays:
+An `SlicedView` offers a duality of view between representing the same data as both a flat multi-dimensional array and as an array of equally-sized arrays:
 
 ```julia
 A_flat = rand(2,3,4,5,6)

@@ -33,7 +33,7 @@ export AbstractVectorOfSimilarVectors
 
 
 """
-    ArrayOfSimilarArrays{T,M,N,P} <: AbstractArrayOfSimilarArrays{T,M,N}
+    SlicedView{T,M,N,P} <: AbstractArrayOfSimilarArrays{T,M,N}
 
 Represents a view of an array of dimension `M + N` as an array of
 dimension M with elements that are arrays with dimension N. All element arrays
@@ -41,8 +41,8 @@ implicitly have equal size/axes.
 
 Constructors:
 
-    ArrayOfSimilarArrays{T,M,N}(flat_data::AbstractArray)
-    ArrayOfSimilarArrays{T,M}(flat_data::AbstractArray)
+    SlicedView{T,M,N}(flat_data::AbstractArray)
+    SlicedView{T,M}(flat_data::AbstractArray)
 
 The following type aliases are defined:
 
@@ -64,14 +64,14 @@ A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
 flatview(A_nested) === A_flat
 ```
 """
-struct ArrayOfSimilarArrays{
+struct SlicedView{
     T, M, N,
     P<:AbstractArray{T},
     ET<:AbstractArray{T,M}
 } <: AbstractArrayOfSimilarArrays{T,M,N,ET}
     data::P
 
-    function ArrayOfSimilarArrays{T,M,N}(flat_data::AbstractArray{U}) where {T,M,N,U}
+    function SlicedView{T,M,N}(flat_data::AbstractArray{U}) where {T,M,N,U}
         require_ndims(flat_data, _add_vals(Val{M}(), Val{N}()))
         conv_parent = _convert_elype(T, flat_data)
         P = typeof(conv_parent)
@@ -80,135 +80,135 @@ struct ArrayOfSimilarArrays{
     end
 end
 
-function ArrayOfSimilarArrays{T,M}(flat_data::AbstractArray{U}) where {T,M,U}
+function SlicedView{T,M}(flat_data::AbstractArray{U}) where {T,M,U}
     _, size_outer = split_tuple(size(flat_data), Val{M}())
     N = length(size_outer)
-    ArrayOfSimilarArrays{T,M,N}(flat_data)
+    SlicedView{T,M,N}(flat_data)
 end
 
-export ArrayOfSimilarArrays
+export SlicedView
 
-function ArrayOfSimilarArrays{T,M,N}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
-    B = ArrayOfSimilarArrays{T,M,N}(Array{T}(undef, innersize(A)..., size(A)...))
+function SlicedView{T,M,N}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
+    B = SlicedView{T,M,N}(Array{T}(undef, innersize(A)..., size(A)...))
     copyto!(B, A)
 end
 
-ArrayOfSimilarArrays{T}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
-    ArrayOfSimilarArrays{T,M,N}(A)
+SlicedView{T}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
+    SlicedView{T,M,N}(A)
 
-ArrayOfSimilarArrays(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
-    ArrayOfSimilarArrays{T,M,N}(A)
+SlicedView(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
+    SlicedView{T,M,N}(A)
 
 
-Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, flat_data::AbstractArray{U}) where {T,M,N,U} = R(flat_data)
-Base.convert(R::Type{ArrayOfSimilarArrays{T,M}}, flat_data::AbstractArray{U}) where {T,M,U} = R(flat_data)
+Base.convert(R::Type{SlicedView{T,M,N}}, flat_data::AbstractArray{U}) where {T,M,N,U} = R(flat_data)
+Base.convert(R::Type{SlicedView{T,M}}, flat_data::AbstractArray{U}) where {T,M,U} = R(flat_data)
 
-Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
-Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
-Base.convert(R::Type{ArrayOfSimilarArrays}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = R(A)
+Base.convert(R::Type{SlicedView{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
+Base.convert(R::Type{SlicedView{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
+Base.convert(R::Type{SlicedView}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = R(A)
 
-fused(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = A.data
-Base.stack(A::ArrayOfSimilarArrays) = fused(A)
+fused(A::SlicedView{T,M,N}) where {T,M,N} = A.data
+Base.stack(A::SlicedView) = fused(A)
 
-function Base.Array(A::ArrayOfSimilarArrays{T,M,N,P,ET}) where {T,M,N,P,ET}
+function Base.Array(A::SlicedView{T,M,N,P,ET}) where {T,M,N,P,ET}
     new_ET = Base.promote_op(similar, ET)
     return Array{new_ET,N}(A)
 end
 
-function getslicemap(::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+function getslicemap(::SlicedView{T,M,N}) where {T,M,N}
     return (_ncolons(Val{M}())..., _oneto_tpl(Val{N}())...)
 end
 
 #!!!!!
-@inline function innersize(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+@inline function innersize(A::SlicedView{T,M,N}) where {T,M,N}
     front_tuple(size(A.data), Val{M}())
 end
 
 
 import Base.==
-(==)(A::ArrayOfSimilarArrays{T,M,N}, B::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} =
+(==)(A::SlicedView{T,M,N}, B::SlicedView{T,M,N}) where {T,M,N} =
     (A.data == B.data)
 
 
-Base.size(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = split_tuple(size(A.data), Val{M}())[2]
+Base.size(A::SlicedView{T,M,N}) where {T,M,N} = split_tuple(size(A.data), Val{M}())[2]
 
 
 
-Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Integer,N}) where {T,M,N} =
+Base.@propagate_inbounds Base.getindex(A::SlicedView{T,M,N}, idxs::Vararg{Integer,N}) where {T,M,N} =
     view(A.data, _ncolons(Val{M}())..., idxs...)
 
 
-Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarArrays{T,M,N}, x::AbstractArray{U,M}, idxs::Vararg{Integer,N}) where {T,M,N,U} =
+Base.@propagate_inbounds Base.setindex!(A::SlicedView{T,M,N}, x::AbstractArray{U,M}, idxs::Vararg{Integer,N}) where {T,M,N,U} =
     setindex!(A.data, x, _ncolons(Val{M}())..., idxs...)
 
-Base.@propagate_inbounds function Base.unsafe_view(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Union{Real, AbstractArray},N}) where {T,M,N}
+Base.@propagate_inbounds function Base.unsafe_view(A::SlicedView{T,M,N}, idxs::Vararg{Union{Real, AbstractArray},N}) where {T,M,N}
     dataview = view(A.data, _ncolons(Val{M}())..., idxs...)
     L = length(size(dataview))
     N_view = L - M
-    ArrayOfSimilarArrays{T,M,N_view}(dataview)
+    SlicedView{T,M,N_view}(dataview)
 end
 
 
-@inline function Base.resize!(A::ArrayOfSimilarArrays{T,M,N}, dims::Vararg{Integer,N}) where {T,M,N}
+@inline function Base.resize!(A::SlicedView{T,M,N}, dims::Vararg{Integer,N}) where {T,M,N}
     resize!(A.data, innersize(A)..., dims...)
     A
 end
 
 
-function Base.similar(A::ArrayOfSimilarArrays{T,M,N}, ::Type{<:AbstractArray{U}}, dims::Dims) where {T,M,N,U}
+function Base.similar(A::SlicedView{T,M,N}, ::Type{<:AbstractArray{U}}, dims::Dims) where {T,M,N,U}
     data = A.data
     size_inner, size_outer = split_tuple(size(data), Val{M}())
     # ToDo: Don't use similar if data is an ElasticArray?
-    ArrayOfSimilarArrays{T,M,N}(similar(data, U, size_inner..., dims...))
+    SlicedView{T,M,N}(similar(data, U, size_inner..., dims...))
 end
 
 
-function Base.deepcopy(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
-    ArrayOfSimilarArrays{T,M,N}(deepcopy(A.data))
+function Base.deepcopy(A::SlicedView{T,M,N}) where {T,M,N}
+    SlicedView{T,M,N}(deepcopy(A.data))
 end
 
 
-function Base.copyto!(dest::ArrayOfSimilarArrays{T,M,N}, src::ArrayOfSimilarArrays{U,M,N}) where {T,M,N,U}
+function Base.copyto!(dest::SlicedView{T,M,N}, src::SlicedView{U,M,N}) where {T,M,N,U}
     copyto!(dest.data, src.data)
     dest
 end
 
 
-function Base.append!(dest::ArrayOfSimilarArrays{T,M,N}, src::ArrayOfSimilarArrays{U,M,N}) where {T,M,N,U}
+function Base.append!(dest::SlicedView{T,M,N}, src::SlicedView{U,M,N}) where {T,M,N,U}
     innersize(dest) != innersize(src) && throw(DimensionMismatch("Can't append, shape of element arrays of source and dest are not equal"))
     append!(dest.data, src.data)
     dest
 end
 
-Base.append!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
-    append!(dest, ArrayOfSimilarArrays(src))
+Base.append!(dest::SlicedView{T,M,N}, src::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
+    append!(dest, SlicedView(src))
 
 
-function Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::ArrayOfSimilarArrays{U,M,N}) where {T,M,N,U}
+function Base.prepend!(dest::SlicedView{T,M,N}, src::SlicedView{U,M,N}) where {T,M,N,U}
     innersize(dest) != innersize(src) && throw(DimensionMismatch("Can't prepend, shape of element arrays of source and dest are not equal"))
     prepend!(dest.data, src.data)
     dest
 end
 
-Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
-    prepend!(dest, ArrayOfSimilarArrays(src))
+Base.prepend!(dest::SlicedView{T,M,N}, src::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
+    prepend!(dest, SlicedView(src))
 
-function innermap(f::Base.Callable, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+function innermap(f::Base.Callable, A::SlicedView{T,M,N}) where {T,M,N}
     new_data = map(f, A.data)
     U = eltype(new_data)
-    ArrayOfSimilarArrays{U,M,N}(new_data)
+    SlicedView{U,M,N}(new_data)
 end
 
 
-function deepmap(f::Base.Callable, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+function deepmap(f::Base.Callable, A::SlicedView{T,M,N}) where {T,M,N}
     new_data = deepmap(f, A.data)
     U = eltype(new_data)
-    ArrayOfSimilarArrays{U,M,N}(new_data)
+    SlicedView{U,M,N}(new_data)
 end
 
 
-Base.map(::typeof(identity), A::ArrayOfSimilarArrays) = A
-Base.Broadcast.broadcasted(::typeof(identity), A::ArrayOfSimilarArrays) = A
+Base.map(::typeof(identity), A::SlicedView) = A
+Base.Broadcast.broadcasted(::typeof(identity), A::SlicedView) = A
 
 
 Base.@pure _result_is_nested(idxs_outer::Tuple, idxs_inner::Tuple) =
@@ -221,15 +221,15 @@ const VectorOfSimilarArrays{
     T, M,
     P<:AbstractArray{T},
     ET<:AbstractArray{T}
-} = ArrayOfSimilarArrays{T,M,1,P,ET}
+} = SlicedView{T,M,1,P,ET}
 
 export VectorOfSimilarArrays
 
 VectorOfSimilarArrays{T}(flat_data::AbstractArray{U}) where {T,U} =
-    ArrayOfSimilarArrays{T,length(Base.front(size(flat_data))),1}(flat_data)
+    SlicedView{T,length(Base.front(size(flat_data))),1}(flat_data)
 
 VectorOfSimilarArrays(flat_data::AbstractArray{T}) where {T} =
-    ArrayOfSimilarArrays{T,length(Base.front(size(flat_data))),1}(flat_data)
+    SlicedView{T,length(Base.front(size(flat_data))),1}(flat_data)
 
 VectorOfSimilarArrays{T}(A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} =
     VectorOfSimilarArrays{T,M}(A)
@@ -267,7 +267,7 @@ function Base.pushfirst!(V::VectorOfSimilarArrays{T,M}, x::AbstractArray{U,M}) w
 end
 
 # Will need equivalent of resize! that resizes in front of data instead of in back:
-# popfirst!(V::ArrayOfSimilarArrays) = ...
+# popfirst!(V::SlicedView) = ...
 
 
 function _empty_data_size(A::VectorOfSimilarArrays{T,M}) where {T,M}
@@ -293,15 +293,15 @@ const ArrayOfSimilarVectors{
     T, N,
     P<:AbstractArray{T},
     ET<:AbstractVector{T}
-} = ArrayOfSimilarArrays{T,1,N,P,ET}
+} = SlicedView{T,1,N,P,ET}
 
 export ArrayOfSimilarVectors
 
 ArrayOfSimilarVectors{T}(flat_data::AbstractArray{U}) where {T,U} =
-    ArrayOfSimilarArrays{T,1,length(Base.front(size(flat_data)))}(flat_data)
+    SlicedView{T,1,length(Base.front(size(flat_data)))}(flat_data)
 
 ArrayOfSimilarVectors(flat_data::AbstractArray{T}) where {T} =
-    ArrayOfSimilarArrays{T,1,length(Base.front(size(flat_data)))}(flat_data)
+    SlicedView{T,1,length(Base.front(size(flat_data)))}(flat_data)
 
 ArrayOfSimilarVectors{T}(A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} =
     ArrayOfSimilarVectors{T,N}(A)
@@ -320,18 +320,18 @@ const VectorOfSimilarVectors{
     T,
     P<:AbstractArray{T,2},
     ET<:AbstractVector{T}
-} = ArrayOfSimilarArrays{T,1,1,P,ET}
+} = SlicedView{T,1,1,P,ET}
 
 export VectorOfSimilarVectors
 
 VectorOfSimilarVectors{T}(flat_data::AbstractArray{U,2}) where {T,U} =
-    ArrayOfSimilarArrays{T,1,1}(flat_data)
+    SlicedView{T,1,1}(flat_data)
 
 VectorOfSimilarVectors(flat_data::AbstractArray{T,2}) where {T} =
     VectorOfSimilarVectors{T}(flat_data)
 
 VectorOfSimilarVectors{T}(A::AbstractVector{<:AbstractVector{U}}) where {T,U} =
-    ArrayOfSimilarArrays{T,1}(A)
+    SlicedView{T,1}(A)
 
 VectorOfSimilarVectors(A::AbstractVector{<:AbstractVector{T}}) where {T} =
     VectorOfSimilarVectors{T}(A)
@@ -368,7 +368,7 @@ Statistics.cor(X::AbstractVectorOfSimilarVectors) =
 AbstractArray{<:AbstractArray{T,M},N}
 
 View array `A` in as an `N`-dimensional array of `M`-dimensional arrays by
-wrapping it into an [`ArrayOfSimilarArrays`](@ref).
+wrapping it into an [`SlicedView`](@ref).
 
 It's also possible to use a `StaticVector` of length `S` as the type of the
 inner arrays via
@@ -380,10 +380,24 @@ function nestedview end
 export nestedview
 
 @inline nestedview(A::AbstractArray{T,L}, M::Integer) where {T,L} =
-    ArrayOfSimilarArrays{T,M}(A)
+    SlicedView{T,M}(A)
 
 @inline nestedview(A::AbstractArray{T,L}, ::Val{M}) where {T,L,M} =
-    ArrayOfSimilarArrays{T,M}(A)
+    SlicedView{T,M}(A)
 
 @inline nestedview(A::AbstractArray{T,2}) where {T} =
     VectorOfSimilarVectors{T}(A)
+
+
+# Deprecated:
+const ArrayOfSimilarArrays{T,M,N} = SlicedView{T,M,N}
+export ArrayOfSimilarArrays
+
+const VectorOfSimilarArrays{T,M} = VoASlicedView{T,M}
+export VectorOfSimilarArrays
+
+const ArrayOfSimilarVectors{T,N} = AoVSlicedView{T,N}
+export ArrayOfSimilarVectors
+
+const VectorOfSimilarVectors{T} = VoVSlicedView{T}
+export VectorOfSimilarVectors

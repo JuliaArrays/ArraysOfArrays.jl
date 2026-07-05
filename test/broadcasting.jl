@@ -27,7 +27,7 @@ using Test
             end
         end
 
-        let A = ArrayOfSimilarArrays(ref_AosA1(Float32, 100))
+        let A = SlicedView(ref_AosA1(Float32, 100))
             refA = Array(A)
 
             for Idxs in [
@@ -45,7 +45,7 @@ using Test
             ]
                 refA = Array(A)
             
-                @test @inferred(broadcast(getindex, A, Idxs...)) isa ArrayOfSimilarArrays{eltype(eltype(A))}
+                @test @inferred(broadcast(getindex, A, Idxs...)) isa SlicedView{eltype(eltype(A))}
                 @test getindex.(A, Idxs...) == getindex.(refA, Idxs...)
             end
         end
@@ -54,7 +54,7 @@ using Test
     @testset "findall" begin
         for A in [
             VectorOfArrays(ref_VoA1(Bool, 100)),
-            ArrayOfSimilarArrays(ref_AosA1(Bool, 100))
+            SlicedView(ref_AosA1(Bool, 100))
         ]
             refA = Array(A)
         

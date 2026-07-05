@@ -6,7 +6,7 @@ using ChainRulesCore: ChainRulesCore, NoTangent, AbstractThunk, Thunk, unthunk, 
 
 using ArraysOfArrays: getsplitmode, is_memordered_splitmode, splitview, fused, flatview, innersize
 using ArraysOfArrays: NonSplitMode, AbstractSlicingMode
-using ArraysOfArrays: ArrayOfSimilarArrays
+using ArraysOfArrays: SlicedView
 
 
 struct _MappedMaybeThunk{F, T} <: AbstractThunk
@@ -48,24 +48,24 @@ _joinedview_pullback(ΔΩ, smode) = NoTangent(), mapthunk(Base.Fix2(splitview, s
 
 
 function _aosa_ctor_fromflat_pullback(ΔΩ)
-    NoTangent(), flatview(convert(ArrayOfSimilarArrays, unthunk(ΔΩ)))
+    NoTangent(), flatview(convert(SlicedView, unthunk(ΔΩ)))
 end
 
-function ChainRulesCore.rrule(::Type{ArrayOfSimilarArrays{T,M,N}}, flat_data::AbstractArray{U}) where {T,M,N,U}
-    return ArrayOfSimilarArrays{T,M,N}(flat_data), _aosa_ctor_fromflat_pullback
+function ChainRulesCore.rrule(::Type{SlicedView{T,M,N}}, flat_data::AbstractArray{U}) where {T,M,N,U}
+    return SlicedView{T,M,N}(flat_data), _aosa_ctor_fromflat_pullback
 end
 
 _aosa_ctor_fromnested_pullback(ΔΩ) = NoTangent(), ΔΩ
 
-function ChainRulesCore.rrule(::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
-    return ArrayOfSimilarArrays{T,M,N}(A), _aosa_ctor_fromnested_pullback
+function ChainRulesCore.rrule(::Type{SlicedView{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
+    return SlicedView{T,M,N}(A), _aosa_ctor_fromnested_pullback
 end
 
 
-function ChainRulesCore.rrule(::typeof(flatview), A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+function ChainRulesCore.rrule(::typeof(flatview), A::SlicedView{T,M,N}) where {T,M,N}
     function flatview_pullback(ΔΩ)
         data = unthunk(ΔΩ)
-        NoTangent(), ArrayOfSimilarArrays{eltype(data),M,N}(data)
+        NoTangent(), SlicedView{eltype(data),M,N}(data)
     end
     
     return flatview(A), flatview_pullback
