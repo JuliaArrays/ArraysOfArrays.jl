@@ -35,7 +35,7 @@ _noreindex_view(A::AbstractArray{T,N}, ::Vararg{Colon,N}) where {T,N} = A
 _generic_size(A) = size(A)
 _generic_size(tpl::Tuple) = (length(tpl),)
 
-Base.Base.@propagate_inbounds function _to_indices(A, idxs)
+Base.@propagate_inbounds function _to_indices(A, idxs)
     new_idxs = Base.to_indices(A, idxs)
     @boundscheck Base.checkbounds(A, new_idxs...)
     return new_idxs

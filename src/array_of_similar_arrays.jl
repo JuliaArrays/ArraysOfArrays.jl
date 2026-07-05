@@ -108,7 +108,7 @@ export ArrayOfSimilarArrays
 
 
 function ArrayOfSimilarArrays{T,M,N}(orig_data::AbstractArray{U,L}) where {T,M,N,U,L}
-    conv_data = _convert_elype(T, orig_data)::AbstractArray{T,L}
+    conv_data = _convert_eltype(T, orig_data)::AbstractArray{T,L}
     return ArrayOfSimilarArrays{T,M,N}(conv_data)
 end
 
