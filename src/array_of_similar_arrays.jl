@@ -107,8 +107,8 @@ Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractAr
 Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
 Base.convert(R::Type{ArrayOfSimilarArrays}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = R(A)
 
-Base.parent(A::ArrayOfSimilarArrays) = A.data
-Base.stack(A::ArrayOfSimilarArrays) = A.data
+unpartview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = A.data
+Base.stack(A::ArrayOfSimilarArrays) = unpartview(A)
 
 function Base.Array(A::ArrayOfSimilarArrays{T,M,N,P,ET}) where {T,M,N,P,ET}
     new_ET = Base.promote_op(similar, ET)
@@ -128,16 +128,6 @@ end
 import Base.==
 (==)(A::ArrayOfSimilarArrays{T,M,N}, B::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} =
     (A.data == B.data)
-
-
-"""
-    flatview(A::ArrayOfSimilarArrays{T,M,N,P})::P
-
-Returns the array of dimensionality `M + N` wrapped by `A`. The shape of
-the result may be freely changed without breaking the inner consistency of
-`A`.
-"""
-flatview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = A.data
 
 
 Base.size(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = split_tuple(size(A.data), Val{M}())[2]
