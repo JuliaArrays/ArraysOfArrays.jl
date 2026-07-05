@@ -5,3 +5,5 @@
 .ipynb_checkpoints
 .vscode
 Manifest.toml
+Manifest-v*.toml
+LocalPreferences.toml
