@@ -2,7 +2,7 @@
 
 import Test
 
-Test.@testset "Package ArraysOfArrays" begin
+Test.@testset verbose=true "Package ArraysOfArrays" begin
     include("test_aqua.jl")
     include("functions.jl")
     include("array_of_similar_arrays.jl")

@@ -365,6 +365,17 @@ using StatsBase: cov2cor
         @test @inferred(ArraysOfArrays._innerlength(VSV)) == N
     end
 
+    @testset "mapreduce maximum/minimum shortcut" begin
+        r1 = rand(1,4); r2 = rand(1,4); r3 = rand(1,4); r4 = rand(1,4)
+        ASA = ArrayOfSimilarArrays([r1,r2,r3,r4])
+
+        @test mapreduce(maximum, max, ASA) == maximum(flatview(ASA))
+        @test (@allocated mapreduce(maximum, max, ASA)) == (@allocated maximum(flatview(ASA)))
+
+        @test mapreduce(minimum, min, ASA) == minimum(flatview(ASA))
+        @test (@allocated mapreduce(minimum, min, ASA)) == (@allocated minimum(flatview(ASA)))
+    end
+
     @testset "map and broadcast" begin
         A_flat = rand(2,3,4,5,6)
         A = nestedview(A_flat, 2)

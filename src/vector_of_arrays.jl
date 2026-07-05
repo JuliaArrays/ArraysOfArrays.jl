@@ -337,6 +337,10 @@ function Base.append!(A::VectorOfArrays{T,N}, B::AbstractVector{<:AbstractArray{
 end
 
 
+Base.mapreduce(::typeof(maximum), ::typeof(max), V::VectorOfArrays) = maximum(flatview(V))
+Base.mapreduce(::typeof(minimum), ::typeof(min), V::VectorOfArrays) = minimum(flatview(V))
+
+
 Base.vcat(V::VectorOfArrays) = V
 
 function Base.vcat(Vs::(VectorOfArrays{U,N} where U)...) where {N}
