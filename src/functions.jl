@@ -31,6 +31,20 @@ deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray}) =
 
 
 """
+    getslicemap(A::AbstractSlices)
+
+Get the slicemap of an `A`.
+
+A slicemap must have type `Tuple{Vararg{Union{Colon,Integer}}}`, e.g.
+`(:, :, :, 1, 2)` or `(:, 2, :, 1, :)`.
+"""
+function getslicemap end
+export getslicemap
+
+getslicemap(A::Slices) = A.slicemap
+
+
+"""
     flatview(A::AbstractArray)
     flatview(A::AbstractArray{<:AbstractArray{<:...}})
 
@@ -43,6 +57,14 @@ export flatview
 
 @inline flatview(A::AbstractArray) = A
 @inline flatview(A::AbstractArray{<:AbstractArray}) = throw(ArgumentError("flatview not implemented nested arrays of type $(nameof(typeof(A)))"))
+
+function flatview(A::AbstractSlices)
+    if _is_aoa_slicemap(A.slicemap)
+        return parent(A)
+    else
+        throw(ArgumentError("flatview for AbstractSlices requires inner dimensions to be first and no dimension reordering, but slicemap is $(A.slicemap)"))
+    end
+end
 
 
 """
@@ -99,6 +121,8 @@ function innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
 
     s
 end
+
+@inline innersize(A::AbstractSlices) = _extract_innerdims(size(parent(A)), getslicemap(A))
 
 @inline innersize(A::AbstractArray{<:AbstractArray}, dim::Integer) =
     innersize(A)[dim]
