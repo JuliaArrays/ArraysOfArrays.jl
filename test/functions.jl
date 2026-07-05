@@ -38,6 +38,7 @@ using StaticArrays
 
 
     @testset "innersize" begin
+        @test @inferred(innersize(rand(3,4,5))) == ()
         @test @inferred(innersize([[1, 2, 3], [4, 5, 6]])) == (3,)
         @test @inferred(innersize([[]])) == (0,)
         @test @inferred(innersize([2:5])) == (4,)
