@@ -42,10 +42,7 @@ function flatview end
 export flatview
 
 @inline flatview(A::AbstractArray) = A
-
-# TODO: Implement flatview on generic nested arrays via new `FlatView`, using
-# deepgetindex to implement getindex, etc?
-@inline flatview(A::AbstractArray{<:AbstractArray}) = throw(ArgumentError("flatview not implemented for generic AbstractArray{<:AbstractArray}"))
+@inline flatview(A::AbstractArray{<:AbstractArray}) = throw(ArgumentError("flatview not implemented nested arrays of type $(nameof(typeof(A)))"))
 
 
 """
@@ -108,110 +105,6 @@ end
 
 @inline innersize(tpl::Tuple{T}) where T = size(only(tpl))
 @inline innersize(ref::Ref) = size(only(ref))
-
-
-"""
-    deepgetindex(A::AbstractArray, idxs...)
-    deepgetindex(A::AbstractArray{<:AbstractArray, N}, idxs...) where {N}
-
-Recursive `getindex` on flat or nested arrays. If A is an array of arrays,
-uses the first `N` entries in `idxs` on `A`, then the rest on the inner
-array(s). If A is not a nested array, `deepgetindex` is equivalent to
-`getindex`.
-
-See also [`deepsetindex!`](@ref) and [`deepview`](@ref).
-"""
-function deepgetindex end
-export deepgetindex
-
-Base.@propagate_inbounds deepgetindex(A::AbstractArray{T,N}, idxs::Vararg{Any,N}) where {T,N} = getindex(A, idxs...)
-Base.@propagate_inbounds deepgetindex(A::AbstractArray{<:AbstractArray,N}, idxs::Vararg{Any,N}) where {N} = getindex(A, idxs...)
-
-Base.@propagate_inbounds function deepgetindex(A::AbstractArray{<:AbstractArray,N}, idxs...) where {N}
-    idxs_outer, idxs_inner = split_tuple(idxs, Val{N}())
-    _deepgetindex_impl(A, idxs_outer, idxs_inner)
-end
-
-Base.@propagate_inbounds _deepgetindex_impl(A::AbstractArray{<:AbstractArray}, idxs_outer::NTuple{N,Real}, idxs_inner::Tuple) where {N} =
-    deepgetindex(getindex(A, idxs_outer...), idxs_inner...)
-
-Base.@propagate_inbounds _deepgetindex_impl(A::AbstractArray{<:AbstractArray}, idxs_outer::NTuple{N,Any}, idxs_inner::Tuple) where {N} =
-    _deepgetindex_tupled.(view(A, idxs_outer...), (idxs_inner,))
-
-Base.@propagate_inbounds _deepgetindex_tupled(A::AbstractArray, idxs::Tuple) = deepgetindex(A, idxs...)
-
-
-"""
-    deepsetindex!(A::AbstractArray, x, idxs...)
-    deepsetindex!(A::AbstractArray{<:AbstractArray,N}, x, idxs...) where {N}
-
-Recursive `setindex!` on flat or nested arrays. If A is an array of arrays,
-uses the first `N` entries in `idxs` on `A`, then the rest on the inner
-array(s). If A is not a nested array, `deepsetindex!` is equivalent to
-`setindex!`.
-
-See also [`deepgetindex`](@ref) and [`deepview`](@ref).
-"""
-function deepsetindex! end
-export deepsetindex!
-
-Base.@propagate_inbounds deepsetindex!(A::AbstractArray{T,N}, x, idxs::Vararg{Any,N}) where {T,N} = setindex!(A, x, idxs...)
-Base.@propagate_inbounds deepsetindex!(A::AbstractArray{<:AbstractArray,N}, x, idxs::Vararg{Any,N}) where {N} = setindex!(A, x, idxs...)
-
-Base.@propagate_inbounds function deepsetindex!(A::AbstractArray{<:AbstractArray,N}, x, idxs...) where {N}
-    idxs_outer, idxs_inner = split_tuple(idxs, Val{N}())
-    _deepsetindex_impl!(A, x, idxs_outer, idxs_inner)
-    A
-end
-
-Base.@propagate_inbounds function _deepsetindex_impl!(A::AbstractArray{<:AbstractArray}, x, idxs_outer::NTuple{N,Real}, idxs_inner::Tuple) where {N}
-    B = getindex(A, idxs_outer...)
-    deepsetindex!(B, x, idxs_inner...)
-end
-
-Base.@propagate_inbounds function _deepsetindex_impl!(A::AbstractArray{<:AbstractArray}, x, idxs_outer::NTuple{N,Any}, idxs_inner::Tuple) where {N}
-    B = view(A, idxs_outer...)
-    for i in eachindex(B, x)
-        deepsetindex!(B[i], x[i], idxs_inner...)
-    end
-end
-
-
-
-"""
-    deepview(A::AbstractArray, idxs...)
-    deepview(A::AbstractArray{<:AbstractArray, N}, idxs...) where {N}
-
-Recursive `view` on flat or nested arrays. If A is an array of arrays,
-uses the first `N` entries in `idxs` on `A`, then the rest on the inner
-array(s). If A is not a nested array, `deepview` is equivalent to `view`.
-
-See also [`deepgetindex`](@ref) and [`deepsetindex!`](@ref).
-"""
-function deepview end
-export deepview
-
-Base.@propagate_inbounds deepview(A::AbstractArray{T,N}, idxs::Vararg{Any,N}) where {T,N} = view(A, idxs...)
-Base.@propagate_inbounds deepview(A::AbstractArray{<:AbstractArray,N}, idxs::Vararg{Any,N}) where {N} = view(A, idxs...)
-
-Base.@propagate_inbounds function deepview(A::AbstractArray{<:AbstractArray,N}, idxs...) where {N}
-    idxs_outer, idxs_inner = split_tuple(idxs, Val{N}())
-    _deepview_impl(A, idxs_outer, idxs_inner)
-end
-
-Base.@propagate_inbounds _deepview_impl(A::AbstractArray{<:AbstractArray}, idxs_outer::NTuple{N,Real}, idxs_inner::NTuple{M,Real}) where {N,M} =
-    deepview(getindex(A, idxs_outer...), idxs_inner...)
-
-Base.@propagate_inbounds _deepview_impl(A::AbstractArray{<:AbstractArray}, idxs_outer::NTuple{N,Real}, idxs_inner::NTuple{M,Any}) where {N,M} =
-    deepview(getindex(A, idxs_outer...), idxs_inner...)
-
-Base.@propagate_inbounds _deepview_impl(A::AbstractArray{<:AbstractArray}, idxs_outer::NTuple{N,Any}, idxs_inner::NTuple{M,Real}) where {N,M} =
-    throw(ArgumentError("deepview not supported yes with outer indices $idxs_outer and inner indices $idxs_inner"))
-
-Base.@propagate_inbounds _deepview_impl(A::AbstractArray{<:AbstractArray}, idxs_outer::NTuple{N,Any}, idxs_inner::NTuple{M,Any}) where {N,M} =
-    _deepview_tupled.(view(A, idxs_outer...), (idxs_inner,))
-
-Base.@propagate_inbounds _deepview_tupled(A::AbstractArray, idxs::Tuple) = deepview(A, idxs...)
 
 
 """
