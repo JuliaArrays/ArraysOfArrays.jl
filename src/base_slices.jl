@@ -3,7 +3,7 @@
 """
     struct BaseSlicing{N,TPL<:Tuple{Vararg{Int,N}}} <: AbstractSlicingMode
 
-The partitioning mode of `Slices`.
+The split mode of `Slices`.
 
 Constructor:
 
@@ -15,23 +15,20 @@ BaseSlicing(slicemap::Tuple{Vararg{Union{Colon,Int}}}})
 
 See also [`AbstractSlicingMode`](@ref).
 """
-struct BaseSlicing{N,TPL<:Tuple{Vararg{Union{Colon,Int},N}}} <: AbstractSlicingMode
+struct BaseSlicing{M,N,TPL<:Tuple{Vararg{Union{Colon,Int}}}} <: AbstractSlicingMode{M,N}
     slicemap::TPL
+end
+export BaseSlicing
+
+is_memordered_splitmode(::BaseSlicing{1,1,Tuple{Colon,Int}}) = true
+
+function is_memordered_splitmode(smode::BaseSlicing{M,N}) where {M,N}
+    dims = _oneto_tpl(Val(M+N))
+    issorted((getinnerdims(dims, smode)..., getouterdims(dims, smode)...))
 end
 
 
-@inline getpartmode(A::Slices) = BaseSlicing(A.slicemap)
-@inline unpartview(A::Slices) = parent(A)
-
-
-@inline stacked(A::Slices) = reshape(parent(A), (length(A), prod(size(parent(A))) ÷ length(A)))
-
-@inline innersize(A::AbstractSlices) = getinnnerdims(size(flatview(A)), getpartmode(A))
-
-
-@inline @generated function getinnnerdims(obj::Tuple, pmode::BaseSlicing{N,SliceMapT}) where {N,SliceMapT}
-    # slicemap may be something like (Colon(), 2, Colon(), 1, Colon()),
-    # extract only the elements of obj where the slicemap is a Colon.
+@inline @generated function getinnerdims(obj::Tuple, ::BaseSlicing{M,N,SliceMapT}) where {M,N,SliceMapT}
     expr = Expr(:tuple)
     slicepars = SliceMapT.parameters
     for i in 1:length(slicepars)
@@ -43,9 +40,7 @@ end
 end
 
 
-@inline @generated function getouterdims(obj::Tuple, pmode::BaseSlicing{N,SliceMapT}) where {N,SliceMapT}
-    # slicemap may be something like (Colon(), 2, Colon(), 1, Colon()),
-    # extract only the elements of obj where the slicemap is a Colon.
+@inline @generated function getouterdims(obj::Tuple, smode::BaseSlicing{M,N,SliceMapT}) where {M,N,SliceMapT}
     slicepars = SliceMapT.parameters
     outdimidxs = Int[]
     for i in 1:length(slicepars)
@@ -59,7 +54,7 @@ end
     result_expr = Expr(:tuple, [:(obj[outdimidxs[idxorder[$i]]]) for i in eachindex(outdimidxs)]...)
 
     quote
-        slicemap = pmode.slicemap
+        slicemap = smode.slicemap
         outdimidxs = $outdimidxs_expr
         idxorder = $idxorder_expr
         return $result_expr
@@ -67,8 +62,17 @@ end
 end
 
 
-function is_memordered_partmode(pmode::BaseSlicing)
-    slicemap = pmode.slicemap
-    dims = _oneto_tpl(Val(length(slicemap)))
-    issorted((_extract_innerdims(dims, slicemap)..., _extract_outerdims(dims, slicemap)...))
+@inline function getsplitmode(A::Slices)
+    M = ndims(eltype(A))
+    N = ndims(A)
+    slicemap = A.slicemap
+    BaseSlicing{M,N,typeof(slicemap)}(slicemap)
 end
+
+function splitview(A::AbstractArray, smode::BaseSlicing)
+    slicemap = smode.slicemap
+    axs = getouterdims(axes(A), smode)
+    return Slices(A, slicemap, axs)
+end
+
+@inline fused(A::Slices) = parent(A)

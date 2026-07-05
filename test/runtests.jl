@@ -5,8 +5,10 @@ import Test
 Test.@testset "Package ArraysOfArrays" begin
     include("test_aqua.jl")
     include("functions.jl")
+    include("base_slices.jl")
     include("array_of_similar_arrays.jl")
     include("vector_of_arrays.jl")
     include("broadcasting.jl")
+    include("static_arrays.jl")
     include("test_docs.jl")
 end # testset

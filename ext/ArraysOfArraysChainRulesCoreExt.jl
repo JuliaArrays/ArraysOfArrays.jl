@@ -2,10 +2,11 @@
 
 module ArraysOfArraysChainRulesCoreExt
 
-using ChainRulesCore: ChainRulesCore, NoTangent, Thunk, unthunk, @thunk, @non_differentiable
+using ChainRulesCore: ChainRulesCore, NoTangent, AbstractThunk, Thunk, unthunk, @thunk, @non_differentiable
 
+using ArraysOfArrays: getsplitmode, is_memordered_splitmode, splitview, fused, flatview, innersize
+using ArraysOfArrays: NonSplitMode, AbstractSlicingMode
 using ArraysOfArrays: ArrayOfSimilarArrays
-using ArraysOfArrays: flatview
 
 
 struct _MappedMaybeThunk{F, T} <: AbstractThunk
@@ -17,32 +18,32 @@ mapthunk(f::F, x::T) where {F,T} = _MappedMaybeThunk{F,T}(f, x)
 mapthunk(::Type{F}, x::T) where {F,T} = _MappedMaybeThunk{Type{F},T}(F, x)
 
 
-@non_differentiable getpartmode(::Any)
+@non_differentiable getsplitmode(::Any)
 @non_differentiable innersize(::Any)
-@non_differentiable is_memordered_partmode(::Any)
+@non_differentiable is_memordered_splitmode(::Any)
 
 
-function ChainRulesCore.rrule(::typeof(partview), A::AbstractArray, ::Unpartitioned)
-    return flatview(A), _partview_pullback
+function ChainRulesCore.rrule(::typeof(splitview), A::AbstractArray, ::NonSplitMode)
+    return fused(A), _partview_pullback
 end
 _unpart_partview_pullback(ΔΩ) = NoTangent(), ΔΩ, NoTangent()
 
-function ChainRulesCore.rrule(::typeof(flatview), A::AbstractArray)
-    return flatview(A), _unpart_flatview_pullback
+function ChainRulesCore.rrule(::typeof(fused), A::AbstractArray)
+    return fused(A), _unpart_joinedview_pullback
 end
-_unpart_flatview_pullback(ΔΩ) = NoTangent(), ΔΩ
+_unpart_joinedview_pullback(ΔΩ) = NoTangent(), ΔΩ
 
 
-function ChainRulesCore.rrule(::typeof(partview), A::AbstractArray, partmode::AbstractSlicingMode)
-    return partview(A, partmode), _partview_pullback
+function ChainRulesCore.rrule(::typeof(splitview), A::AbstractArray, smode::AbstractSlicingMode)
+    return splitview(A, smode), _partview_pullback
 end
-_partview_pullback(ΔΩ) = NoTangent(), mapthunk(flatview, ΔΩ), NoTangent()
+_partview_pullback(ΔΩ) = NoTangent(), mapthunk(fused, ΔΩ), NoTangent()
 
-function ChainRulesCore.rrule(::typeof(flatview), A::AbstractArray{<:AbstractArray})
-    pmode = getpartmode(A)
-    return flatview(A), Base.Fix2(_flatview_pullback, pmode)
+function ChainRulesCore.rrule(::typeof(fused), A::AbstractArray{<:AbstractArray})
+    smode = getsplitmode(A)
+    return fused(A), Base.Fix2(_joinedview_pullback, smode)
 end
-_flatview_pullback(ΔΩ, pmode) = NoTangent(), mapthunk(Base.Fix2(partview, pmode), ΔΩ)
+_joinedview_pullback(ΔΩ, smode) = NoTangent(), mapthunk(Base.Fix2(splitview, smode), ΔΩ)
 
 
 

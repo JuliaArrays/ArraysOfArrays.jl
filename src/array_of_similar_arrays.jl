@@ -107,8 +107,8 @@ Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractAr
 Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
 Base.convert(R::Type{ArrayOfSimilarArrays}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = R(A)
 
-unpartview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = A.data
-Base.stack(A::ArrayOfSimilarArrays) = unpartview(A)
+fused(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = A.data
+Base.stack(A::ArrayOfSimilarArrays) = fused(A)
 
 function Base.Array(A::ArrayOfSimilarArrays{T,M,N,P,ET}) where {T,M,N,P,ET}
     new_ET = Base.promote_op(similar, ET)
@@ -359,3 +359,31 @@ Statistics.cov(X::AbstractVectorOfSimilarVectors; corrected::Bool = true) =
 
 Statistics.cor(X::AbstractVectorOfSimilarVectors) =
     cor(flatview(X); dims = 2)
+
+
+"""
+    nestedview(A::AbstractArray{T,M+N}, M::Integer)
+    nestedview(A::AbstractArray{T,2})
+
+AbstractArray{<:AbstractArray{T,M},N}
+
+View array `A` in as an `N`-dimensional array of `M`-dimensional arrays by
+wrapping it into an [`ArrayOfSimilarArrays`](@ref).
+
+It's also possible to use a `StaticVector` of length `S` as the type of the
+inner arrays via
+
+    nestedview(A::AbstractArray{T}, ::Type{StaticArrays.SVector{S}})
+    nestedview(A::AbstractArray{T}, ::Type{StaticArrays.SVector{S,T}})
+"""
+function nestedview end
+export nestedview
+
+@inline nestedview(A::AbstractArray{T,L}, M::Integer) where {T,L} =
+    ArrayOfSimilarArrays{T,M}(A)
+
+@inline nestedview(A::AbstractArray{T,L}, ::Val{M}) where {T,L,M} =
+    ArrayOfSimilarArrays{T,M}(A)
+
+@inline nestedview(A::AbstractArray{T,2}) where {T} =
+    VectorOfSimilarVectors{T}(A)
