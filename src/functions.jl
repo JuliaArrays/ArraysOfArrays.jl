@@ -2,15 +2,101 @@
 
 
 """
-    innermap(f::Base.Callable, A::AbstractArray{<:AbstractArray})
+    abstract type AbstractPartitionMode
 
-Nested `map` at depth 2. Equivalent to `map(X -> map(f, X) A)`.
+Abstract supertype for array partition modes.
+
+Use [`getpartmode`](@ref) to get the partition mode of an array.
+
+See also [`partview`](@ref) and [`flatview`](@ref).
 """
-function innermap end
-export innermap
+abstract type AbstractPartitionMode end
+export AbstractPartitionMode
 
-innermap(f::Base.Callable, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
-    map(X -> map(f, X), A)
+"""
+    struct Unpartitioned <: AbstractPartitionMode
+
+The partitioning mode of unpartitioned arrays.
+
+Constructor: `Unpartitioned()`
+"""
+struct Unpartitioned <: AbstractPartitionMode end
+export Unpartitioned
+
+
+"""
+    abstract type AbstractSlicingMode <: AbstractPartitionMode
+
+Abstract supertype for array partition modes.
+
+Use `getpartmode` to get the partition mode of an partitioned array.
+"""
+abstract type AbstractSlicingMode <: AbstractPartitionMode end
+export AbstractSlicingMode
+
+
+
+"""
+    getpartmode(A::AbstractArray)::Unpartitioned
+    getpartmode(A::AbstractArray{<:AbstractArray})::AbstractSlicingMode
+
+Get the partitioning mode of `A`.
+
+`partview(flatview(A), getpartmode(A))` must equal `A`, and should have
+the same type as `A` if at all possible.
+
+`getpartmode` should be an allocation-free O(1) operation, if at all possible.
+"""
+function getpartmode end
+
+@inline getpartmode(::AbstractArray) = Unpartitioned()
+
+function getpartmode(A::AbstractArray{<:AbstractArray})
+    throw(ArgumentError("getpartmode not implemented for nested arrays of type $(nameof(typeof(A)))"))
+end
+
+
+"""
+    partview(A::AbstractArray, pmode::AbstractSlicingMode)
+
+View array `A` in partitioned form, as an array of arrays.
+
+If `A` is not a nested array return `A` itself. If `A` is a partitioned array,
+return the original unpartition array.
+
+`partview` should be an allocation-free O(1) operation, if at all possible.
+
+See also [`flatview`](@ref) and [`getpartmode`](@ref).
+"""
+function partview end
+export partview
+
+@inline partview(A::AbstractArray, ::Unpartitioned) = A
+
+
+"""
+    flatview(A::AbstractArray)
+    flatview(A::AbstractArray{<:AbstractArray{<:...}})
+
+View array `A` in a suitable flattened form.
+
+`partview(flatview(A), getpartmode(A))` must equal `A`, and should have
+the same type as `A` if at all possible.
+
+If `A` is not a nested array return `A` itself. If `A` is a partitioned array,
+return the original unpartition array.
+
+`flatview` should be an allocation-free O(1) operation, if at all possible.
+"""
+function flatview end
+export flatview
+
+@inline flatview(A::AbstractArray) = A
+
+function flatview(A::AbstractArray{<:AbstractArray})
+    throw(ArgumentError("flatview not implemented nested arrays of type $(nameof(typeof(A)))"))
+end
+
 
 
 
@@ -26,45 +112,7 @@ export deepmap
 
 deepmap(f::Base.Callable, x::Any) = map(f, x)
 
-deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray}) =
-    map(X -> deepmap(f, X), A)
-
-
-"""
-    getslicemap(A::AbstractSlices)
-
-Get the slicemap of an `A`.
-
-A slicemap must have type `Tuple{Vararg{Union{Colon,Integer}}}`, e.g.
-`(:, :, :, 1, 2)` or `(:, 2, :, 1, :)`.
-"""
-function getslicemap end
-export getslicemap
-
-getslicemap(A::Slices) = A.slicemap
-
-
-"""
-    flatview(A::AbstractArray)
-    flatview(A::AbstractArray{<:AbstractArray{<:...}})
-
-View array `A` in a suitable flattened form. The shape of the flattened form
-will depend on the type of `A`. If the `A` is not a nested array, the return
-value is `A` itself. Only specific types of nested arrays are supported.
-"""
-function flatview end
-export flatview
-
-@inline flatview(A::AbstractArray) = A
-@inline flatview(A::AbstractArray{<:AbstractArray}) = throw(ArgumentError("flatview not implemented nested arrays of type $(nameof(typeof(A)))"))
-
-function flatview(A::AbstractSlices)
-    if _is_aoa_slicemap(A.slicemap)
-        return parent(A)
-    else
-        throw(ArgumentError("flatview for AbstractSlices requires inner dimensions to be first and no dimension reordering, but slicemap is $(A.slicemap)"))
-    end
-end
+deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray}) = map(X -> deepmap(f, X), A)
 
 
 """
@@ -122,7 +170,6 @@ function innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
     s
 end
 
-@inline innersize(A::AbstractSlices) = _extract_innerdims(size(parent(A)), getslicemap(A))
 
 @inline innersize(A::AbstractArray{<:AbstractArray}, dim::Integer) =
     innersize(A)[dim]
