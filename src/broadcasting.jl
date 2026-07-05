@@ -45,7 +45,7 @@ end
 # ToDo: Extend to vectors of arrays.
 function Base.Broadcast.broadcasted(
     ::typeof(getindex),
-    A::Union{VectorOfSimilarVectors, VectorOfVectors},
+    A::Union{VectorOfSimilarVectors, PartsView},
     Idxs::Union{AbstractVector{<:AbstractVector{<:Integer}},AbstractVector{Colon},_RefLike{<:Union{AbstractVector{<:Integer},Colon}}}...
 )
     # Checks size compatibility:
@@ -123,7 +123,7 @@ end
 
 function Base.Broadcast.broadcasted(
     ::typeof(findall),
-    A::Union{VectorOfSimilarVectors{Bool}, VectorOfVectors{Bool}}
+    A::Union{VectorOfSimilarVectors{Bool}, PartsView{Bool}}
 )
     new_lengths = _similar_idx_vector(A, _idx_type(A), length(A))
     new_lengths .= sum.(A)

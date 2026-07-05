@@ -106,7 +106,7 @@ all(x -> x == 4.2, VA[2])
 ### Type aliases
 The following type aliases are defined:
 
-* `VectorOfVectors{T,VT,VI,VD} = VectorOfArrays{T,1,VT,VI,VD}`
+* `PartsView{T,VT,VI,VD} = VectorOfArrays{T,1,VT,VI,VD}`
 
 ### Appending data and resizing
 

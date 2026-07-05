@@ -35,10 +35,10 @@ VectorOfArrays(
 Other suitable values for `checks` are `ArraysOfArrays.simple_consistency_checks`
 and `ArraysOfArrays.no_consistency_checks`.
 
-`VectorOfVectors` is defined as an type alias:
+`PartsView` is defined as an type alias:
 
 ```julia
-`VectorOfVectors{T,VT,VI,VD} = VectorOfArrays{T,1,VT,VI,VD}`
+`PartsView{T,VT,VI,VD} = VectorOfArrays{T,1,VT,VI,VD}`
 ```
 """
 struct VectorOfArrays{
@@ -421,15 +421,15 @@ Base.Broadcast.broadcasted(::typeof(identity), A::VectorOfArrays) = A
 
 
 """
-    VectorOfVectors{T,...} = VectorOfArrays{T,1,...}
+    PartsView{T,...} = VectorOfArrays{T,1,...}
 
 Constructors:
 
 ```julia
-VectorOfVectors(A::AbstractVector{<:AbstractVector})
-VectorOfVectors{T}(A::AbstractVector{<:AbstractVector}) where {T}
+PartsView(A::AbstractVector{<:AbstractVector})
+PartsView{T}(A::AbstractVector{<:AbstractVector}) where {T}
 
-VectorOfVectors(
+PartsView(
     data::AbstractVector, elem_ptr::AbstractVector{<:Integer},
     checks::Function = full_consistency_checks
 )
@@ -437,21 +437,21 @@ VectorOfVectors(
 See also [VectorOfArrays](@ref).
 ```
 """
-const VectorOfVectors{
+const PartsView{
     T,
     VT<:AbstractVector{T},
     VI<:AbstractVector{<:Integer},
     VD<:AbstractVector{Dims{0}}
 } = VectorOfArrays{T,1,0,VT,VI,VD}
 
-export VectorOfVectors
+export PartsView
 
-VectorOfVectors{T}() where {T} = VectorOfArrays{T,1}()
+PartsView{T}() where {T} = VectorOfArrays{T,1}()
 
-VectorOfVectors{T}(A::AbstractVector{<:AbstractVector}) where {T} = VectorOfArrays{T,1}(A)
-VectorOfVectors(A::AbstractVector{<:AbstractVector}) = VectorOfArrays(A)
+PartsView{T}(A::AbstractVector{<:AbstractVector}) where {T} = VectorOfArrays{T,1}(A)
+PartsView(A::AbstractVector{<:AbstractVector}) = VectorOfArrays(A)
 
-VectorOfVectors(
+PartsView(
     data::AbstractVector,
     elem_ptr::AbstractVector{I},
     checks::Function = full_consistency_checks
@@ -468,7 +468,7 @@ VectorOfVectors(
     consgrouped_ptrs(A::AbstractVector)
 
 Compute an element pointer vector, suitable for creation of a
-`VectorOfVectors` that implies grouping equal consecutive entries of
+`PartsView` that implies grouping equal consecutive entries of
 `A`.
 
 Example:
@@ -476,7 +476,7 @@ Example:
 ```julia
     A = [1, 1, 2, 3, 3, 2, 2, 2]
     elem_ptr = consgrouped_ptrs(A)
-    first.(VectorOfVectors(A, elem_ptr)) == [1, 2, 3, 2]
+    first.(PartsView(A, elem_ptr)) == [1, 2, 3, 2]
 ```
 consgrouped_ptrs
 Typically, `elem_ptr` will be used to apply the computed grouping to other
@@ -484,7 +484,7 @@ data:
 
 ```julia
     B = [1, 2, 3, 4, 5, 6, 7, 8]
-    VectorOfVectors(B, elem_ptr) == [[1, 2], [3], [4, 5], [6, 7, 8]]
+    PartsView(B, elem_ptr) == [[1, 2], [3], [4, 5], [6, 7, 8]]
 ```
 """
 function consgrouped_ptrs end
@@ -516,7 +516,7 @@ end
 Compute a grouping of equal consecutive elements on `source` via
 [`consgrouped_ptrs`](@ref) and apply the grouping to target, resp. each
 element of `target`. `target` may be an vector or a named or unnamed tuple of
-vectors. The result is a `VectorOfVectors`, resp. a tuple of such.
+vectors. The result is a `PartsView`, resp. a tuple of such.
 
 Example:
 
@@ -561,15 +561,25 @@ export consgroupedview
 
 function consgroupedview(source::AbstractVector, target::AbstractVector)
     elem_ptr = consgrouped_ptrs(source)
-    VectorOfVectors(target, elem_ptr)
+    PartsView(target, elem_ptr)
 end
 
 function consgroupedview(source::AbstractVector, target::NTuple{N,AbstractVector}) where {N}
     elem_ptr = consgrouped_ptrs(source)
-    map(X -> VectorOfVectors(X, elem_ptr), target)
+    map(X -> PartsView(X, elem_ptr), target)
 end
 
 function consgroupedview(source::AbstractVector, target::NamedTuple{syms,<:NTuple{N,AbstractVector}}) where {syms,N}
     elem_ptr = consgrouped_ptrs(source)
-    map(X -> VectorOfVectors(X, elem_ptr), target)
+    map(X -> PartsView(X, elem_ptr), target)
 end
+
+
+# Deprecated:
+
+const VectorOfArrays{T,N} = PartsView{T,N}
+export VectorOfArrays
+
+
+const VectorOfVectors{T} = VoVPartsView{T}
+export VectorOfVectors

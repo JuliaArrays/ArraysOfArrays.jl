@@ -32,10 +32,10 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         @test @inferred(VectorOfArrays{Float64,1}(deepcopy(A1))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int,1},Array{Tuple{},1}}
         @test VectorOfArrays{Float64,1}(deepcopy(A1)) == A1
 
-        @test @inferred(VectorOfVectors(deepcopy(A1))) isa VectorOfArrays{Float32,1,0,Array{Float32,1},Array{Int,1},Array{Tuple{},1}}
-        @test VectorOfVectors(deepcopy(A1)) == A1
-        @test @inferred(VectorOfVectors{Float64}(deepcopy(A1))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int,1},Array{Tuple{},1}}
-        @test VectorOfVectors{Float64}(deepcopy(A1)) == A1
+        @test @inferred(PartsView(deepcopy(A1))) isa VectorOfArrays{Float32,1,0,Array{Float32,1},Array{Int,1},Array{Tuple{},1}}
+        @test PartsView(deepcopy(A1)) == A1
+        @test @inferred(PartsView{Float64}(deepcopy(A1))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int,1},Array{Tuple{},1}}
+        @test PartsView{Float64}(deepcopy(A1)) == A1
 
         A1_empty = ref_AoA1(Float32, 0)
         @test @inferred(VectorOfArrays(deepcopy(A1_empty))) isa VectorOfArrays{Float32,1,0,Array{Float32,1},Array{Int,1},Array{Tuple{},1}}
@@ -45,10 +45,10 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         @test @inferred(VectorOfArrays{Float64,1}(deepcopy(A1_empty))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int,1},Array{Tuple{},1}}
         @test VectorOfArrays{Float64,1}(deepcopy(A1_empty)) == A1_empty
 
-        @test @inferred(VectorOfVectors(deepcopy(A1_empty))) isa VectorOfArrays{Float32,1,0,Array{Float32,1},Array{Int,1},Array{Tuple{},1}}
-        @test VectorOfVectors(deepcopy(A1_empty)) == A1_empty
-        @test @inferred(VectorOfVectors{Float64}(deepcopy(A1_empty))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int,1},Array{Tuple{},1}}
-        @test VectorOfVectors{Float64}(deepcopy(A1_empty)) == A1_empty
+        @test @inferred(PartsView(deepcopy(A1_empty))) isa VectorOfArrays{Float32,1,0,Array{Float32,1},Array{Int,1},Array{Tuple{},1}}
+        @test PartsView(deepcopy(A1_empty)) == A1_empty
+        @test @inferred(PartsView{Float64}(deepcopy(A1_empty))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int,1},Array{Tuple{},1}}
+        @test PartsView{Float64}(deepcopy(A1_empty)) == A1_empty
 
         A2 = ref_AoA2(Float32, 4)
         @test @inferred(VectorOfArrays(deepcopy(A2))) isa VectorOfArrays{Float32,2,1,Array{Float32,1},Array{Int,1},Array{Tuple{Int},1}}
@@ -128,7 +128,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         @test getindex_of_UR == V12
         @test getindex_of_vector == getindex_of_UR
 
-        VV = @inferred(VectorOfVectors{Float64}())
+        VV = @inferred(PartsView{Float64}())
         data = @inferred(rand(5))
         @inferred(push!(VV, data))
         @test @inferred(getindex(VV, 1)) == data
@@ -253,7 +253,7 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
         # -------------------------------------------------------------------
 
-        VV = @inferred(VectorOfVectors{Float64}())
+        VV = @inferred(PartsView{Float64}())
         d1 = @inferred(rand(5))
         d2 = @inferred(rand(4))
 
@@ -290,21 +290,21 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
         A_grouped_ref = [[1, 1], [2], [3, 3], [2, 2, 2]]
         elem_ptr = consgrouped_ptrs(A)
         elem_ptr32 = Int32.(consgrouped_ptrs(A))
-        @test first.(@inferred(VectorOfVectors(A, elem_ptr))) == [1, 2, 3, 2]
-        @test first.(@inferred(VectorOfVectors(A, elem_ptr32))) == [1, 2, 3, 2]
+        @test first.(@inferred(PartsView(A, elem_ptr))) == [1, 2, 3, 2]
+        @test first.(@inferred(PartsView(A, elem_ptr32))) == [1, 2, 3, 2]
 
         B = [1, 2, 3, 4, 5, 6, 7, 8]
         B_grouped_ref = [[1, 2], [3], [4, 5], [6, 7, 8]]
-        @test @inferred(VectorOfVectors(B, elem_ptr)) == B_grouped_ref
-        @test @inferred(VectorOfVectors(B, elem_ptr32)) == B_grouped_ref
+        @test @inferred(PartsView(B, elem_ptr)) == B_grouped_ref
+        @test @inferred(PartsView(B, elem_ptr32)) == B_grouped_ref
 
         C = [1.1, 2.2, 3.3, 4.4, 5.5, 6.6, 7.7, 8.8]
         C_grouped_ref = [[1.1, 2.2], [3.3], [4.4, 5.5], [6.6, 7.7, 8.8]]
 
-        @test @inferred(consgroupedview(A, B)) isa VectorOfVectors
+        @test @inferred(consgroupedview(A, B)) isa PartsView
         @test consgroupedview(A, B) == B_grouped_ref
 
-        @test @inferred(consgroupedview(A, (B, C))) isa NTuple{2, VectorOfVectors}
+        @test @inferred(consgroupedview(A, (B, C))) isa NTuple{2, PartsView}
         @test consgroupedview(A, (B, C)) == (B_grouped_ref, C_grouped_ref)
 
         data = (a = A, b = B, c = C)
