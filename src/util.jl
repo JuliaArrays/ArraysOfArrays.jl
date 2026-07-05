@@ -32,9 +32,12 @@ _convert_elype(::Type{T}, A::AbstractArray{U}) where {T,U} = broadcast(Base.Fix1
 
 Base.@pure _add_vals(::Val{A}, ::Val{B}) where {A,B} = Val{A + B}()
 
-Base.@pure require_ndims(A::AbstractArray{T,N}, Val_N::Val{N}) where {T,N} =
-    nothing
+Base.@pure _subtract_vals(::Val{A}, ::Val{B}) where {A,B} = Val{A - B}()
 
-Base.@pure require_ndims(A::AbstractArray{T,M}, Val_N::Val{N}) where {T,M,N} =
-    throw(ArgumentError("Require an array with $N dimensions"))
+@inline _require_ndims(::Val{N}, ::Val{N}) where {N} = nothing
 
+function _require_ndims(::Val{N1}, ::Val{N2}) where {N1,N2}
+    throw(ArgumentError("Require an array with $N2 dimensions, but got an array with $N1 dimensions"))
+end
+
+Base.@pure _val_value(::Val{x}) where x = x

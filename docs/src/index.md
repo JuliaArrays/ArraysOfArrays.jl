@@ -1,22 +1,26 @@
 # ArraysOfArrays.jl
 
-A Julia package for efficient storage and handling of nested arrays. ArraysOfArrays provides two different types of nested arrays: [`SlicedView`](@ref section_ArrayOfSimilarArrays) and [`VectorOfArrays`](@ref section_VectorOfArrays).
+A Julia package for efficient storage and handling of nested arrays. ArraysOfArrays provides two different types of nested arrays: [`ArrayOfSimilarArrays`](@ref section_ArrayOfSimilarArrays) and [`VectorOfArrays`](@ref section_VectorOfArrays).
 
 This package also defines and exports the following new functions applicable to nested arrays in general:
 
-* [`nestedview`](@ref) and [`flatview`](@ref) switch between a flat and a nested view of the same data.
+* [`sliced`](@ref) and [`flatview`](@ref) switch between a flat and a nested (sliced) view of the same data.
+* [`partitioned`](@ref) creates a view of a vector as a vector of arrays that may differ in size.
+* [`getsplitmode`](@ref), [`splitup`](@ref) and [`fused`](@ref) provide a general API to split arrays into nested (sliced or partitioned) form and to fuse them back into flat form.
+* [`stacked`](@ref) and [`unstackmode`](@ref) are similar to `Base.stack`, but can return the original underlying data of sliced arrays without copying it.
+* [`vecflattened`](@ref) concatenates the elements of nested arrays into a single vector.
 * [`innersize`](@ref) returns the size of the elements of an array, provided they all have equal size.
 * [`innermap`](@ref) and [`deepmap`](@ref) apply a function to the elements of the inner (resp. innermost) arrays.
 * [`consgroupedview`](@ref) computes a grouping of equal consecutive elements on a vector and applies it to another vector or (named or unnamed) tuple of vectors.
 
 
-## [SlicedView](@id section_ArrayOfSimilarArrays)
+## [ArrayOfSimilarArrays](@id section_ArrayOfSimilarArrays)
 
-An `SlicedView` offers a duality of view between representing the same data as both a flat multi-dimensional array and as an array of equally-sized arrays:
+An `ArrayOfSimilarArrays` offers a duality of view between representing the same data as both a flat multi-dimensional array and as an array of equally-sized arrays:
 
 ```julia
 A_flat = rand(2,3,4,5,6)
-A_nested = nestedview(A_flat, 2)
+A_nested = sliced(A_flat, 2)
 ```
 
 creates a view of `A_flat` as an array of arrays:
@@ -42,9 +46,9 @@ all(x -> x == 4.2, A_flat[:, :, 2, 4, 3])
 
 The following type aliases are defined:
 
-* `VectorOfSimilarArrays{T,M} = AbstractArrayOfSimilarArrays{T,M,1}`
-* `ArrayOfSimilarVectors{T,N} = AbstractArrayOfSimilarArrays{T,1,N}`
-* `VectorOfSimilarVectors{T} = AbstractArrayOfSimilarArrays{T,1,1}`
+* `VectorOfSimilarArrays{T,M} = ArrayOfSimilarArrays{T,M,1}`
+* `ArrayOfSimilarVectors{T,N} = ArrayOfSimilarArrays{T,1,N}`
+* `VectorOfSimilarVectors{T} = ArrayOfSimilarArrays{T,1,1}`
 
 For each of the types there is also an abstract type (`AbstractArrayOfSimilarArrays`, etc.).
 
@@ -55,7 +59,7 @@ If a `VectorOfSimilarArrays` is backed by an `ElasticArrays.ElasticArray`, addit
 ```julia
 using ElasticArrays
 
-A_nested = nestedview(ElasticArray{Float64}(undef, 2, 3, 0), 2)
+A_nested = sliced(ElasticArray{Float64}(undef, 2, 3, 0), 2)
 
 for i in 1:4
     push!(A_nested, rand(2, 3))
@@ -106,7 +110,7 @@ all(x -> x == 4.2, VA[2])
 ### Type aliases
 The following type aliases are defined:
 
-* `PartsView{T,VT,VI,VD} = VectorOfArrays{T,1,VT,VI,VD}`
+* `PartsView{T,VT,VI,VD,ET} = VectorOfArrays{T,1,0,VT,VI,VD,ET}`
 
 ### Appending data and resizing
 

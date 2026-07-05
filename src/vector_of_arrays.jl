@@ -1,12 +1,24 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 
-"""
-    VectorOfArrays{T,N,M} <: AbstractVector{<:AbstractArray{T,N}}
+Base.@propagate_inbounds _voa_elem_range(elem_ptr::AbstractVector{<:Integer}, i::Integer) =
+    elem_ptr[i]:(elem_ptr[i+1] - 1)
 
-An `VectorOfArrays` represents a vector of `N`-dimensional arrays (that may
+# Element type of a `VectorOfArrays{T,N}` with data of type `VT` and element
+# pointers of type `VI`, must match the return type of `getindex` exactly:
+@inline function _voa_eltype(::Type{VT}, ::Type{VI}, ::Val{N}) where {VT<:AbstractVector,VI<:AbstractVector{<:Integer},N}
+    R = Base.promote_op(_voa_elem_range, VI, Int)
+    SV = Base.promote_op(view, VT, R)
+    return Base.promote_op(_reshape_dataview, SV, NTuple{N,Int})
+end
+
+
+"""
+    VectorOfArrays{T,N,M,VT,VI,VD,ET<:AbstractArray{T,N}} <: AbstractVector{ET}
+
+A `VectorOfArrays` represents a vector of `N`-dimensional arrays (that may
 differ in size). Internally, `VectorOfArrays` stores all elements of all
-arrays in a single flat vector. `M` must equal `N - 1`
+arrays in a single flat vector. `M` must equal `N - 1`.
 
 The `VectorOfArrays` itself supports `push!`, `unshift!`, etc., but the size
 of each individual array in the vector is fixed. `resize!` can be used to
@@ -38,15 +50,16 @@ and `ArraysOfArrays.no_consistency_checks`.
 `PartsView` is defined as an type alias:
 
 ```julia
-`PartsView{T,VT,VI,VD} = VectorOfArrays{T,1,VT,VI,VD}`
+`PartsView{T,VT,VI,VD,ET} = VectorOfArrays{T,1,0,VT,VI,VD,ET}`
 ```
 """
 struct VectorOfArrays{
     T, N, M,
     VT<:AbstractVector{T},
     VI<:AbstractVector{<:Integer},
-    VD<:AbstractVector{Dims{M}}
-} <: AbstractVector{Array{T,N}}
+    VD<:AbstractVector{Dims{M}},
+    ET<:AbstractArray{T,N}
+} <: AbstractVector{ET}
     data::VT
     elem_ptr::VI
     kernel_size::VD
@@ -57,11 +70,13 @@ struct VectorOfArrays{
         elem_ptr = [firstindex(data)]
         kernel_size = Vector{Dims{M}}()
 
+        ET = _voa_eltype(typeof(data), typeof(elem_ptr), Val(N))
         new{
             T, N, M,
             typeof(data),
             typeof(elem_ptr),
-            typeof(kernel_size)
+            typeof(kernel_size),
+            ET
         }(data, elem_ptr, kernel_size)
     end
 
@@ -77,7 +92,8 @@ struct VectorOfArrays{
         VD<:AbstractVector{Dims{M}}
     }
         N = length((ntuple(_ -> 0, Val{M}())..., 0))
-        A = new{T,N,M,VT,VI,VD}(data, elem_ptr, kernel_size)
+        ET = _voa_eltype(VT, VI, Val(N))
+        A = new{T,N,M,VT,VI,VD,ET}(data, elem_ptr, kernel_size)
         checks(A)
         A
     end
@@ -148,20 +164,16 @@ end
 
 
 Base.@propagate_inbounds function _elem_range_size(A::VectorOfArrays, i::Integer)
-    elem_ptr = A.elem_ptr
-
-    from = elem_ptr[i]
-    until = elem_ptr[i+1]
-    to = until - 1
-    len = until - from
+    r = _voa_elem_range(A.elem_ptr, i)
+    len = length(r)
 
     ksize = A.kernel_size[i]
     klen = prod(ksize)
     len_p, klen_p = promote(len, klen)
     sz_lastdim = len == 0 ? len_p : div(len_p, klen_p)
-    sz = (ksize..., sz_lastdim)
+    sz = (ksize..., Int(sz_lastdim))
 
-    (from:to, sz)
+    (r, sz)
 end
 
 
@@ -181,6 +193,98 @@ flatview(A::VectorOfArrays{<:Any,N,M,<:Any}) where {N,M} = A.data
 function flatview(A::VectorOfArrays{<:Any,N,M,<:Any,<:SubArray}) where {N,M}
     view(A.data, A.elem_ptr[begin]:A.elem_ptr[end]-1)
 end
+
+
+"""
+    struct SplitParts{M,VI,VD} <: AbstractPartMode{M,1}
+
+The split mode of [`VectorOfArrays`](@ref): a partition of a vector into
+consecutive parts of possibly different size, viewed as a vector of
+`M`-dimensional arrays.
+
+Constructor:
+
+```
+SplitParts(
+    elem_ptr::AbstractVector{<:Integer},
+    kernel_size::AbstractVector{Dims{M-1}}
+)
+```
+
+`elem_ptr` and `kernel_size` equal the equivalent properties of
+`VectorOfArrays`.
+
+See also [`AbstractPartMode`](@ref).
+"""
+struct SplitParts{
+    M,
+    VI<:AbstractVector{<:Integer},
+    VD<:AbstractVector{<:Dims}
+} <: AbstractPartMode{M,1}
+    elem_ptr::VI
+    kernel_size::VD
+
+    function SplitParts(
+        elem_ptr::VI,
+        kernel_size::VD
+    ) where {
+        Mk,
+        VI<:AbstractVector{<:Integer},
+        VD<:AbstractVector{Dims{Mk}}
+    }
+        M = _val_value(_add_vals(Val(Mk), Val(1)))
+        new{M,VI,VD}(elem_ptr, kernel_size)
+    end
+end
+export SplitParts
+
+is_memordered_splitmode(::SplitParts) = true
+
+@inline getsplitmode(A::VectorOfArrays) = SplitParts(A.elem_ptr, A.kernel_size)
+
+@inline fused(A::VectorOfArrays) = A.data
+
+function splitup(A::AbstractVector, smode::SplitParts)
+    VectorOfArrays(A, smode.elem_ptr, smode.kernel_size, simple_consistency_checks)
+end
+
+
+function partitioned(A::AbstractVector, lengths::AbstractVector{<:Integer})
+    elem_ptr = _elem_ptr_from_lengths(A, lengths)
+    kernel_size = similar(lengths, Dims{0})
+    fill!(kernel_size, ())
+    VectorOfArrays(A, elem_ptr, kernel_size, no_consistency_checks)
+end
+
+function partitioned(A::AbstractVector, shapes::AbstractVector{Dims{N}}) where {N}
+    elem_ptr = _elem_ptr_from_lengths(A, prod.(shapes))
+    kernel_size = Base.front.(shapes)
+    VectorOfArrays(A, elem_ptr, kernel_size, no_consistency_checks)
+end
+
+function _elem_ptr_from_lengths(A::AbstractVector, lengths::AbstractVector{<:Integer})
+    elem_ptr = similar(lengths, Int, length(lengths) + 1)
+    i = firstindex(elem_ptr)
+    elem_ptr[i] = firstindex(A)
+    for l in lengths
+        l >= 0 || throw(ArgumentError("Part lengths must not be negative"))
+        elem_ptr[i + 1] = elem_ptr[i] + l
+        i += 1
+    end
+    last(elem_ptr) - 1 <= lastindex(A) || throw(ArgumentError("Sum of part lengths exceeds length of data vector"))
+    return elem_ptr
+end
+
+
+function vecflattened(A::VectorOfArrays)
+    ep = A.elem_ptr
+    view(A.data, first(ep):(last(ep) - 1))
+end
+
+# Fast paths, must return independent arrays, unlike `vecflattened`:
+Base.mapreduce(::typeof(vec), ::typeof(vcat), A::VectorOfArrays) = copy(vecflattened(A))
+Base.reduce(::typeof(vcat), A::VectorOfArrays{T,1}) where {T} = copy(vecflattened(A))
+
 
 Base.size(A::VectorOfArrays) = size(A.kernel_size)
 
@@ -388,7 +492,7 @@ function Base.push!(A::VectorOfArrays{T,N}, x::AbstractArray{U,N}) where {T,N,U}
 end
 
 
-function Base.empty(A::VectorOfArrays{T,N}, ::Type{<:DenseArray{U,N}}) where {T,N,U}
+function Base.empty(A::VectorOfArrays{T,N}, ::Type{<:AbstractArray{U,N}}) where {T,N,U}
     empty_data = empty(A.data, U)
     empty_elem_ptr = push!(empty(A.elem_ptr), firstindex(empty_data))
     empty_kernel_size = empty(A.kernel_size)
@@ -421,7 +525,10 @@ Base.Broadcast.broadcasted(::typeof(identity), A::VectorOfArrays) = A
 
 
 """
-    PartsView{T,...} = VectorOfArrays{T,1,...}
+    PartsView{T,...} = VectorOfArrays{T,1,0,...}
+
+A vector of vectors (that may differ in length), stored in contiguous,
+partitioned form. See [`VectorOfArrays`](@ref) for details.
 
 Constructors:
 
@@ -433,16 +540,17 @@ PartsView(
     data::AbstractVector, elem_ptr::AbstractVector{<:Integer},
     checks::Function = full_consistency_checks
 )
-
-See also [VectorOfArrays](@ref).
 ```
+
+See also [`VectorOfArrays`](@ref).
 """
 const PartsView{
     T,
     VT<:AbstractVector{T},
     VI<:AbstractVector{<:Integer},
-    VD<:AbstractVector{Dims{0}}
-} = VectorOfArrays{T,1,0,VT,VI,VD}
+    VD<:AbstractVector{Dims{0}},
+    ET<:AbstractVector{T}
+} = VectorOfArrays{T,1,0,VT,VI,VD,ET}
 
 export PartsView
 
@@ -577,9 +685,4 @@ end
 
 # Deprecated:
 
-const VectorOfArrays{T,N} = PartsView{T,N}
-export VectorOfArrays
-
-
-const VectorOfVectors{T} = VoVPartsView{T}
-export VectorOfVectors
+Base.@deprecate_binding VectorOfVectors PartsView

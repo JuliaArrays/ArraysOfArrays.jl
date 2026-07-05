@@ -5,13 +5,13 @@ module ArraysOfArraysAdaptExt
 import Adapt
 using Adapt: adapt
 
-using ArraysOfArrays: SlicedView, VectorOfArrays
+using ArraysOfArrays: ArrayOfSimilarArrays, VectorOfArrays
 using ArraysOfArrays: no_consistency_checks
 
 
-function Adapt.adapt_structure(to, A::SlicedView{T,M,N}) where {T,M,N}
+function Adapt.adapt_structure(to, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     adapted_data = adapt(to, A.data)
-    SlicedView{eltype(adapted_data),M,N}(adapted_data)
+    ArrayOfSimilarArrays{eltype(adapted_data),M,N}(adapted_data)
 end
 
 

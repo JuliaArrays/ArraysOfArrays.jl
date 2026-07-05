@@ -8,7 +8,7 @@ __precompile__(true)
 Efficient storage and handling of nested arrays.
 
 ArraysOfArrays provides two different types of nested arrays:
-[`SlicedView`](@ref section_ArrayOfSimilarArrays) and
+[`ArrayOfSimilarArrays`](@ref section_ArrayOfSimilarArrays) and
 [`VectorOfArrays`](@ref section_VectorOfArrays).
 """
 module ArraysOfArrays

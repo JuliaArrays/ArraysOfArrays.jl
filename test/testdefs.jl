@@ -2,7 +2,7 @@
 
 using ChainRulesCore: rrule, unthunk, AbstractThunk, Thunk, NoTangent
 
-#if !isdefined(Main, :test_api)
+if !isdefined(Main, :test_api)
     maptest_f(x::Number) = x^2
     maptest_f(x::AbstractArray{<:Number}) = sum(x)^2
     maptest_f(x::AbstractArray) = length(x)^2
@@ -14,7 +14,7 @@ using ChainRulesCore: rrule, unthunk, AbstractThunk, Thunk, NoTangent
         @test @inferred(f_pullback(dy)) == ntuple(_ -> NoTangent(), Val(N+1))
     end
 
-    function test_joinedview_rrule(A)
+    function test_fused_rrule(A)
         @testset "Test fused rrule for $(nameof(typeof(A)))" begin
             A_joined, f_pullback = @inferred(rrule(fused, A))
             @test A_joined == fused(A)
@@ -26,9 +26,9 @@ using ChainRulesCore: rrule, unthunk, AbstractThunk, Thunk, NoTangent
     end
 
     function test_splitview_rrule(A, smode)
-        @testset "Test splitview rrule for $(nameof(typeof(A)))" begin
-            A_split, f_pullback = @inferred(rrule(splitview, A, smode))
-            @test A_split == splitview(A, smode)
+        @testset "Test splitup rrule for $(nameof(typeof(A)))" begin
+            A_split, f_pullback = @inferred(rrule(splitup, A, smode))
+            @test A_split == splitup(A, smode)
             dy = Thunk(Returns(A_split))
             tangents = @inferred(f_pullback(dy))
             @test tangents isa Tuple{NoTangent,<:AbstractThunk,NoTangent}
@@ -104,15 +104,18 @@ using ChainRulesCore: rrule, unthunk, AbstractThunk, Thunk, NoTangent
 
                 @test Array(stack(A)) == A_array_stacked
 
+                @test @inferred(unstackmode(A)) isa AbstractSlicingMode{M,N}
+                umode = unstackmode(A)
+                @test @inferred(splitup(stacked(A), umode)) == A
+
                 if is_memordered_splitmode(smode)
-                    if A isa Slices
-                        # stack(A) never returns parent for Slices, even if possible:
-                        @test @inferred(stack(A)) == A_unsplit_ref
-                    else
-                        @test @inferred(stack(A)) === A_unsplit_ref
-                    end
+                    # stack(A) must return an independent array, even if the
+                    # parent array could be returned as-is:
+                    @test @inferred(stack(A)) == A_unsplit_ref
+                    @test stack(A) !== A_unsplit_ref
                     @test @inferred(stacked(A)) === A_unsplit_ref
                     @test @inferred(flatview(A)) === A_unsplit_ref
+                    @test stacked(splitup(stacked(A), umode)) === stacked(A)
                 else
                     @test Array(@inferred(stack(A))) == A_array_stacked
                     @test Array(@inferred(stacked(A))) == A_array_stacked
@@ -139,18 +142,18 @@ using ChainRulesCore: rrule, unthunk, AbstractThunk, Thunk, NoTangent
                 @test @inferred(is_memordered_splitmode(smode)) == false
                 @test_throws ArgumentError fused(A)
                 @test_throws ArgumentError flatview(A)
-                @test_throws ArgumentError splitview(A_unsplit_ref, smode)
+                @test_throws ArgumentError splitup(A_unsplit_ref, smode)
                 @test_throws ArgumentError getinnerdims(dimstpl, smode)
                 @test_throws ArgumentError getouterdims(dimstpl, smode)
             elseif smode isa NonSplitMode
                 @test @inferred(is_memordered_splitmode(smode)) == true
                 @test @inferred(fused(A)) === A
                 @test @inferred(flatview(A)) === A
-                @test @inferred(splitview(A, smode)) === A
+                @test @inferred(splitup(A, smode)) === A
                 @test @inferred(getinnerdims(dimstpl, smode)) == ()
                 @test @inferred(getouterdims(dimstpl, smode)) == dimstpl
 
-                test_joinedview_rrule(A)
+                test_fused_rrule(A)
                 test_splitview_rrule(A, smode)
             else
                 if A isa Slices
@@ -159,12 +162,12 @@ using ChainRulesCore: rrule, unthunk, AbstractThunk, Thunk, NoTangent
                 @test @inferred(fused(A)) == A_unsplit_ref
                 A_unsplit = fused(A)
                 @test typeof(A_unsplit) == typeof(A_unsplit_ref)
-                @test typeof(splitview(A_unsplit, smode)) == typeof(A)
-                @test splitview(A_unsplit, smode) == A
+                @test typeof(splitup(A_unsplit, smode)) == typeof(A)
+                @test splitup(A_unsplit, smode) == A
 
-                test_joinedview_rrule(A)
+                test_fused_rrule(A)
                 test_splitview_rrule(A_unsplit, smode)
             end
         end
     end
-#end
+end

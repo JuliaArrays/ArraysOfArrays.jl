@@ -32,17 +32,16 @@ using StatsBase: cov2cor
 
 
     @inline function test_from_flat(::Type{TT}, ::Type{RT}, Val_L::Val{L}) where {
-        TT<:SlicedView,
-        RT<:SlicedView,
+        TT<:ArrayOfSimilarArrays,
+        RT<:ArrayOfSimilarArrays,
         L
     }
         @testset "$TT from Array{Float64,$L}" begin
             A = rand_flat_array(Val_L)
             @test typeof(@inferred TT(A)) <: RT
-            @test typeof(@inferred convert(TT, A)) <: RT
             
             AosA = TT(A)
-            @test typeof(AosA) == typeof(convert(TT, A))
+            @test typeof(AosA) == typeof(TT(A))
             @test @inferred(eltype(AosA)) == typeof(AosA[1])
             @test @inferred(parent(AosA)) === @inferred(flatview(AosA))
             if eltype(eltype(AosA)) == eltype(A)
@@ -50,67 +49,72 @@ using StatsBase: cov2cor
             else
                 @test @inferred(flatview(AosA)) ≈ A
             end
-            @test @inferred(stack(AosA)) === flatview(AosA)
+            @test @inferred(stacked(AosA)) === flatview(AosA)
+            @test @inferred(stack(AosA)) == flatview(AosA)
+            @test stack(AosA) !== flatview(AosA)
+
+            @test_deprecated convert(TT, A) == TT(A)
         end
     end
 
 
     @inline function test_from_nested(::Type{TT}, ::Type{RT}, Val_M::Val{M}, Val_N::Val{N}) where {
-        TT<:SlicedView,
-        RT<:SlicedView,
+        TT<:ArrayOfSimilarArrays,
+        RT<:ArrayOfSimilarArrays,
         M, N
     }
         @testset "$TT from Array{Array{Float64,$M},$N}" begin
             A = rand_nested_similar_arrays(Val_M, Val_N)
 
-            A2_ctor = @inferred TT(A)
-            U = eltype(flatview(A2_ctor))
+            A2_conv = @inferred convert(TT, A)
+            U = eltype(flatview(A2_conv))
 
             A_U = Array{Array{U,M},N}(A)
 
-            @test typeof(A2_ctor) <: RT
-            @test A2_ctor == A_U
+            @test typeof(A2_conv) <: RT
+            @test A2_conv == A_U
 
             A2_conv = @inferred convert(TT, A)
             @test typeof(A2_conv) <: RT
-            @test A2_conv == A2_ctor
 
-            U = eltype(flatview(A2_ctor))
-            A3 = @inferred Array(A2_ctor)
+            U = eltype(flatview(A2_conv))
+            A3 = @inferred Array(A2_conv)
             @test typeof(A3) == Array{Array{U,M},N}
             @test A3 == A_U
+
+            @test_deprecated TT(A) == A2_conv
         end
     end
 
 
     @testset "construct/convert from flat array" begin
-        test_from_flat(SlicedView{Float64,2,3}, SlicedView{Float64,2,3,Array{Float64,5}}, Val(5))
-        test_from_flat(SlicedView{Float64,2}, SlicedView{Float64,2,3,Array{Float64,5}}, Val(5))
+        test_from_flat(ArrayOfSimilarArrays{Float64,2,3}, ArrayOfSimilarArrays{Float64,2,3,Array{Float64,5}}, Val(5))
+        test_from_flat(ArrayOfSimilarArrays{Float64,2}, ArrayOfSimilarArrays{Float64,2,3,Array{Float64,5}}, Val(5))
         test_from_flat(ArrayOfSimilarVectors{Float64}, ArrayOfSimilarVectors{Float64,2,Array{Float64,3}}, Val(3))
         test_from_flat(VectorOfSimilarArrays{Float64}, VectorOfSimilarArrays{Float64,2,Array{Float64,3}}, Val(3))
         test_from_flat(VectorOfSimilarVectors{Float64}, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(2))
         test_from_flat(VectorOfSimilarVectors, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(2))
 
-        test_from_flat(SlicedView{Float32,2,3}, SlicedView{Float32,2,3,Array{Float32,5}}, Val(5))
-        test_from_flat(SlicedView{Float32,2}, SlicedView{Float32,2,3,Array{Float32,5}}, Val(5))
+        test_from_flat(ArrayOfSimilarArrays{Float32,2,3}, ArrayOfSimilarArrays{Float32,2,3,Array{Float32,5}}, Val(5))
+        test_from_flat(ArrayOfSimilarArrays{Float32,2}, ArrayOfSimilarArrays{Float32,2,3,Array{Float32,5}}, Val(5))
         test_from_flat(ArrayOfSimilarVectors{Float32}, ArrayOfSimilarVectors{Float32,2,Array{Float32,3}}, Val(3))
         test_from_flat(VectorOfSimilarArrays{Float32}, VectorOfSimilarArrays{Float32,2,Array{Float32,3}}, Val(3))
         test_from_flat(VectorOfSimilarVectors{Float32}, VectorOfSimilarVectors{Float32,Array{Float32,2}}, Val(2))
         test_from_flat(VectorOfSimilarVectors{Float32}, VectorOfSimilarVectors{Float32,Array{Float32,2}}, Val(2))
 
-        test_rrule(SlicedView{Float64,2,2}, rand(2,3,4,5))
+        test_rrule(ArrayOfSimilarArrays{Float64,2,2}, rand(2,3,4,5))
     end
 
 
     @testset "construct/convert from nested arrays" begin
-        test_from_nested(SlicedView, SlicedView{Float64,2,3,Array{Float64,5}}, Val(2), Val(3))
-        test_from_nested(SlicedView{Float64,2,3}, SlicedView{Float64,2,3,Array{Float64,5}}, Val(2), Val(3))
-        test_from_nested(SlicedView{Float64}, SlicedView{Float64,2,3,Array{Float64,5}}, Val(2), Val(3))
-        test_from_nested(SlicedView{Float32}, SlicedView{Float32,2,3,Array{Float32,5}}, Val(2), Val(3))
+        test_from_nested(ArrayOfSimilarArrays, ArrayOfSimilarArrays{Float64,2,3,Array{Float64,5}}, Val(2), Val(3))
+        test_from_nested(ArrayOfSimilarArrays{Float64,2,3}, ArrayOfSimilarArrays{Float64,2,3,Array{Float64,5}}, Val(2), Val(3))
+        test_from_nested(ArrayOfSimilarArrays{Float64}, ArrayOfSimilarArrays{Float64,2,3,Array{Float64,5}}, Val(2), Val(3))
+        test_from_nested(ArrayOfSimilarArrays{Float32}, ArrayOfSimilarArrays{Float32,2,3,Array{Float32,5}}, Val(2), Val(3))
 
-        test_from_nested(SlicedView, VectorOfSimilarArrays{Float64,4,Array{Float64,5}}, Val(4), Val(1))
-        test_from_nested(SlicedView, ArrayOfSimilarVectors{Float64,4,Array{Float64,5}}, Val(1), Val(4))
-        test_from_nested(SlicedView, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
+        test_from_nested(ArrayOfSimilarArrays, VectorOfSimilarArrays{Float64,4,Array{Float64,5}}, Val(4), Val(1))
+        test_from_nested(ArrayOfSimilarArrays, ArrayOfSimilarVectors{Float64,4,Array{Float64,5}}, Val(1), Val(4))
+        test_from_nested(ArrayOfSimilarArrays, VectorOfSimilarVectors{Float64,Array{Float64,2}}, Val(1), Val(1))
 
         test_from_nested(VectorOfSimilarArrays{Float64,4}, VectorOfSimilarArrays{Float64,4,Array{Float64,5}}, Val(4), Val(1))
         test_from_nested(VectorOfSimilarArrays{Float64}, VectorOfSimilarArrays{Float64,4,Array{Float64,5}}, Val(4), Val(1))
@@ -129,12 +133,12 @@ using StatsBase: cov2cor
         r = @inferred(rand(5,5))
         @test @inferred(flatview(ArrayOfSimilarVectors(r))) == r
 
-        test_rrule(SlicedView{Float64,2,2}, [rand(2,3) for i in 1:5, j in 1:6])
+        test_rrule(ArrayOfSimilarArrays{Float64,2,2}, [rand(2,3) for i in 1:5, j in 1:6])
     end
 
     @testset "AbstractSlices interface" begin
-        @test @inferred(SlicedView{Float32,2,3}(rand(3,4,5,6,7))) isa AbstractSlices
-        let A = SlicedView{Float32,2,3}(rand(3,4,5,6,7))
+        @test @inferred(ArrayOfSimilarArrays{Float32,2,3}(rand(3,4,5,6,7))) isa AbstractSlices
+        let A = ArrayOfSimilarArrays{Float32,2,3}(rand(3,4,5,6,7))
             @test @inferred(A[2, 3, 4]) isa AbstractArray{Float32,2}
             ref_ET = typeof(A[2, 3, 4])
             @test A isa AbstractSlices{ref_ET, 3}
@@ -150,8 +154,8 @@ using StatsBase: cov2cor
         EA_ref2 = rand_flat_array(Val(3))
         EA1 = ElasticArray{Float64, 3}(EA_ref1)
         EA2 = ElasticArray{Float64, 3}(EA_ref2)
-        AEA1 = SlicedView{Float64, 3}(EA1)
-        AEA2 = SlicedView{Float64, 3}(EA2)
+        AEA1 = ArrayOfSimilarArrays{Float64, 3}(EA1)
+        AEA2 = ArrayOfSimilarArrays{Float64, 3}(EA2)
         AEA1_ref = copy(AEA1)
         AEA2_ref = copy(AEA2)
         append!(AEA1, AEA2)
@@ -161,8 +165,8 @@ using StatsBase: cov2cor
             @test @inferred(reverse(AEA2.data, dims=3)[:,:,i]) == @inferred(AEA1.data[:,:,N+1-i])
         end
 
-        A1 = SlicedView{Float64,1}(rand_flat_array(Val(1)))
-        A2 = SlicedView{Float64,1}(rand_flat_array(Val(1)))
+        A1 = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
+        A2 = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
         A1_data = copy(A1.data)
         A2_data = copy(A2.data)
         append!(A1, A2)
@@ -173,14 +177,14 @@ using StatsBase: cov2cor
     end
 
     @testset "similar and copyto!" begin
-        A = SlicedView{Float64,1}(rand_flat_array(Val(1)))
+        A = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
         @test (@inferred copyto!((@inferred similar(A)), A)) == A
 
-        A = SlicedView{Float64,2}(rand_flat_array(Val(5)))
+        A = ArrayOfSimilarArrays{Float64,2}(rand_flat_array(Val(5)))
         @test (@inferred copyto!((@inferred similar(A)), A)) == A
 
         A_data = rand_flat_array(Val(4))
-        A = SlicedView{Float64, 2}(A_data)
+        A = ArrayOfSimilarArrays{Float64, 2}(A_data)
         A_similar = similar(A, Array{Float64, 2}, size(A))
         @test @inferred(size(A)) == @inferred(size(A_similar))
         @test @inferred(size(A.data)) == @inferred(size(A_similar.data))
@@ -191,14 +195,14 @@ using StatsBase: cov2cor
 
     @testset "adapt" begin
         A_flat = rand(2,3,4,5,6)
-        A_nested = nestedview(A_flat, 2)
+        A_nested = sliced(A_flat, 2)
         @test @inferred(adapt(identity, A_nested)) == A_nested
         @test typeof(adapt(identity, A_nested)) == typeof(A_nested)
     end
 
 
     @testset "deepcopy" begin
-        A = SlicedView{Float64,1}(rand_flat_array(Val(1)))
+        A = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
         @test (@inferred deepcopy(A)) == A
         @test typeof(deepcopy(A)) == typeof(A)
     end
@@ -206,14 +210,16 @@ using StatsBase: cov2cor
 
     @testset "flatview" begin
         A = rand_nested_similar_arrays(Val(3), Val(2))
-        B = SlicedView(A)
-        @inferred(flatview(B))[:] == collect(flatview(A))
+        B = convert(ArrayOfSimilarArrays, A)
+        @test @inferred(flatview(B)) === B.data
+        @test flatview(B) == stacked(A)
+        @test_throws ArgumentError flatview(A)
     end
 
 
     @testset "empty" begin
         A = [rand(2,3), rand(2,3), rand(2,3)]
-        B = SlicedView(A)
+        B = ArrayOfSimilarArrays(A)
         @test typeof(@inferred empty(B)) == typeof(B)
         @test empty(A) == empty(B)
 
@@ -227,10 +233,10 @@ using StatsBase: cov2cor
 
     @testset "stats" begin
         VV = [rand(3) for i in 1:10]
-        VV_aosa = SlicedView(VV)
+        VV_aosa = ArrayOfSimilarArrays(VV)
 
         VA = [rand(2,3,3) for i in 1:10]
-        VA_aosa = SlicedView(VA)
+        VA_aosa = ArrayOfSimilarArrays(VA)
 
         array_cmp(A, B) = (A ≈ B) && (size(A) == size(B))
 
@@ -264,13 +270,13 @@ using StatsBase: cov2cor
 
     @testset "examples" begin
         A_flat = rand(2,3,4,5,6)
-        A_nested = nestedview(A_flat, 2)
+        A_nested = sliced(A_flat, 2)
 
         @test A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
         @test flatview(A_nested) === A_flat
 
         A_flat = rand(4,4)
-        A_nested = @inferred(nestedview(A_flat))
+        A_nested = @inferred(sliced(A_flat))
 
         @test A_nested.data == A_flat
         @test @inferred(size(A_nested))[1] == @inferred(size(A_flat))[1]
@@ -279,11 +285,11 @@ using StatsBase: cov2cor
         # -------------------------------------------------------------------
 
         A_flat = rand(2,3,4,5)
-        ASA = @inferred(SlicedView{Float64,2,2}(A_flat))
+        ASA = @inferred(ArrayOfSimilarArrays{Float64,2,2}(A_flat))
         @test ASA.data == A_flat
 
         # -------------------------------------------------------------------
-        A_nested = nestedview(ElasticArray{Float64}(undef, 2, 3, 0), 2)
+        A_nested = sliced(ElasticArray{Float64}(undef, 2, 3, 0), 2)
         A_nested_copy = deepcopy(A_nested)
 
         for i in 1:4
@@ -317,7 +323,7 @@ using StatsBase: cov2cor
         r = vcat(r1,r2,r3,r4)
         VSV = VectorOfSimilarVectors(r)
         VSA = VectorOfSimilarArrays(r)
-        ASA = SlicedView([r1,r2,r3,r4])
+        ASA = ArrayOfSimilarArrays([r1,r2,r3,r4])
 
         f = x -> x.*2
 
@@ -335,7 +341,7 @@ using StatsBase: cov2cor
 
     @testset "map and broadcast" begin
         A_flat = rand(2,3,4,5,6)
-        A = nestedview(A_flat, 2)
+        A = sliced(A_flat, 2)
 
         for do_map in (map, broadcast)
             @test @inferred(do_map(identity, A)) === A

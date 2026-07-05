@@ -8,6 +8,8 @@ using Adapt
 
 using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
+include("testdefs.jl")
+
 
 @testset "vector_of_arrays" begin
     ref_flatview(A::AbstractVector{<:AbstractArray}) = vcat(map(vec, Array(A))...)
@@ -88,22 +90,85 @@ using ArraysOfArrays: full_consistency_checks, append_elemptr!, element_ptr
 
         @test @inferred(vcat(B1, B2)) isa VectorOfArrays
         @test vcat(B1, B2) == vcat(A1, A2)
-        @test eltype(vcat(B1, B2)) == Array{Float32,3}
+        @test eltype(vcat(B1, B2)) <: AbstractArray{Float32,3}
+        @test eltype(vcat(B1, B2)) == eltype(B1)
         full_consistency_checks(vcat(B1, B2))
 
         @test @inferred(vcat(B1, B3)) isa VectorOfArrays
         @test vcat(B1, B3) == vcat(A1, A3)
-        @test eltype(vcat(B1, B3)) == Array{Float32,3}
+        @test eltype(vcat(B1, B3)) <: AbstractArray{Float32,3}
         full_consistency_checks(vcat(B1, B3))
 
         @test @inferred(vcat(B1, B2, B3, B4)) isa VectorOfArrays
         @test vcat(B1, B2, B3, B4) == vcat(A1, A2, A3, A4)
-        @test eltype(vcat(B1, B2, B3, B4)) == Array{Float64,3}
+        @test eltype(vcat(B1, B2, B3, B4)) <: AbstractArray{Float64,3}
         full_consistency_checks(vcat(B1, B2, B3, B4))
 
         B1_copy = @inferred(copy(B1)); B3_copy = @inferred(copy(B3))
         append!(B1_copy, B3_copy)
         @test B1_copy.data == vcat(B1.data, B3.data)
+    end
+
+
+    @testset "split mode API" begin
+        B1 = VectorOfArrays(ref_AoA1(Float32, 5))
+        B1e = VectorOfArrays(ref_AoA1(Float32, 0))
+        B3 = VectorOfArrays(ref_AoA3(Float32, 3))
+        Bu = VectorOfArrays([rand(Float32, 2, 3) for i in 1:4])
+
+        for B in [B1, B1e, B3, Bu]
+            @test @inferred(getsplitmode(B)) isa AbstractPartMode{ndims(eltype(B)),1}
+            @test @inferred(fused(B)) === B.data
+            @test @inferred(splitup(fused(B), getsplitmode(B))) == B
+            @test typeof(splitup(fused(B), getsplitmode(B))) == typeof(B)
+            test_api(B, Array(B), B.data)
+        end
+
+        # Uniform element size, so stackable:
+        @test @inferred(stacked(Bu)) == stack(Array(Bu))
+        @test @inferred(splitup(stacked(Bu), unstackmode(Bu))) == Bu
+
+        # flatview on view-backed VectorOfArrays returns a view of only the
+        # covered data range, in a type-stable fashion:
+        B3_view = view(B3, 2:3)
+        @test @inferred(flatview(B3_view)) isa SubArray
+        @test flatview(B3_view) == B3.data[B3.elem_ptr[2]:(B3.elem_ptr[4] - 1)]
+        @test @inferred(vecflattened(B3_view)) == flatview(B3_view)
+        @test @inferred(flatview(B3)) === B3.data
+    end
+
+
+    @testset "partitioned" begin
+        x = collect(1:10)
+
+        p = @inferred(partitioned(x, [2, 3, 5]))
+        @test p isa PartsView{Int}
+        @test p == [[1, 2], [3, 4, 5], [6, 7, 8, 9, 10]]
+        @test @inferred(fused(p)) === x
+        @test flatview(p) === x
+        test_api(p, Array(p), x)
+
+        # vecflattened may share memory, reduce/mapreduce must not:
+        @test @inferred(vecflattened(p)) == x
+        @test parent(vecflattened(p)) === x
+        @test @inferred(reduce(vcat, p)) == x
+        @test reduce(vcat, p) !== x
+        @test typeof(reduce(vcat, p)) == typeof(x)
+        @test @inferred(mapreduce(vec, vcat, p)) == x
+        @test mapreduce(vec, vcat, p) !== x
+
+        # Partial partitions are allowed:
+        p_partial = @inferred(partitioned(x, [2, 3]))
+        @test p_partial == [[1, 2], [3, 4, 5]]
+
+        @test_throws ArgumentError partitioned(x, [2, 3, 6])
+        @test_throws ArgumentError partitioned(x, [2, -1, 5])
+
+        p2 = @inferred(partitioned(x, [(1, 2), (2, 2)]))
+        @test p2 isa VectorOfArrays{Int,2}
+        @test p2[1] == [1 2]
+        @test p2[2] == [3 5; 4 6]
+        @test @inferred(fused(p2)) === x
     end
 
 

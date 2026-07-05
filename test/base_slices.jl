@@ -21,6 +21,13 @@ include("testdefs.jl")
     @test @inferred(getinnerdims((1,2,3,4,5), getsplitmode(Aes2))) == (2,4)
     @test @inferred(getouterdims((1,2,3,4,5), getsplitmode(Aes2))) == (3,1,5)
 
+    # Non-involutive outer dimension order (a 3-cycle), regression test for
+    # getouterdims applying the inverse of the slicemap permutation:
+    Aes3 = eachslice(A_orig; dims = (2,3,1))
+    @test @inferred(getsplitmode(Aes3)) isa BaseSlicing{2,3,Tuple{Int,Int,Int,Colon,Colon}}
+    @test @inferred(getinnerdims((1,2,3,4,5), getsplitmode(Aes3))) == (4,5)
+    @test @inferred(getouterdims((1,2,3,4,5), getsplitmode(Aes3))) == (2,3,1)
+
     Aec = eachcol(A_orig_mat)
     @test @inferred(getsplitmode(Aec)) isa BaseSlicing{1,1,Tuple{Colon,Int}}
     @test @inferred(getinnerdims((1,2), getsplitmode(Aec))) == (1,)
@@ -33,6 +40,7 @@ include("testdefs.jl")
 
     test_api(Aes1, Array(Aes1), A_orig)
     test_api(Aes2, Array(Aes2), A_orig)
+    test_api(Aes3, Array(Aes3), A_orig)
     test_api(Aec, Array(Aec), A_orig_mat)
     test_api(Aer, Array(Aer), A_orig_mat)
 end

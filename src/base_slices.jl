@@ -1,17 +1,18 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 """
-    struct BaseSlicing{N,TPL<:Tuple{Vararg{Int,N}}} <: AbstractSlicingMode
+    struct BaseSlicing{M,N,TPL<:Tuple{Vararg{Union{Colon,Int}}}} <: AbstractSlicingMode{M,N}
 
-The split mode of `Slices`.
+The split mode of `Base.Slices` (as returned by `eachslice`, `eachcol` and
+`eachrow`).
 
 Constructor:
 
 ```
-BaseSlicing(slicemap::Tuple{Vararg{Union{Colon,Int}}}})
+BaseSlicing{M,N,TPL}(slicemap::TPL)
 ```
 
-`slicemap` equals the `slicemap` property of `Base.Slice` objects.
+`slicemap` equals the `slicemap` property of `Base.Slices` objects.
 
 See also [`AbstractSlicingMode`](@ref).
 """
@@ -49,27 +50,43 @@ end
         end
     end
 
-    outdimidxs_expr = Expr(:tuple, outdimidxs...)
-    idxorder_expr = Expr(:tuple, [:(slicemap[$i]) for i in outdimidxs]...)
-    result_expr = Expr(:tuple, [:(obj[outdimidxs[idxorder[$i]]]) for i in eachindex(outdimidxs)]...)
+    # With less than two outer dimensions the result is fully determined by
+    # SliceMapT already:
+    if length(outdimidxs) < 2
+        return Expr(:tuple, [:(obj[$i]) for i in outdimidxs]...)
+    end
+
+    # vals[j] is the entry of obj and pos[j] the outer dimension number for
+    # the j-th outer dimension of the parent array. The result must be
+    # ordered by outer dimension number, so it is vals in inverse-perm order
+    # of pos. pos is only known at runtime, its values are not encoded in
+    # SliceMapT.
+    vals_expr = Expr(:tuple, [:(obj[$i]) for i in outdimidxs]...)
+    pos_expr = Expr(:tuple, [:(slicemap[$i]) for i in outdimidxs]...)
 
     quote
         slicemap = smode.slicemap
-        outdimidxs = $outdimidxs_expr
-        idxorder = $idxorder_expr
-        return $result_expr
+        vals = $vals_expr
+        pos = $pos_expr
+        return _invpermuted(vals, pos)
     end
 end
 
+@inline function _invpermuted(vals::NTuple{N,Any}, pos::NTuple{N,Int}) where N
+    ntuple(k -> vals[findfirst(==(k), pos)::Int], Val(N))
+end
+
+
+@inline getslicemap(A::Slices) = A.slicemap
 
 @inline function getsplitmode(A::Slices)
     M = ndims(eltype(A))
     N = ndims(A)
-    slicemap = A.slicemap
+    slicemap = getslicemap(A)
     BaseSlicing{M,N,typeof(slicemap)}(slicemap)
 end
 
-function splitview(A::AbstractArray, smode::BaseSlicing)
+function splitup(A::AbstractArray, smode::BaseSlicing)
     slicemap = smode.slicemap
     axs = getouterdims(axes(A), smode)
     return Slices(A, slicemap, axs)
