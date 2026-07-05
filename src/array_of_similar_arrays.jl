@@ -1,7 +1,7 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 """
-    AbstractArrayOfSimilarArrays{T,M,N} <: AbstractArray{<:AbstractArray{T,M},N}
+    AbstractArrayOfSimilarArrays{T,M,N,ET<:AbstractArray{T}} <: AbstractSlices{ET,N}
 
 An array that contains arrays that have the same size/axes. The array is
 internally stored in flattened form as some kind of array of dimension
@@ -10,31 +10,32 @@ internally stored in flattened form as some kind of array of dimension
 Subtypes must implement (in addition to typical array operations):
 
     flatview(A::SomeArrayOfSimilarArrays)::AbstractArray{T,M+N}
+    getslicemap(A::SomeArrayOfSimilarArrays)
 
 The following type aliases are defined:
 
-* `AbstractVectorOfSimilarArrays{T,M} = AbstractArrayOfSimilarArrays{T,M,1}`
-* `AbstractArrayOfSimilarVectors{T,N} = AbstractArrayOfSimilarArrays{T,1,N}`
-* `AbstractVectorOfSimilarVectors{T} = AbstractArrayOfSimilarArrays{T,1,1}`
+* `AbstractVectorOfSimilarArrays{T,M,ET} = AbstractArrayOfSimilarArrays{T,M,1,ET}`
+* `AbstractArrayOfSimilarVectors{T,N,ET} = AbstractArrayOfSimilarArrays{T,1,N,ET}`
+* `AbstractVectorOfSimilarVectors{T,ET} = AbstractArrayOfSimilarArrays{T,1,1,ET}`
 """
-abstract type AbstractArrayOfSimilarArrays{T,M,N} <: AbstractArray{Array{T,M},N} end
+abstract type AbstractArrayOfSimilarArrays{T,M,N,ET<:AbstractArray{T}} <: AbstractSlices{ET,N} end
 export AbstractArrayOfSimilarArrays
 
-const AbstractVectorOfSimilarArrays{T,M} = AbstractArrayOfSimilarArrays{T,M,1}
+const AbstractVectorOfSimilarArrays{T,M,ET<:AbstractArray{T}} = AbstractArrayOfSimilarArrays{T,M,1,ET}
 export AbstractVectorOfSimilarArrays
 
-const AbstractArrayOfSimilarVectors{T,N} = AbstractArrayOfSimilarArrays{T,1,N}
+const AbstractArrayOfSimilarVectors{T,N,ET<:AbstractVector{T}} = AbstractArrayOfSimilarArrays{T,1,N,ET}
 export AbstractArrayOfSimilarVectors
 
-const AbstractVectorOfSimilarVectors{T} = AbstractArrayOfSimilarArrays{T,1,1}
+const AbstractVectorOfSimilarVectors{T,ET<:AbstractVector{T}} = AbstractArrayOfSimilarArrays{T,1,1,ET}
 export AbstractVectorOfSimilarVectors
 
 
 
 """
-    ArrayOfSimilarArrays{T,M,N,L,P} <: AbstractArrayOfSimilarArrays{T,M,N}
+    ArrayOfSimilarArrays{T,M,N,P} <: AbstractArrayOfSimilarArrays{T,M,N}
 
-Represents a view of an array of dimension `L = M + N` as an array of
+Represents a view of an array of dimension `M + N` as an array of
 dimension M with elements that are arrays with dimension N. All element arrays
 implicitly have equal size/axes.
 
@@ -64,20 +65,22 @@ flatview(A_nested) === A_flat
 ```
 """
 struct ArrayOfSimilarArrays{
-    T, M, N, L,
-    P<:AbstractArray{T,L}
-} <: AbstractArrayOfSimilarArrays{T,M,N}
+    T, M, N,
+    P<:AbstractArray{T},
+    ET<:AbstractArray{T,M}
+} <: AbstractArrayOfSimilarArrays{T,M,N,ET}
     data::P
 
-    function ArrayOfSimilarArrays{T,M,N}(flat_data::AbstractArray{U,L}) where {T,M,N,L,U}
+    function ArrayOfSimilarArrays{T,M,N}(flat_data::AbstractArray{U}) where {T,M,N,U}
         require_ndims(flat_data, _add_vals(Val{M}(), Val{N}()))
         conv_parent = _convert_elype(T, flat_data)
         P = typeof(conv_parent)
-        new{T,M,N,L,P}(conv_parent)
+        ET = Base.promote_op(view, P, _nColons(Val{M}())..., _nInts(Val{N}())...)
+        new{T,M,N,P,ET}(conv_parent)
     end
 end
 
-function ArrayOfSimilarArrays{T,M}(flat_data::AbstractArray{U,L}) where {T,M,L,U}
+function ArrayOfSimilarArrays{T,M}(flat_data::AbstractArray{U}) where {T,M,U}
     _, size_outer = split_tuple(size(flat_data), Val{M}())
     N = length(size_outer)
     ArrayOfSimilarArrays{T,M,N}(flat_data)
@@ -97,13 +100,24 @@ ArrayOfSimilarArrays(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
     ArrayOfSimilarArrays{T,M,N}(A)
 
 
-Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, flat_data::AbstractArray{U,L}) where {T,M,N,L,U} = R(flat_data)
-Base.convert(R::Type{ArrayOfSimilarArrays{T,M}}, flat_data::AbstractArray{U,L}) where {T,M,L,U} = R(flat_data)
+Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, flat_data::AbstractArray{U}) where {T,M,N,U} = R(flat_data)
+Base.convert(R::Type{ArrayOfSimilarArrays{T,M}}, flat_data::AbstractArray{U}) where {T,M,U} = R(flat_data)
 
 Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
 Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
 Base.convert(R::Type{ArrayOfSimilarArrays}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = R(A)
 
+Base.parent(A::ArrayOfSimilarArrays) = A.data
+Base.stack(A::ArrayOfSimilarArrays) = A.data
+
+function Base.Array(A::ArrayOfSimilarArrays{T,M,N,P,ET}) where {T,M,N,P,ET}
+    new_ET = Base.promote_op(similar, ET)
+    return Array{new_ET,N}(A)
+end
+
+function getslicemap(::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+    return (_ncolons(Val{M}())..., _oneto_tpl(Val{N}())...)
+end
 
 @inline function innersize(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     front_tuple(size(A.data), Val{M}())
@@ -121,9 +135,9 @@ import Base.==
 
 
 """
-    flatview(A::ArrayOfSimilarArrays{T,M,N,L,P})::P
+    flatview(A::ArrayOfSimilarArrays{T,M,N,P})::P
 
-Returns the array of dimensionality `L = M + N` wrapped by `A`. The shape of
+Returns the array of dimensionality `M + N` wrapped by `A`. The shape of
 the result may be freely changed without breaking the inner consistency of
 `A`.
 """
@@ -218,16 +232,17 @@ Base.@pure ndims_after_getindex(idxs::Tuple) = Val{length(Base.index_dimsum(idxs
 
 
 const VectorOfSimilarArrays{
-    T, M, L,
-    P<:AbstractArray{T,L}
-} = ArrayOfSimilarArrays{T,M,1,L,P}
+    T, M,
+    P<:AbstractArray{T},
+    ET<:AbstractArray{T}
+} = ArrayOfSimilarArrays{T,M,1,P,ET}
 
 export VectorOfSimilarArrays
 
-VectorOfSimilarArrays{T}(flat_data::AbstractArray{U,L}) where {T,U,L} =
+VectorOfSimilarArrays{T}(flat_data::AbstractArray{U}) where {T,U} =
     ArrayOfSimilarArrays{T,length(Base.front(size(flat_data))),1}(flat_data)
 
-VectorOfSimilarArrays(flat_data::AbstractArray{T,L}) where {T,L} =
+VectorOfSimilarArrays(flat_data::AbstractArray{T}) where {T} =
     ArrayOfSimilarArrays{T,length(Base.front(size(flat_data))),1}(flat_data)
 
 VectorOfSimilarArrays{T}(A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} =
@@ -237,8 +252,8 @@ VectorOfSimilarArrays(A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} =
     VectorOfSimilarArrays{T,M}(A)
 
 
-Base.convert(R::Type{VectorOfSimilarArrays{T}}, flat_data::AbstractArray{U,L}) where {T,U,L} = R(flat_data)
-Base.convert(R::Type{VectorOfSimilarArrays}, flat_data::AbstractArray{T,L}) where {T,L} = R(flat_data)
+Base.convert(R::Type{VectorOfSimilarArrays{T}}, flat_data::AbstractArray{U}) where {T,U} = R(flat_data)
+Base.convert(R::Type{VectorOfSimilarArrays}, flat_data::AbstractArray{T}) where {T} = R(flat_data)
 Base.convert(R::Type{VectorOfSimilarArrays{T}}, A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} = R(A)
 Base.convert(R::Type{VectorOfSimilarArrays}, A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} = R(A)
 
@@ -289,16 +304,17 @@ end
 
 
 const ArrayOfSimilarVectors{
-    T, N, L,
-    P<:AbstractArray{T,L}
-} = ArrayOfSimilarArrays{T,1,N,L,P}
+    T, N,
+    P<:AbstractArray{T},
+    ET<:AbstractVector{T}
+} = ArrayOfSimilarArrays{T,1,N,P,ET}
 
 export ArrayOfSimilarVectors
 
-ArrayOfSimilarVectors{T}(flat_data::AbstractArray{U,L}) where {T,U,L} =
+ArrayOfSimilarVectors{T}(flat_data::AbstractArray{U}) where {T,U} =
     ArrayOfSimilarArrays{T,1,length(Base.front(size(flat_data)))}(flat_data)
 
-ArrayOfSimilarVectors(flat_data::AbstractArray{T,L}) where {T,L} =
+ArrayOfSimilarVectors(flat_data::AbstractArray{T}) where {T} =
     ArrayOfSimilarArrays{T,1,length(Base.front(size(flat_data)))}(flat_data)
 
 ArrayOfSimilarVectors{T}(A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} =
@@ -308,16 +324,17 @@ ArrayOfSimilarVectors(A::AbstractArray{<:AbstractVector{T},N}) where {T,N} =
     ArrayOfSimilarVectors{T,N}(A)
 
 
-Base.convert(R::Type{ArrayOfSimilarVectors{T}}, flat_data::AbstractArray{U,L}) where {T,U,L} = R(flat_data)
-Base.convert(R::Type{ArrayOfSimilarVectors}, flat_data::AbstractArray{T,L}) where {T,L} = R(flat_data)
+Base.convert(R::Type{ArrayOfSimilarVectors{T}}, flat_data::AbstractArray{U}) where {T,U} = R(flat_data)
+Base.convert(R::Type{ArrayOfSimilarVectors}, flat_data::AbstractArray{T}) where {T} = R(flat_data)
 Base.convert(R::Type{ArrayOfSimilarVectors{T}}, A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} = R(A)
 Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T},N}) where {T,N} = R(A)
 
 
 const VectorOfSimilarVectors{
     T,
-    P<:AbstractArray{T,2}
-} = ArrayOfSimilarArrays{T,1,1,2,P}
+    P<:AbstractArray{T,2},
+    ET<:AbstractVector{T}
+} = ArrayOfSimilarArrays{T,1,1,P,ET}
 
 export VectorOfSimilarVectors
 

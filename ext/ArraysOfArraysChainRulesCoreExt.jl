@@ -13,7 +13,7 @@ function _aosa_ctor_fromflat_pullback(ΔΩ)
     NoTangent(), flatview(convert(ArrayOfSimilarArrays, unthunk(ΔΩ)))
 end
 
-function ChainRulesCore.rrule(::Type{ArrayOfSimilarArrays{T,M,N}}, flat_data::AbstractArray{U,L}) where {T,M,N,L,U}
+function ChainRulesCore.rrule(::Type{ArrayOfSimilarArrays{T,M,N}}, flat_data::AbstractArray{U}) where {T,M,N,U}
     return ArrayOfSimilarArrays{T,M,N}(flat_data), _aosa_ctor_fromflat_pullback
 end
 
