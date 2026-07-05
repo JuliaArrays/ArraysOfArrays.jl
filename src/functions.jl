@@ -2,16 +2,35 @@
 
 
 """
-    abstract type AbstractSplitMode
+    abstract type AbstractSplitMode <: Function
 
 Abstract supertype for array split modes.
 
 Use [`getsplitmode`](@ref) to get the split mode of an array.
 
+Use [`splitview`](@ref) or call `smode::AbstractSplitMode` as a function to
+split an array:
+
+```julia
+splitview(A, smode) === smode(A)
+```
+
 See also [`splitview`](@ref) and [`fused`](@ref).
+
+# Implementation
+
+Subtypes of `AbstractSplitMode` should specialize
+
+* `splitview(A, smode::SomeSplitMode)` for arrays `A`
+* `is_memordered_splitmode(smode::SomeSplitMode)`
+
+`(smode::SomeSplitMode)(A)` calls `splitview(A, smode)` by default and should
+not be specialized.
 """
-abstract type AbstractSplitMode end
+abstract type AbstractSplitMode <: Function end
 export AbstractSplitMode
+
+(smode::AbstractSplitMode)(A::AbstractArray) = splitview(A, smode)
 
 
 """
