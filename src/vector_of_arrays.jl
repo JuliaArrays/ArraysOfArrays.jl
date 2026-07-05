@@ -573,3 +573,5 @@ function consgroupedview(source::AbstractVector, target::NamedTuple{syms,<:NTupl
     elem_ptr = consgrouped_ptrs(source)
     map(X -> VectorOfVectors(X, elem_ptr), target)
 end
+
+Base.reduce(::typeof(vcat), V::VectorOfVectors) = flatview(V)
