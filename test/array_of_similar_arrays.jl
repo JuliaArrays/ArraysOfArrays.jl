@@ -189,6 +189,14 @@ using StatsBase: cov2cor
         @test @inferred(size(A)) == @inferred(size(A_similar))
         @test @inferred(size(A.data)) == @inferred(size(A_similar.data))
         @test typeof(A_similar.data) == typeof(A_data)
+
+        # similar must respect the requested element type and outer dims:
+        A_similar32 = @inferred similar(A, Array{Float32, 2}, size(A))
+        @test eltype(eltype(A_similar32)) == Float32
+        @test eltype(A_similar32.data) == Float32
+        A_similar_1d = @inferred similar(A, Array{Float64, 2}, (3,))
+        @test size(A_similar_1d) == (3,)
+        @test innersize(A_similar_1d) == innersize(A)
         @test typeof(A_similar) == typeof(A)
     end
 

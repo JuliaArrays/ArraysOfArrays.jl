@@ -189,7 +189,7 @@ function Base.similar(A::ArrayOfSimilarArrays{T,M,N}, ::Type{<:AbstractArray{U}}
     data = A.data
     size_inner = front_tuple(size(data), Val{M}())
     # ToDo: Don't use similar if data is an ElasticArray?
-    ArrayOfSimilarArrays{T,M,N}(similar(data, U, size_inner..., dims...))
+    ArrayOfSimilarArrays{U,M,length(dims)}(similar(data, U, size_inner..., dims...))
 end
 
 
