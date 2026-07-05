@@ -20,7 +20,7 @@ A `VectorOfArrays` represents a vector of `N`-dimensional arrays (that may
 differ in size). Internally, `VectorOfArrays` stores all elements of all
 arrays in a single flat vector. `M` must equal `N - 1`.
 
-The `VectorOfArrays` itself supports `push!`, `unshift!`, etc., but the size
+The `VectorOfArrays` itself supports `push!`, `append!`, etc., but the size
 of each individual array in the vector is fixed. `resize!` can be used to
 shrink, but not to grow, as the size of the additional element arrays in the
 vector would be unknown. However, memory space for up to `n` arrays with a
@@ -120,7 +120,7 @@ Base.convert(VA::Type{VectorOfArrays}, A::AbstractVector{AbstractArray{T,N}}) wh
 
 Returns the internal element pointer vector of `A`.
 
-Do *not* change modify the returned vector in any way, as this would break the
+Do *not* modify the returned vector in any way, as this would break the
 inner consistency of `A`.
 
 Use with care, see [`element_ptr`](@ref) for a safe version of this function.
@@ -586,7 +586,7 @@ Example:
     elem_ptr = consgrouped_ptrs(A)
     first.(PartsView(A, elem_ptr)) == [1, 2, 3, 2]
 ```
-consgrouped_ptrs
+
 Typically, `elem_ptr` will be used to apply the computed grouping to other
 data:
 
@@ -623,7 +623,7 @@ end
 
 Compute a grouping of equal consecutive elements on `source` via
 [`consgrouped_ptrs`](@ref) and apply the grouping to target, resp. each
-element of `target`. `target` may be an vector or a named or unnamed tuple of
+element of `target`. `target` may be a vector or a named or unnamed tuple of
 vectors. The result is a `PartsView`, resp. a tuple of such.
 
 Example:

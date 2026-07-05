@@ -94,7 +94,7 @@ VA_flat = flatview(VA)
 VA_flat isa Vector{Float64}
 ```
 
-Calling `getindex` on `A_nested` returns a view into `A_flat`:
+Calling `getindex` on `VA` returns a view into `VA_flat`:
 
 ```julia
 VA_flat = flatview(VA)

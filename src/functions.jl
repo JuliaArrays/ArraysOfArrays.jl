@@ -36,10 +36,10 @@ export AbstractSplitMode
 """
     is_memordered_splitmode(smode::AbstractSplitMode)::Bool
 
-Check if `smode` splits in memory-order.
-    
+Check whether `smode` splits in memory order.
+
 If true, inner arrays are stored contiguously in memory in Julia-native
-dimension order, and the same is true for the outer dimensions (no dimention
+dimension order, and the same is true for the outer dimensions (no dimension
 reordering).
 
 If true, `flatview` and `fused` are equivalent.
@@ -69,7 +69,7 @@ unknown way, e.g. nested arrays of type `Array{<:Array}`.
 
 Since the split parts may be (typically are) non-contiguous in memory, this
 split mode does not allow for `fused` or `flatview`. It is also not
-inferrable if the split object should be interpreted as a sliced array,
+inferable whether the split object should be interpreted as a sliced array,
 a ragged array, or something else.
 
 Constructor: `UnknownSplitMode{T}()`
@@ -131,7 +131,7 @@ View array `A` in unsplit form.
 the same type as `A` if at all possible, except if `getsplitmode(A)` is an
 `UnknownSplitMode`.
 
-If `A` is not a nested array return `A` itself. If `A` is a split array,
+If `A` is not a nested array, return `A` itself. If `A` is a split array,
 return the original unsplit array.
 
 If `is_memordered_splitmode(getsplitmode(A))` is true, `fused(A)` is
@@ -160,7 +160,7 @@ end
     flatview(A::AbstractArray{<:AbstractArray})
 
 View array `A` in a flattened form, with inner dimensions first. The shape of
-the flattened form will depend on the type of `A`. If the `A` is not a
+the flattened form will depend on the type of `A`. If `A` is not a
 nested array, the return value is `A` itself. Only specific types of nested
 arrays are supported.
 
@@ -198,7 +198,7 @@ end
 Abstract supertype for array slicing modes with `M` inner dimensions and `N`
 outer dimensions.
 
-Use `getsplitmode` to get the split mode of an split array.
+Use `getsplitmode` to get the split mode of a split array.
 """
 abstract type AbstractSlicingMode{M,N} <: AbstractSplitMode end
 export AbstractSlicingMode
@@ -312,7 +312,7 @@ end
     sliced(A::AbstractArray{T,M+N}, Val(M))
     sliced(A::AbstractArray{T,M+N}, M::Integer)
 
-Return a sliced view of `A`, using the columns or the the first `M`
+Return a sliced view of `A`, using the columns or the first `M`
 dimensions as inner dimensions.
 """
 function sliced end
@@ -361,7 +361,7 @@ end
     innermap(f, A::AbstractArray)
     innermap(f, A::AbstractArray{<:AbstractArray})
 
-Nested `map` at depth 2. Equivalent to `map(X -> map(f, X) A)` for arrays
+Nested `map` at depth 2. Equivalent to `map(X -> map(f, X), A)` for arrays
 of arrays, otherwise equivalent to `Base.map`.
 """
 function innermap end
@@ -390,7 +390,7 @@ The mode need not represent a true partition, a partition that discards part
 of the original array is allowed. The elements of the partition may also
 be reshaped, depending on the mode.
 
-Use `getsplitmode` to get the split mode of an split array.
+Use `getsplitmode` to get the split mode of a split array.
 """
 abstract type AbstractPartMode{M,N} <: AbstractSplitMode end
 export AbstractPartMode
@@ -438,7 +438,7 @@ export vecflattened
     deepmap(f, A::AbstractArray{<:AbstractArray{<:...}})
 
 Applies `map` at the deepest layer of nested arrays. If `A` is not
-a nested array, `deepmap` behaves identical to `Base.map`.
+a nested array, `deepmap` behaves identically to `Base.map`.
 """
 function deepmap end
 export deepmap

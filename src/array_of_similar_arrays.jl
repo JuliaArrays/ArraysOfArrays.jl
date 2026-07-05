@@ -76,7 +76,7 @@ The following type aliases are defined:
 * `VectorOfSimilarVectors{T} = ArrayOfSimilarArrays{T,1,1}`
 
 `VectorOfSimilarArrays` supports `push!()`, etc., provided the underlying
-array supports resizing of it's last dimension (e.g. an `ElasticArray`).
+array supports resizing of its last dimension (e.g. an `ElasticArray`).
 
 The nested array can also be created using the function [`sliced`](@ref)
 and the wrapped flat array can be accessed using [`flatview`](@ref)
