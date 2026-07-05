@@ -110,6 +110,36 @@ include("testdefs.jl")
     end
 
 
+    @testset "equality" begin
+        # == and isequal must be equivalent to elementwise comparison,
+        # independent of the underlying data layout:
+        p = partitioned(collect(1:10), [2, 3])   # unused data after covered range
+        q = VectorOfArrays([[1, 2], [3, 4, 5]])
+        @test collect(p) == collect(q)
+        @test p == q
+        @test q == p
+        @test isequal(p, q)
+
+        @test p != VectorOfArrays([[1, 2], [3, 4, 6]])
+        @test p != VectorOfArrays([[1, 2, 3], [4, 5]])
+        @test p != VectorOfArrays([[1, 2], [3, 4, 5], [6]])
+
+        # Equal-length parts with different shapes are not equal:
+        r1 = VectorOfArrays([[1 2; 3 4]])
+        r2 = VectorOfArrays([[1 3; 2 4]])
+        r3 = partitioned(collect([1, 3, 2, 4]), [(2, 2)])
+        @test r1 != r2
+        @test r1 == permutedims.(r2)
+        @test r1 == r3 && r2 != r3
+
+        # missing propagates through ==, but not isequal:
+        m1 = VectorOfArrays([[1, missing], [3]])
+        m2 = VectorOfArrays([[1, missing], [3]])
+        @test ismissing(m1 == m2)
+        @test isequal(m1, m2)
+    end
+
+
     @testset "split mode API" begin
         B1 = VectorOfArrays(ref_AoA1(Float32, 5))
         B1e = VectorOfArrays(ref_AoA1(Float32, 0))

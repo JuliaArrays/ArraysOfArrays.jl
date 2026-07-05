@@ -177,9 +177,33 @@ Base.@propagate_inbounds function _elem_range_size(A::VectorOfArrays, i::Integer
 end
 
 
+# Equality must be equivalent to elementwise comparison, but can be checked
+# much more efficiently via the flat data. The underlying data of A and B may
+# be offset relative to their element pointers, so only element sizes and the
+# data regions covered by the elements may be compared:
+
+function _elem_lengths_equal(elem_ptr_A::AbstractVector{<:Integer}, elem_ptr_B::AbstractVector{<:Integer})
+    length(elem_ptr_A) == length(elem_ptr_B) || return false
+    iA, iB = firstindex(elem_ptr_A), firstindex(elem_ptr_B)
+    @inbounds for k in 0:(length(elem_ptr_A) - 2)
+        elem_ptr_A[iA+k+1] - elem_ptr_A[iA+k] == elem_ptr_B[iB+k+1] - elem_ptr_B[iB+k] || return false
+    end
+    return true
+end
+
 import Base.==
-(==)(A::VectorOfArrays, B::VectorOfArrays) =
-    A.data == B.data && A.elem_ptr == B.elem_ptr && A.kernel_size == B.kernel_size
+function ==(A::VectorOfArrays{<:Any,N}, B::VectorOfArrays{<:Any,N}) where {N}
+    axes(A) == axes(B) || return false
+    A.kernel_size == B.kernel_size || return false
+    _elem_lengths_equal(A.elem_ptr, B.elem_ptr) || return false
+    return vecflattened(A) == vecflattened(B)
+end
+
+function Base.isequal(A::VectorOfArrays{<:Any,N}, B::VectorOfArrays{<:Any,N}) where {N}
+    axes(A) == axes(B) && isequal(A.kernel_size, B.kernel_size) &&
+        _elem_lengths_equal(A.elem_ptr, B.elem_ptr) &&
+        isequal(vecflattened(A), vecflattened(B))
+end
 
 """
     flatview(A::VectorOfArrays{T})::Vector{T}
