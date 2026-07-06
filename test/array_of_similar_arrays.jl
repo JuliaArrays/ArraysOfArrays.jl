@@ -162,7 +162,24 @@ end
             @test @inferred(innersize(A)) == (3, 4)
             @test @inferred(getslicemap(A)) == (:, :, 1, 2, 3)
             @test @inferred(parent(A)) === A.data
+
+            Av = @inferred(view(A, 2:3, :, 4))
+            @test Av isa ArrayOfSimilarArrays{Float32,2,2}
+            @test Av == Array(A)[2:3, :, 4]
+            @test flatview(Av) == view(A.data, :, :, 2:3, :, 4)
         end
+    end
+
+    @testset "offset axes" begin
+        m = rand(4, 4)
+        # Offset outer axes of the data are not supported:
+        @test_throws ArgumentError sliced(view(m, :, Base.IdentityUnitRange(2:3)), Val(1))
+        # Offset inner axes just carry over to the elements (indexing
+        # semantics of such element views are up to Base):
+        om = view(m, Base.IdentityUnitRange(2:3), :)
+        A = sliced(om, Val(1))
+        @test innersize(A) == (2,)
+        @test axes(A[1]) == (Base.IdentityUnitRange(2:3),)
     end
 
     @testset "split mode API" begin
@@ -255,6 +272,12 @@ end
     @testset "similar and copyto!" begin
         A = ArrayOfSimilarArrays{Float64,1}(rand_flat_array(Val(1)))
         @test (@inferred copyto!((@inferred similar(A)), A)) == A
+
+        # copyto! must not reinterpret data across element shapes:
+        @test_throws DimensionMismatch copyto!(
+            ArrayOfSimilarArrays{Float64,1,1}(zeros(3, 2)),
+            ArrayOfSimilarArrays{Float64,1,1}(zeros(2, 3))
+        )
 
         A = ArrayOfSimilarArrays{Float64,2}(rand_flat_array(Val(5)))
         @test (@inferred copyto!((@inferred similar(A)), A)) == A
@@ -405,6 +428,14 @@ end
         end
         @test_throws ArgumentError pop!(A_nested)
 
+        # pop! must return a value that stays valid when V changes:
+        V = VectorOfSimilarArrays(ElasticArray{Float64}(undef, 2, 0))
+        push!(V, [1.0, 2.0])
+        push!(V, [3.0, 4.0])
+        x = pop!(V)
+        @test x == [3.0, 4.0]
+        push!(V, [9.0, 9.0])
+        @test x == [3.0, 4.0]
     end
 
     @testset "misc" begin

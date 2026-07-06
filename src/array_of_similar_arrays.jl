@@ -155,10 +155,20 @@ struct ArrayOfSimilarArrays{
 
     function ArrayOfSimilarArrays{T,M,N}(data::AbstractArray{T,L}) where {T,M,N,L}
         _require_ndims(Val(L), _add_vals(Val(M), Val(N)))
+        _require_one_based_outer(data, Val(N))
         P = typeof(data)
         ET = Base.promote_op(view, P, _nColons(Val(M))..., _nInts(Val(N))...)
         new{T,M,N,P,ET}(data)
     end
+end
+
+# The outer dimensions of A are indexed directly into the outer dimensions
+# of the underlying data, so their axes must agree:
+@inline function _require_one_based_outer(data::AbstractArray, ::Val{N}) where N
+    if !all(map(isone ∘ first, back_tuple(axes(data), Val(N))))
+        throw(ArgumentError("ArrayOfSimilarArrays requires the outer axes of the underlying data to be one-based"))
+    end
+    nothing
 end
 
 export ArrayOfSimilarArrays
@@ -231,6 +241,7 @@ end
 
 
 function Base.copyto!(dest::ArrayOfSimilarArrays{T,M,N}, src::ArrayOfSimilarArrays{U,M,N}) where {T,M,N,U}
+    innersize(dest) != innersize(src) && throw(DimensionMismatch("Can't copy, shape of element arrays of source and dest are not equal"))
     copyto!(dest.data, src.data)
     dest
 end
@@ -299,7 +310,8 @@ end
 
 function Base.pop!(V::VectorOfSimilarArrays)
     isempty(V) && throw(ArgumentError("array must be non-empty"))
-    x = V[end]
+    # Copy, a view would alias data beyond the new size:
+    x = copy(V[end])
     resize!(V, size(V, 1) - 1)
     x
 end
