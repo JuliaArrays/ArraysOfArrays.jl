@@ -148,7 +148,7 @@ function _partition_sizes_valid(elem_ptr::AbstractVector{<:Integer}, kernel_size
     all(eachindex(kernel_size)) do i
         len = elem_ptr[i+1] - elem_ptr[i]
         klen = prod(kernel_size[i])
-        len >= 0 && (klen == 1 || mod(len, klen) == 0)
+        len >= 0 && (klen == 0 ? len == 0 : mod(len, klen) == 0)
     end
 end
 

@@ -64,6 +64,10 @@ JLArrays.allowscalar(false)
         @test_throws ArgumentError VectorOfArrays(xv, jl([1, 6, 3]), jl([(), ()]))
         @test_throws ArgumentError VectorOfArrays(xv, jl([1, 4, 11]), jl([(2,), (2,)]))
 
+        # Zero-size kernels are valid for empty elements, invalid otherwise:
+        @test VectorOfArrays(xv, jl([1, 1, 11]), jl([(0,), (2,)])) isa VectorOfArrays
+        @test_throws ArgumentError VectorOfArrays(xv, jl([1, 3, 11]), jl([(0,), (2,)]))
+
         # mapat and innerlengths only touch device data and shape info:
         @test collect(fused(mapat(abs2, Val(2), V))) == abs2.(collect(xv))
         @test innerlengths(V) isa AbstractGPUArray

@@ -25,6 +25,18 @@ include("testdefs.jl")
     end
 
 
+    @testset "consistency checks" begin
+        # Elements with zero-size kernel dimensions are valid:
+        V = VectorOfArrays([zeros(0, 3), ones(2, 3)])
+        @test VectorOfArrays(V.data, V.elem_ptr, V.kernel_size) == V
+
+        # Data length per element must be a multiple of the kernel length:
+        @test_throws ArgumentError VectorOfArrays(collect(1.0:3.0), [1, 4], [(2,)])
+        # A zero-length kernel requires an empty element:
+        @test_throws ArgumentError VectorOfArrays(collect(1.0:3.0), [1, 3], [(0,)])
+    end
+
+
     @testset "ctors" begin
         A1 = ref_AoA1(Float32, 5)
         @test @inferred(VectorOfArrays(deepcopy(A1))) isa VectorOfArrays{Float32,1,0,Array{Float32,1},Array{Int,1},Array{Tuple{},1}}

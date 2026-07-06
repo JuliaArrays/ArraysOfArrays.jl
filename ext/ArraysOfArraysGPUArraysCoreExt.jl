@@ -20,10 +20,12 @@ function ArraysOfArrays._partition_sizes_valid(elem_ptr::AbstractGPUArray{<:Inte
     # kernel_size may still live on the host:
     klen_dev = klen isa AbstractGPUArray ? klen : copyto!(similar(elem_ptr, eltype(klen), size(klen)), klen)
 
-    valid = (len .>= 0) .& (
-        (klen_dev .== 1) .| (
-            (klen_dev .!= 0) .& (mod.(len, max.(klen_dev, one(eltype(klen_dev)))) .== 0)
-        )
+    # klen == 0 requires len == 0; the max guard keeps the untaken mod
+    # branch free of division by zero:
+    valid = (len .>= 0) .& ifelse.(
+        klen_dev .== 0,
+        len .== 0,
+        mod.(len, max.(klen_dev, one(eltype(klen_dev)))) .== 0
     )
     return all(valid)
 end
