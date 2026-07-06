@@ -208,6 +208,36 @@ include("testdefs.jl")
     end
 
 
+    @testset "rrules" begin
+        x = collect(Float64, 1:10)
+
+        for lengths in ([2, 3, 5], [2, 3])
+            Y, pb = rrule(partitioned, x, lengths)
+            @test Y == partitioned(x, lengths)
+            ΔY = [fill(1.0, l) for l in lengths]
+            ΔA = pb(ΔY)[2]
+            want = zero(x)
+            want[1:sum(lengths)] .= 1.0
+            @test pb(ΔY)[1] == NoTangent() && pb(ΔY)[3] == NoTangent()
+            @test ΔA == want
+        end
+
+        Y2, pb2 = rrule(partitioned, x, [(1, 2), (2, 2)])
+        @test Y2 == partitioned(x, [(1, 2), (2, 2)])
+        ΔA2 = pb2([fill(1.0, 1, 2), fill(1.0, 2, 2)])[2]
+        @test ΔA2 == [ones(6); zeros(4)]
+
+        p = partitioned(x, [2, 3])
+        y, pb3 = rrule(vecflattened, p)
+        @test y == vecflattened(p)
+        t = pb3(collect(1.0:5.0))
+        @test t[1] == NoTangent()
+        @test t[2] isa VectorOfArrays
+        @test t[2] == [[1.0, 2.0], [3.0, 4.0, 5.0]]
+        @test fused(t[2])[6:10] == zeros(5)
+    end
+
+
     @testset "indexing" begin
         V1 = @inferred(VectorOfArrays(ref_AoA3(Float32, 3)))
         V2 = @inferred(VectorOfArrays(ref_AoA3(Float32, 3)))

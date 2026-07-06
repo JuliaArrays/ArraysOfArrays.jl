@@ -5,9 +5,9 @@ module ArraysOfArraysChainRulesCoreExt
 using ChainRulesCore: ChainRulesCore, NoTangent, AbstractThunk, Thunk, unthunk, @thunk, @non_differentiable
 
 using ArraysOfArrays: getsplitmode, is_memordered_splitmode, splitup, fused, stacked, unstackmode,
-    flatview, innersize
+    flatview, innersize, vecflattened, partitioned
 using ArraysOfArrays: NonSplitMode, AbstractSplitMode
-using ArraysOfArrays: AbstractArrayOfSimilarArrays, ArrayOfSimilarArrays
+using ArraysOfArrays: AbstractArrayOfSimilarArrays, ArrayOfSimilarArrays, VectorOfArrays
 
 
 struct _MappedMaybeThunk{F, T} <: AbstractThunk
@@ -57,6 +57,63 @@ function ChainRulesCore.rrule(::typeof(stack), A::AbstractArrayOfSimilarArrays)
 end
 _stacked_pullback(ΔΩ, smode) = NoTangent(), mapthunk(Base.Fix2(splitup, smode), ΔΩ)
 
+
+
+function ChainRulesCore.rrule(::typeof(vecflattened), A::AbstractArrayOfSimilarArrays)
+    smode = getsplitmode(A)
+    sz = size(fused(A))
+    function aosa_vecflattened_pullback(ΔΩ)
+        Δdata = reshape(unthunk(ΔΩ), sz)
+        return NoTangent(), splitup(Δdata, smode)
+    end
+    return vecflattened(A), aosa_vecflattened_pullback
+end
+
+function ChainRulesCore.rrule(::typeof(vecflattened), A::VectorOfArrays)
+    smode = getsplitmode(A)  # makes a defensive copy, safe to close over
+    datalen = length(A.data)
+    covered_from = first(A.elem_ptr)
+    covered_len = last(A.elem_ptr) - covered_from
+    function voa_vecflattened_pullback(ΔΩ)
+        Δ = unthunk(ΔΩ)
+        Δdata = if covered_len == datalen
+            Δ
+        else
+            padded = fill!(similar(Δ, datalen), zero(eltype(Δ)))
+            copyto!(padded, covered_from, Δ, firstindex(Δ), covered_len)
+            padded
+        end
+        return NoTangent(), splitup(Δdata, smode)
+    end
+    return vecflattened(A), voa_vecflattened_pullback
+end
+
+
+function ChainRulesCore.rrule(::typeof(partitioned), A::AbstractVector, lengths::AbstractVector{<:Integer})
+    return partitioned(A, lengths), _partitioned_pullback_for(A)
+end
+
+function ChainRulesCore.rrule(::typeof(partitioned), A::AbstractVector, shapes::AbstractVector{<:Dims})
+    return partitioned(A, shapes), _partitioned_pullback_for(A)
+end
+
+function _partitioned_pullback_for(A::AbstractVector)
+    datalen = length(A)
+    function partitioned_pullback(ΔΩ)
+        Δflat = vecflattened(unthunk(ΔΩ))
+        ΔA = if length(Δflat) == datalen
+            Δflat
+        else
+            # Partial partitions leave uncovered data, which gets no tangent
+            # contribution:
+            padded = fill!(similar(Δflat, datalen), zero(eltype(Δflat)))
+            copyto!(padded, firstindex(padded), Δflat, firstindex(Δflat), length(Δflat))
+            padded
+        end
+        return NoTangent(), ΔA, NoTangent()
+    end
+    return partitioned_pullback
+end
 
 
 function _aosa_ctor_fromflat_pullback(ΔΩ)

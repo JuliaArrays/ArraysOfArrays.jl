@@ -173,6 +173,15 @@ end
         V_flat = rand_flat_array(Val(2))
         V = VectorOfSimilarVectors(V_flat)
         test_api(V, Array(V), V_flat)
+
+        # vecflattened rrule:
+        A_rr = ArrayOfSimilarArrays{Float64,1,1}(rand(3, 4))
+        y, pb = rrule(vecflattened, A_rr)
+        @test y == vec(A_rr.data)
+        t = pb(collect(1.0:12.0))
+        @test t[1] == NoTangent()
+        @test t[2] isa ArrayOfSimilarArrays
+        @test fused(t[2]) == reshape(1.0:12.0, 3, 4)
     end
 
     @testset "custom subtypes" begin
