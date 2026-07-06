@@ -95,8 +95,6 @@ the same type as `A` if at all possible, except if `getsplitmode(A)` is an
 function getsplitmode end
 export getsplitmode
 
-@inline getsplitmode(::T) where T = UnknownSplitMode{T}()
-
 @inline getsplitmode(::AbstractArray{<:Any,N}) where N = NonSplitMode{N}()
 
 @inline getsplitmode(A::AbstractArray{<:AbstractArray}) = UnknownSplitMode{typeof(A)}()
@@ -114,9 +112,9 @@ See also [`fused`](@ref) and [`getsplitmode`](@ref).
 function splitup end
 export splitup
 
-@inline splitup(obj::Any, ::NonSplitMode) = obj
+@inline splitup(A::AbstractArray, ::NonSplitMode) = A
 
-function splitup(::Any, ::UnknownSplitMode)
+function splitup(::AbstractArray, ::UnknownSplitMode)
     throw(ArgumentError("splitup cannot be used with UnknownSplitMode"))
 end
 
@@ -141,8 +139,6 @@ equivalent to [`flatview(A)`](@ref).
 """
 function fused end
 export fused
-
-@inline fused(obj) = _fused_impl(obj, getsplitmode(obj))
 
 @inline fused(A::AbstractArray) = A
 
@@ -267,9 +263,9 @@ type and underlying memory layout than `A`.
 function unstackmode end
 export unstackmode
 
-@inline unstackmode(::T) where T = UnknownSplitMode{T}()
-
 @inline unstackmode(::AbstractArray{<:Any,N}) where N = NonSplitMode{N}()
+
+@inline unstackmode(A::AbstractArray{<:AbstractArray}) = UnknownSplitMode{typeof(A)}()
 
 function unstackmode(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
     innersize(A)  # Ensure element arrays have equal size
@@ -367,16 +363,15 @@ of arrays, otherwise equivalent to `Base.map`.
 function innermap end
 export innermap
 
-innermap(f, obj) = _generic_innermap_impl(f, obj)
 innermap(f, A::AbstractArray) = map(f, A)
 innermap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(map, f), A)
 innermap(f, A::AbstractSlices{<:AbstractArray}) = _generic_innermap_impl(f, A)
 
-function _generic_innermap_impl(f, obj)
-    joined_obj = fused(obj)
-    mapped_joined_obj = map(f, joined_obj)
-    mapped_obj = splitup(mapped_joined_obj, getsplitmode(obj))
-    return mapped_obj
+function _generic_innermap_impl(f, A::AbstractArray)
+    joined_A = fused(A)
+    mapped_joined_A = map(f, joined_A)
+    mapped_A = splitup(mapped_joined_A, getsplitmode(A))
+    return mapped_A
 end
 
 
@@ -443,16 +438,15 @@ a nested array, `deepmap` behaves identically to `Base.map`.
 function deepmap end
 export deepmap
 
-deepmap(f, obj) = _generic_deepmap_impl(f, obj)
 deepmap(f, A::AbstractArray) = map(f, A)
 deepmap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(deepmap, f), A)
 deepmap(f, A::AbstractSlices{<:AbstractArray}) = _generic_deepmap_impl(f, A)
 
-function _generic_deepmap_impl(f, obj)
-    joined_obj = fused(obj)
-    mapped_joined_obj = deepmap(f, joined_obj)
-    mapped_obj = splitup(mapped_joined_obj, getsplitmode(obj))
-    return mapped_obj
+function _generic_deepmap_impl(f, A::AbstractArray)
+    joined_A = fused(A)
+    mapped_joined_A = deepmap(f, joined_A)
+    mapped_A = splitup(mapped_joined_A, getsplitmode(A))
+    return mapped_A
 end
 
 
