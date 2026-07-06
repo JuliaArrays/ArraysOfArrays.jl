@@ -11,5 +11,6 @@ Test.@testset "Package ArraysOfArrays" begin
     include("broadcasting.jl")
     include("static_arrays.jl")
     include("fixed_size_arrays.jl")
+    include("mooncake.jl")
     include("test_docs.jl")
 end # testset
