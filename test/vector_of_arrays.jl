@@ -529,8 +529,8 @@ include("testdefs.jl")
         @inferred(push!(VA, rand(2, 3)))
         @inferred(push!(VA, rand(4, 2)))
 
-        @test @inferred(size(VA[1]) == (2,3))
-        @test @inferred(size(VA[2]) == (4,2))
+        @test @inferred(size(VA[1])) == (2,3)
+        @test @inferred(size(VA[2])) == (4,2)
 
         # -------------------------------------------------------------------
 

@@ -69,7 +69,8 @@ end
             @test @inferred(stack(AosA)) == flatview(AosA)
             @test stack(AosA) !== flatview(AosA)
 
-            @test_deprecated convert(TT, A) == TT(A)
+            A_conv_depr = @test_deprecated convert(TT, A)
+            @test A_conv_depr == TT(A)
         end
     end
 
@@ -98,7 +99,8 @@ end
             @test typeof(A3) == Array{Array{U,M},N}
             @test A3 == A_U
 
-            @test_deprecated TT(A) == A2_conv
+            A_ctor_depr = @test_deprecated TT(A)
+            @test A_ctor_depr == A2_conv
         end
     end
 
@@ -458,6 +460,18 @@ end
         @test @inferred(innermap(f, ASA)).data == ASA.data.*2
 
         @test @inferred(prod(ArraysOfArrays.innersize(VSV))) == N
+
+        @test stack(VSA; dims = 1) == stack(collect(VSA); dims = 1)
+
+        C = ArrayOfSimilarArrays{Float64,1,1}(zeros(2, 3))
+        C[2] = [1.0, 2.0]
+        @test C[2] == [1.0, 2.0]
+        @test C[1] == zeros(2)
+        @test_throws DimensionMismatch C[1] = [1.0, 2.0, 3.0]
+
+        fill!(C, [7.0, 8.0])
+        @test all(x -> x == [7.0, 8.0], C)
+        @test_throws DimensionMismatch fill!(C, [1.0, 2.0, 3.0])
     end
 
     @testset "map and broadcast" begin

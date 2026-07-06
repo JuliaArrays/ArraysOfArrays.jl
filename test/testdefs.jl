@@ -89,8 +89,8 @@ if !isdefined(Main, :test_api)
                     @test all(size.(A) .== Ref(innersz))
                 end
 
-                @inferred(innermap(maptest_f, A)) == innermap(maptest_f, Array(A))
-                @inferred(deepmap(maptest_f, A)) == deepmap(maptest_f, Array(A))
+                @test @inferred(innermap(maptest_f, A)) == innermap(maptest_f, Array(A))
+                @test @inferred(deepmap(maptest_f, A)) == deepmap(maptest_f, Array(A))
             end
 
             _smode_M(::AbstractSlicingMode{M,N}) where {M,N} = M
@@ -136,7 +136,7 @@ if !isdefined(Main, :test_api)
                 if stacked_A isa Exception
                     @test_throws typeof(stacked_A) stacked(A)
                 else
-                    @inferred(stacked(A)) == stacked_A
+                    @test @inferred(stacked(A)) == stacked_A
                 end
             end
 
