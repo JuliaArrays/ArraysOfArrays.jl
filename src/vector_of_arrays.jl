@@ -139,12 +139,17 @@ element_ptr(A::VectorOfArrays) = deepcopy(internal_element_ptr(A))
 
 function full_consistency_checks(A::VectorOfArrays)
     simple_consistency_checks(A)
-    all(eachindex(A.kernel_size)) do i
-        len = A.elem_ptr[i+1] - A.elem_ptr[i]
-        klen = prod(A.kernel_size[i])
-        len >= 0 && (klen == 1 || mod(len, klen) == 0)
-    end || throw(ArgumentError("VectorOfArrays inconsistent: Content of elem_ptr and kernel_size is inconsistent"))
+    _partition_sizes_valid(A.elem_ptr, A.kernel_size) || throw(ArgumentError("VectorOfArrays inconsistent: Content of elem_ptr and kernel_size is inconsistent"))
     nothing
+end
+
+# Package extensions specialize this for GPU arrays, to avoid scalar indexing:
+function _partition_sizes_valid(elem_ptr::AbstractVector{<:Integer}, kernel_size::AbstractVector)
+    all(eachindex(kernel_size)) do i
+        len = elem_ptr[i+1] - elem_ptr[i]
+        klen = prod(kernel_size[i])
+        len >= 0 && (klen == 1 || mod(len, klen) == 0)
+    end
 end
 
 
@@ -152,10 +157,15 @@ function simple_consistency_checks(A::VectorOfArrays{T,N,M}) where {T,N,M}
     M == N - 1 || throw(ArgumentError("VectorOfArrays{T,N,M} inconsistent: M must equal N - 1"))
     firstindex(A.elem_ptr) == firstindex(A.kernel_size) || throw(ArgumentError("VectorOfArrays inconsistent: elem_ptr and kernel_size have incompatible indexing"))
     size(A.elem_ptr, 1) == size(A.kernel_size, 1) + 1 || throw(ArgumentError("VectorOfArrays inconsistent: elem_ptr and kernel_size have incompatible size"))
-    first(A.elem_ptr) >= firstindex(A.data) || throw(ArgumentError("VectorOfArrays inconsistent: First elem_ptr inconsistent with data indices"))
-    last(A.elem_ptr) - 1 <= lastindex(A.data) || throw(ArgumentError("VectorOfArrays inconsistent: Last elem_ptr inconsistent with data indices"))
+    ep_first, ep_last = _scalar_first_last(A.elem_ptr)
+    ep_first >= firstindex(A.data) || throw(ArgumentError("VectorOfArrays inconsistent: First elem_ptr inconsistent with data indices"))
+    ep_last - 1 <= lastindex(A.data) || throw(ArgumentError("VectorOfArrays inconsistent: Last elem_ptr inconsistent with data indices"))
     nothing
 end
+
+# Package extensions specialize this for GPU arrays, to allow the two scalar
+# reads explicitly:
+_scalar_first_last(x::AbstractVector) = (first(x), last(x))
 
 
 function no_consistency_checks(A::VectorOfArrays)
