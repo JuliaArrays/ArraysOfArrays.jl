@@ -43,6 +43,10 @@ end
 Base.@pure _val_value(::Val{x}) where x = x
 
 
+# Internal sentinel for "no init value given":
+struct _NoInit end
+
+
 # Concatenate arrays of equal ndims and equal size except in their last
 # dimension along their last dimension, with a single allocation:
 _cat_lastdim(datas) = _cat_lastdim_impl(datas, Val(ndims(first(datas))))

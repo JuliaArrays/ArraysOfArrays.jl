@@ -96,6 +96,19 @@ Base.stack(A::AbstractArrayOfSimilarArrays; dims::Union{Integer,Colon} = :) = _s
 _stack_impl(A::AbstractArrayOfSimilarArrays, ::Colon) = copy(fused(A))
 _stack_impl(A::AbstractArrayOfSimilarArrays, dims::Integer) = stack(collect(A); dims)
 
+# Per-element reductions reduce over the inner dimensions of the flat data:
+function _innermapreduce_impl(f, op, init, A::AbstractArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+    data = fused(A)
+    dims = ntuple(identity, Val(M))
+    r = if init isa _NoInit
+        mapreduce(f, op, data; dims = dims)
+    else
+        mapreduce(f, op, data; dims = dims, init = init)
+    end
+    return reshape(r, size(A))
+end
+
+
 @inline Base.:(==)(A::AbstractArrayOfSimilarArrays{<:Any,M,N}, B::AbstractArrayOfSimilarArrays{<:Any,M,N}) where {M,N} = (stacked(A) == stacked(B))
 @inline Base.isequal(A::AbstractArrayOfSimilarArrays{<:Any,M,N}, B::AbstractArrayOfSimilarArrays{<:Any,M,N}) where {M,N} = isequal(stacked(A), stacked(B))
 @inline Base.isapprox(A::AbstractArrayOfSimilarArrays{<:Any,M,N}, B::AbstractArrayOfSimilarArrays{<:Any,M,N}; kwargs...) where {M,N} = isapprox(stacked(A), stacked(B); kwargs...)

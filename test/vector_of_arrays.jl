@@ -311,6 +311,21 @@ include("testdefs.jl")
         @test_throws ArgumentError bcastat(+, Val(2), [[1, 2], [3]], 1)
     end
 
+    @testset "inner reductions" begin
+        x = collect(Float32, 1:10)
+        p = partitioned(x, [2, 3, 5])
+
+        @test @inferred(innermapreduce(abs2, +, p)) == [sum(abs2, xi) for xi in p]
+        @test @inferred(innerreduce(max, p)) == [maximum(xi) for xi in p]
+        @test @inferred(innersum(p)) == [sum(xi) for xi in p]
+
+        # Empty element arrays require an init value, except for innersum:
+        pe = partitioned(collect(Float32, 1:5), [2, 0, 3])
+        @test innersum(pe) == Float32[3, 0, 12]
+        @test_throws ArgumentError innerreduce(max, pe)
+        @test innerreduce(max, pe; init = -Inf32) == Float32[2, -Inf32, 5]
+    end
+
     @testset "rrules" begin
         x = collect(Float64, 1:10)
 

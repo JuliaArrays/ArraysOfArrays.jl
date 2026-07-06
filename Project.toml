@@ -19,6 +19,7 @@ ArraysOfArraysAdaptExt = "Adapt"
 ArraysOfArraysChainRulesCoreExt = "ChainRulesCore"
 ArraysOfArraysFixedSizeArraysExt = "FixedSizeArrays"
 ArraysOfArraysGPUArraysCoreExt = "GPUArraysCore"
+ArraysOfArraysGPUKernelsExt = ["GPUArraysCore", "KernelAbstractions"]
 ArraysOfArraysKernelAbstractionsExt = "KernelAbstractions"
 ArraysOfArraysMooncakeExt = "Mooncake"
 ArraysOfArraysStaticArraysCoreExt = "StaticArraysCore"

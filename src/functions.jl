@@ -523,6 +523,56 @@ end
 
 
 """
+    innermapreduce(f, op, A::AbstractArray{<:AbstractArray}; [init])
+
+Per-element `mapreduce` over the contents of the element arrays of `A`:
+returns an array shaped like `A` that contains
+`mapreduce(f, op, A[i]; [init])` for each element `A[i]`.
+
+For split arrays (like [`ArrayOfSimilarArrays`](@ref) and
+[`VectorOfArrays`](@ref)) this uses efficient (GPU-compatible) segmented
+reductions over the underlying flat data where possible.
+"""
+function innermapreduce end
+export innermapreduce
+
+innermapreduce(f, op, A::AbstractArray{<:AbstractArray}; init = _NoInit()) = _innermapreduce_impl(f, op, init, A)
+
+function _innermapreduce_impl(f, op, init, A::AbstractArray{<:AbstractArray})
+    if init isa _NoInit
+        map(x -> mapreduce(f, op, x), A)
+    else
+        map(x -> mapreduce(f, op, x; init = init), A)
+    end
+end
+
+
+"""
+    innerreduce(op, A::AbstractArray{<:AbstractArray}; [init])
+
+Per-element `reduce` over the contents of the element arrays of `A`,
+equivalent to `innermapreduce(identity, op, A; [init])`.
+"""
+function innerreduce end
+export innerreduce
+
+innerreduce(op, A::AbstractArray{<:AbstractArray}; init = _NoInit()) = _innermapreduce_impl(identity, op, init, A)
+
+
+"""
+    innersum(A::AbstractArray{<:AbstractArray})
+
+Per-element sum over the contents of the element arrays of `A`, empty
+element arrays sum to zero.
+"""
+function innersum end
+export innersum
+
+innersum(A::AbstractArray{<:AbstractArray}) = innermapreduce(identity, +, A)
+innersum(A::AbstractArray{<:AbstractArray{T}}) where {T<:Number} = innermapreduce(identity, +, A, init = zero(T))
+
+
+"""
     bcastat(f, ::Val{depth}, args...)
 
 Broadcast `f` over the contents of nested arrays at nesting depth `depth`,

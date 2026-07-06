@@ -183,6 +183,11 @@ end
         @test @inferred(innersizes(A)) == fill(innersize(A), size(A))
         @test @inferred(innerlengths(A)) == fill(prod(innersize(A)), size(A))
 
+        # Per-element reductions over the inner dimensions of the flat data:
+        @test @inferred(innersum(A)) == [sum(x) for x in A]
+        @test @inferred(innermapreduce(abs2, +, A)) ≈ [sum(abs2, x) for x in A]
+        @test @inferred(innerreduce(max, A)) == [maximum(x) for x in A]
+
         # bcastat with outer-aligned, scalar and flat-matching arguments:
         w = rand(size(A)...)
         r_bc = @inferred bcastat(+, Val(2), A, w)

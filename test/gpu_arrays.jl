@@ -77,6 +77,15 @@ JLArrays.allowscalar(false)
         @test fused(r_bc) isa AbstractGPUArray
         @test collect(fused(r_bc)) == collect(xv) .+ [10, 10, 20, 20, 20, 30, 30, 30, 30, 30]
 
+        # Segmented reductions run as a single device kernel:
+        xv_h = collect(xv)
+        parts_h = [xv_h[1:2], xv_h[3:5], xv_h[6:10]]
+        @test innersum(V) isa AbstractGPUArray
+        @test collect(innersum(V)) ≈ sum.(parts_h)
+        @test collect(innermapreduce(abs2, +, V)) ≈ [sum(abs2, p) for p in parts_h]
+        @test collect(innerreduce(max, V; init = -Inf32)) ≈ maximum.(parts_h)
+        @test_throws ArgumentError innerreduce(max, VectorOfArrays(xv, jl([1, 3, 3, 11]), jl([(), (), ()])))
+
         # Split mode round trip on device shape info:
         sm = getsplitmode(V)
         @test splitup(fused(V), sm) isa VectorOfArrays
