@@ -484,6 +484,7 @@ end
 
 """
     mapat(f, ::Val{depth}, As::AbstractArray...)
+    mapat(f, depth::Integer, As::AbstractArray...)
 
 Nested `map` at nesting depth `depth`: apply `f` elementwise to the objects
 at depth `depth` of the nested arrays `As`. Depth 1 refers to the elements
@@ -491,6 +492,9 @@ of the arrays themselves, so `mapat(f, Val(1), As...)` is equivalent to
 `map(f, As...)` and `mapat(f, Val(2), A)` is equivalent to
 [`innermap`](@ref)`(f, A)`. If `depth` exceeds the nesting depth of the
 arrays, `f` is applied to the innermost elements, like [`deepmap`](@ref).
+
+The `Integer` form relies on constant propagation for type stability, use
+the `Val` form when passing a non-constant depth.
 
 All of `As` must have the same nesting structure down to `depth`, their
 split modes (see [`getsplitmode`](@ref)) must be equal on each nesting
@@ -505,6 +509,8 @@ different nesting depth.
 """
 function mapat end
 export mapat
+
+@inline mapat(f, depth::Integer, As::Vararg{AbstractArray,NA}) where {NA} = mapat(f, Val(depth), As...)
 
 @inline mapat(f, ::Val{1}, As::Vararg{AbstractArray,NA}) where {NA} = map(f, As...)
 
@@ -574,6 +580,7 @@ innersum(A::AbstractArray{<:AbstractArray{T}}) where {T<:Number} = innermapreduc
 
 """
     bcastat(f, ::Val{depth}, args...)
+    bcastat(f, depth::Integer, args...)
 
 Broadcast `f` over the contents of nested arrays at nesting depth `depth`,
 with AwkwardArrays-like alignment, but with array-of-arrays nesting
@@ -587,7 +594,9 @@ semantics:
 
 `bcastat(f, Val(1), args...)` is equivalent to `broadcast(f, args...)`, and
 like [`mapat`](@ref), a `depth` that exceeds the nesting depth of the
-arguments applies `f` at the innermost level.
+arguments applies `f` at the innermost level. The `Integer` form relies on
+constant propagation for type stability, use the `Val` form when passing a
+non-constant depth.
 
 Nested array arguments must be split arrays (like
 [`ArrayOfSimilarArrays`](@ref) and [`VectorOfArrays`](@ref)): for these,
@@ -596,6 +605,8 @@ level.
 """
 function bcastat end
 export bcastat
+
+@inline bcastat(f, depth::Integer, args...) = bcastat(f, Val(depth), args...)
 
 @inline bcastat(f, ::Val{1}, args...) = broadcast(f, args...)
 

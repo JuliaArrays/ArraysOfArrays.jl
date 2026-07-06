@@ -299,6 +299,10 @@ include("testdefs.jl")
         # Depth exceeding the nesting depth applies at the innermost level:
         @test bcastat(+, Val(3), p, v) == bcastat(+, Val(2), p, v)
 
+        # Integer depth relies on constant propagation for type stability:
+        bcastat_intdepth(g, A, y) = bcastat(g, 2, A, y)
+        @test @inferred(bcastat_intdepth(+, p, v)) == bcastat(+, Val(2), p, v)
+
         # Two nesting levels over a single flat buffer:
         VV = VectorOfArrays(partitioned(collect(1.0:10.0), [2, 3, 5]), [1, 3, 4], [(), ()])
         w = [100.0, 200.0]

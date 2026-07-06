@@ -88,6 +88,10 @@ include("testdefs.jl")
         # Multiple inputs, zipped like map:
         @test @inferred(mapat(+, Val(1), A_1, A_1)) == 2 .* A_1
         @test mapat(+, Val(2), A_2, A_2) == innermap(x -> 2 * x, A_2)
+
+        # Integer depth relies on constant propagation for type stability:
+        mapat_intdepth(g, A) = mapat(g, 2, A)
+        @test @inferred(mapat_intdepth(f, A_2)) == innermap(f, A_2)
     end
 
     @testset "innersizes and innerlengths" begin
