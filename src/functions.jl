@@ -310,6 +310,9 @@ end
 
 Return a sliced view of `A`, using the columns or the first `M`
 dimensions as inner dimensions.
+
+With StaticArrays loaded, `sliced(A, SVector{S})` returns a reinterpreted
+array with `SVector{S}` elements instead of an array of views.
 """
 function sliced end
 export sliced

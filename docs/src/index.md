@@ -13,6 +13,15 @@ This package also defines and exports the following new functions applicable to 
 * [`innermap`](@ref) and [`deepmap`](@ref) apply a function to the elements of the inner (resp. innermost) arrays.
 * [`consgroupedview`](@ref) computes a grouping of equal consecutive elements on a vector and applies it to another vector or (named or unnamed) tuple of vectors.
 
+## Which flattening function do I want?
+
+* [`fused(A)`](@ref): the original underlying array, `splitup(fused(A), getsplitmode(A)) == A`.
+* [`flatview(A)`](@ref): the underlying storage, requires a memory-ordered layout.
+* [`stacked(A)`](@ref): elements joined along new trailing dimensions, like `Base.stack`.
+* [`vecflattened(A)`](@ref): elements concatenated into a single vector, like `reduce(vcat, A)`.
+
+All four are zero-copy where possible and so may return arrays that share memory with `A`. In contrast, `Base.stack(A)` and `reduce(vcat, A)` always return independent arrays.
+
 
 ## [ArrayOfSimilarArrays](@id section_ArrayOfSimilarArrays)
 
