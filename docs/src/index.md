@@ -13,6 +13,17 @@ This package also defines and exports the following new functions applicable to 
 * [`innermap`](@ref) and [`deepmap`](@ref) apply a function to the elements of the inner (resp. innermost) arrays.
 * [`consgroupedview`](@ref) computes a grouping of equal consecutive elements on a vector and applies it to another vector or (named or unnamed) tuple of vectors.
 
+## Operations at a given nesting depth
+
+Similar to axis-targeted operations in Python's AwkwardArrays, but with array-of-arrays nesting semantics:
+
+* [`mapat(f, Val(d), As...)`](@ref) maps `f` over the objects at nesting depth `d` (`d = 1` ≡ `map`, `d = 2` ≡ `innermap`).
+* [`bcastat(f, Val(d), args...)`](@ref) broadcasts `f` at depth `d`: nested arguments align, shallower arrays contribute one value per element of their level, scalars broadcast over everything.
+* [`innermapreduce`](@ref), [`innerreduce`](@ref) and [`innersum`](@ref) reduce over the contents of each element array.
+* [`innersizes`](@ref) and [`innerlengths`](@ref) return per-element sizes/lengths (elements need not be of equal size).
+
+For split arrays these operate on the underlying flat data — a single (GPU-compatible) operation per nesting level. Outer-level broadcasts like `(x -> 2 .* x).(A)` keep their usual Julia semantics (`f` receives whole element arrays), but return a `VectorOfArrays` when the results are arrays.
+
 ## Which flattening function do I want?
 
 * [`fused(A)`](@ref): the original underlying array, `splitup(fused(A), getsplitmode(A)) == A`.
