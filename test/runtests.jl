@@ -10,5 +10,6 @@ Test.@testset "Package ArraysOfArrays" begin
     include("vector_of_arrays.jl")
     include("broadcasting.jl")
     include("static_arrays.jl")
+    include("fixed_size_arrays.jl")
     include("test_docs.jl")
 end # testset
