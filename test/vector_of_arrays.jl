@@ -154,6 +154,12 @@ include("testdefs.jl")
             test_api(B, Array(B), B.data)
         end
 
+        # getsplitmode must not be affected by later resizing:
+        B_grow = VectorOfArrays([[1, 2], [3, 4, 5]])
+        sm_grow = getsplitmode(B_grow)
+        push!(B_grow, [6])
+        @test splitup(collect(1:5), sm_grow) == [[1, 2], [3, 4, 5]]
+
         # Uniform element size, so stackable:
         @test @inferred(stacked(Bu)) == stack(Array(Bu))
         @test @inferred(splitup(stacked(Bu), unstackmode(Bu))) == Bu

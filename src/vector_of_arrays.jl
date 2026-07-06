@@ -238,6 +238,12 @@ SplitParts(
 `elem_ptr` and `kernel_size` equal the equivalent properties of
 `VectorOfArrays`.
 
+[`getsplitmode(A::VectorOfArrays)`](@ref) copies the shape information of
+`A` (an O(length) operation), so the resulting mode is not affected if `A`
+is resized afterwards. A `VectorOfArrays` created via
+[`splitup`](@ref), on the other hand, shares the vectors of the mode it was
+created from, like the `VectorOfArrays` inner constructor.
+
 See also [`AbstractPartMode`](@ref).
 """
 struct SplitParts{
@@ -264,7 +270,18 @@ export SplitParts
 
 is_memordered_splitmode(::SplitParts) = true
 
-@inline getsplitmode(A::VectorOfArrays) = SplitParts(A.elem_ptr, A.kernel_size)
+Base.:(==)(a::SplitParts, b::SplitParts) =
+    a.elem_ptr == b.elem_ptr && a.kernel_size == b.kernel_size
+
+Base.hash(x::SplitParts, h::UInt) =
+    hash(x.kernel_size, hash(x.elem_ptr, hash(:SplitParts, h)))
+
+# Defensive copy: the split mode must not be affected if the vector of
+# arrays is resized later on. Package extensions may specialize this for
+# vector types that cannot be resized:
+_shapeinfo_copy(x::AbstractVector) = copy(x)
+
+getsplitmode(A::VectorOfArrays) = SplitParts(_shapeinfo_copy(A.elem_ptr), _shapeinfo_copy(A.kernel_size))
 
 @inline fused(A::VectorOfArrays) = A.data
 
