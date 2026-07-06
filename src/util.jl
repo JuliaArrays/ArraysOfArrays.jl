@@ -5,11 +5,11 @@
 @inline _tail(x) = _tail_impl(x...)
 
 
-Base.@pure _ncolons(::Val{N}) where N = ntuple(_ -> Colon(), Val{N}())
-Base.@pure _nColons(::Val{N}) where N = ntuple(_ -> Colon, Val{N}())
+@inline _ncolons(::Val{N}) where N = ntuple(_ -> Colon(), Val{N}())
+@inline _nColons(::Val{N}) where N = ntuple(_ -> Colon, Val{N}())
 
 @inline _oneto_tpl(::Val{N}) where N = ntuple(identity, Val{N}())
-Base.@pure _nInts(::Val{N}) where N = ntuple(_ -> Int, Val{N}())
+@inline _nInts(::Val{N}) where N = ntuple(_ -> Int, Val{N}())
 
 
 Base.@propagate_inbounds front_tuple(x::NTuple{N,Any}, ::Val{M}) where {N,M} =
@@ -30,9 +30,9 @@ _convert_eltype(::Type{T}, A::AbstractArray{T}) where {T} = A
 _convert_eltype(::Type{T}, A::AbstractArray{U}) where {T,U} = broadcast(Base.Fix1(convert, T), A)
 
 
-Base.@pure _add_vals(::Val{A}, ::Val{B}) where {A,B} = Val{A + B}()
+@inline _add_vals(::Val{A}, ::Val{B}) where {A,B} = Val{A + B}()
 
-Base.@pure _subtract_vals(::Val{A}, ::Val{B}) where {A,B} = Val{A - B}()
+@inline _subtract_vals(::Val{A}, ::Val{B}) where {A,B} = Val{A - B}()
 
 @inline _require_ndims(::Val{N}, ::Val{N}) where {N} = nothing
 
@@ -40,7 +40,7 @@ function _require_ndims(::Val{N1}, ::Val{N2}) where {N1,N2}
     throw(ArgumentError("Require an array with $N2 dimensions, but got an array with $N1 dimensions"))
 end
 
-Base.@pure _val_value(::Val{x}) where x = x
+@inline _val_value(::Val{x}) where x = x
 
 
 # Internal sentinel for "no init value given":
