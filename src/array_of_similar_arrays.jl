@@ -1,16 +1,21 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 """
-    AbstractArrayOfSimilarArrays{T,M,N,ET<:AbstractArray{T}} <: AbstractSlices{ET,N}
+    AbstractArrayOfSimilarArrays{T,M,N,ET<:AbstractArray{T,M}} <: AbstractSlices{ET,N}
 
 An array that contains arrays that have the same size/axes. The array is
 internally stored in flattened form as some kind of array of dimension
-`M + N`. The flattened form can be accessed via `flatview(A)`.
+`M + N`, in memory order. The flattened form can be accessed via
+`flatview(A)`.
 
-Subtypes must implement (in addition to typical array operations):
+Subtypes must implement (in addition to typical array operations)
 
-    flatview(A::SomeArrayOfSimilarArrays)::AbstractArray{T,M+N}
-    getslicemap(A::SomeArrayOfSimilarArrays)
+    ArraysOfArrays.fused(A::SomeArrayOfSimilarArrays)::AbstractArray{T,M+N}
+
+which must return the underlying flat array. All split-mode operations
+([`getsplitmode`](@ref), [`stacked`](@ref), [`flatview`](@ref),
+[`innersize`](@ref), [`getslicemap`](@ref), etc.) are then provided
+automatically.
 
 The following type aliases are defined:
 
@@ -18,10 +23,10 @@ The following type aliases are defined:
 * `AbstractArrayOfSimilarVectors{T,N,ET} = AbstractArrayOfSimilarArrays{T,1,N,ET}`
 * `AbstractVectorOfSimilarVectors{T,ET} = AbstractArrayOfSimilarArrays{T,1,1,ET}`
 """
-abstract type AbstractArrayOfSimilarArrays{T,M,N,ET<:AbstractArray{T}} <: AbstractSlices{ET,N} end
+abstract type AbstractArrayOfSimilarArrays{T,M,N,ET<:AbstractArray{T,M}} <: AbstractSlices{ET,N} end
 export AbstractArrayOfSimilarArrays
 
-const AbstractVectorOfSimilarArrays{T,M,ET<:AbstractArray{T}} = AbstractArrayOfSimilarArrays{T,M,1,ET}
+const AbstractVectorOfSimilarArrays{T,M,ET<:AbstractArray{T,M}} = AbstractArrayOfSimilarArrays{T,M,1,ET}
 export AbstractVectorOfSimilarArrays
 
 const AbstractArrayOfSimilarVectors{T,N,ET<:AbstractVector{T}} = AbstractArrayOfSimilarArrays{T,1,N,ET}
@@ -55,6 +60,45 @@ getinnerdims(obj::Tuple, ::SplitSlices{M,N}) where {M,N} = front_tuple(obj, Val(
 getouterdims(obj::Tuple, ::SplitSlices{M,N}) where {M,N} = back_tuple(obj, Val(N))
 
 @inline splitup(A::AbstractArray{T}, ::SplitSlices{M,N}) where {T,M,N} = ArrayOfSimilarArrays{T,M,N}(A)
+
+
+# Subtypes of AbstractArrayOfSimilarArrays only need to implement `fused`
+# (plus the typical array operations), all split-mode operations are derived
+# from it:
+
+function fused(A::AbstractArrayOfSimilarArrays)
+    throw(ArgumentError("Subtypes of AbstractArrayOfSimilarArrays like $(nameof(typeof(A))) must implement ArraysOfArrays.fused"))
+end
+
+@inline getsplitmode(::AbstractArrayOfSimilarArrays{T,M,N}) where {T,M,N} = SplitSlices{M,N}()
+@inline unstackmode(A::AbstractArrayOfSimilarArrays) = getsplitmode(A)
+
+@inline stacked(A::AbstractArrayOfSimilarArrays) = fused(A)
+
+@inline Base.parent(A::AbstractArrayOfSimilarArrays) = fused(A)
+
+@inline vecflattened(A::AbstractArrayOfSimilarArrays) = vec(fused(A))
+# Disambiguation:
+@inline vecflattened(A::AbstractVectorOfSimilarArrays) = vec(fused(A))
+@inline vecflattened(A::AbstractArrayOfSimilarVectors) = vec(fused(A))
+@inline vecflattened(A::AbstractVectorOfSimilarVectors) = vec(fused(A))
+
+function getslicemap(::AbstractArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+    return (_ncolons(Val{M}())..., _oneto_tpl(Val{N}())...)
+end
+
+# `stack` must return an independent array, unlike `stacked`. Julia does not
+# dispatch on keyword arguments, so dispatch on the value of `dims` instead:
+Base.stack(A::AbstractArrayOfSimilarArrays; dims::Union{Integer,Colon} = :) = _stack_impl(A, dims)
+
+# Fast path for the default layout: a single bulk copy instead of the
+# element-by-element copy that generic `stack` would do:
+_stack_impl(A::AbstractArrayOfSimilarArrays, ::Colon) = copy(fused(A))
+_stack_impl(A::AbstractArrayOfSimilarArrays, dims::Integer) = stack(collect(A); dims)
+
+@inline Base.:(==)(A::AbstractArrayOfSimilarArrays{<:Any,M,N}, B::AbstractArrayOfSimilarArrays{<:Any,M,N}) where {M,N} = (stacked(A) == stacked(B))
+@inline Base.isequal(A::AbstractArrayOfSimilarArrays{<:Any,M,N}, B::AbstractArrayOfSimilarArrays{<:Any,M,N}) where {M,N} = isequal(stacked(A), stacked(B))
+@inline Base.isapprox(A::AbstractArrayOfSimilarArrays{<:Any,M,N}, B::AbstractArrayOfSimilarArrays{<:Any,M,N}; kwargs...) where {M,N} = isapprox(stacked(A), stacked(B); kwargs...)
 
 
 """
@@ -122,42 +166,11 @@ Base.convert(::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U
 Base.convert(::Type{ArrayOfSimilarArrays}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = ArrayOfSimilarArrays{T,M,N}(stacked(A))
 
 
-@inline Base.:(==)(A::ArrayOfSimilarArrays{T,M,N}, B::ArrayOfSimilarArrays{U,M,N}) where {T,M,N,U} = (stacked(A) == stacked(B))
-@inline Base.isequal(A::ArrayOfSimilarArrays{T,M,N}, B::ArrayOfSimilarArrays{U,M,N}) where {T,M,N,U} = isequal(stacked(A), stacked(B))
-@inline Base.isapprox(A::ArrayOfSimilarArrays{T,M,N}, B::ArrayOfSimilarArrays{U,M,N}; kwargs...) where {T,M,N,U} = isapprox(stacked(A), stacked(B); kwargs...)
-
-@inline getsplitmode(A::ArrayOfSimilarArrays) = unstackmode(A)
-@inline unstackmode(::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = SplitSlices{M,N}()
-
-@inline stacked(A::ArrayOfSimilarArrays) = A.data
-@inline fused(A::ArrayOfSimilarArrays) = stacked(A)
-
-@inline vecflattened(A::ArrayOfSimilarArrays) = vec(fused(A))
-
-@inline Base.parent(A::ArrayOfSimilarArrays) = fused(A)
-
-# `stack` must return an independent array, unlike `stacked`. Julia does not
-# dispatch on keyword arguments, so dispatch on the value of `dims` instead:
-Base.stack(A::ArrayOfSimilarArrays; dims::Union{Integer,Colon} = :) = _stack_impl(A, dims)
-
-# Fast path for the default layout: a single bulk copy instead of the
-# element-by-element copy that generic `stack` would do:
-_stack_impl(A::ArrayOfSimilarArrays, ::Colon) = copy(fused(A))
-_stack_impl(A::ArrayOfSimilarArrays, dims::Integer) = stack(collect(A); dims)
+@inline fused(A::ArrayOfSimilarArrays) = A.data
 
 function Base.Array(A::ArrayOfSimilarArrays{T,M,N,P,ET}) where {T,M,N,P,ET}
     new_ET = Base.promote_op(similar, ET)
     return Array{new_ET,N}(A)
-end
-
-
-function getslicemap(::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
-    return (_ncolons(Val{M}())..., _oneto_tpl(Val{N}())...)
-end
-
-
-@inline function innersize(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
-    front_tuple(size(A.data), Val{M}())
 end
 
 

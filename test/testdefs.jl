@@ -2,6 +2,8 @@
 
 using ChainRulesCore: rrule, unthunk, AbstractThunk, Thunk, NoTangent
 
+using ArraysOfArrays: getinnerdims, getouterdims
+
 if !isdefined(Main, :test_api)
     maptest_f(x::Number) = x^2
     maptest_f(x::AbstractArray{<:Number}) = sum(x)^2

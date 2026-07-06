@@ -10,6 +10,22 @@ using ChainRulesTestUtils
 using Statistics
 using StatsBase: cov2cor
 
+include("testdefs.jl")
+
+# Minimal third-party subtype of AbstractArrayOfSimilarArrays, only
+# implements the standard array API and `fused`:
+if !isdefined(Main, :TestSimilarVectors)
+    struct TestSimilarVectors{T,ET} <: AbstractArrayOfSimilarArrays{T,1,1,ET}
+        data::Matrix{T}
+
+        TestSimilarVectors(data::Matrix{T}) where {T} =
+            new{T,typeof(view(data, :, firstindex(data, 2)))}(data)
+    end
+    Base.size(A::TestSimilarVectors) = (size(A.data, 2),)
+    Base.getindex(A::TestSimilarVectors, i::Int) = view(A.data, :, i)
+    ArraysOfArrays.fused(A::TestSimilarVectors) = A.data
+end
+
 @testset "array_of_similar_arrays" begin
     function rand_flat_array(Val_N::Val{N}) where {N}
         sz_max = (2,3,2,4,5)
@@ -147,6 +163,36 @@ using StatsBase: cov2cor
             @test @inferred(getslicemap(A)) == (:, :, 1, 2, 3)
             @test @inferred(parent(A)) === A.data
         end
+    end
+
+    @testset "split mode API" begin
+        A_flat = rand_flat_array(Val(5))
+        A = ArrayOfSimilarArrays{Float64,2,3}(A_flat)
+        test_api(A, Array(A), A_flat)
+
+        V_flat = rand_flat_array(Val(2))
+        V = VectorOfSimilarVectors(V_flat)
+        test_api(V, Array(V), V_flat)
+    end
+
+    @testset "custom subtypes" begin
+        data = rand(3, 5)
+        B = TestSimilarVectors(data)
+
+        @test @inferred(getsplitmode(B)) === SplitSlices{1,1}()
+        @test @inferred(unstackmode(B)) === SplitSlices{1,1}()
+        @test @inferred(fused(B)) === data
+        @test @inferred(stacked(B)) === data
+        @test @inferred(flatview(B)) === data
+        @test @inferred(parent(B)) === data
+        @test @inferred(vecflattened(B)) == vec(data)
+        @test @inferred(innersize(B)) == (3,)
+        @test @inferred(getslicemap(B)) == (:, 1)
+        @test @inferred(stack(B)) == data
+        @test stack(B) !== data
+        @test B == VectorOfSimilarVectors(data)
+        @test isapprox(B, VectorOfSimilarVectors(data .+ 1e-14))
+        @test splitup(fused(B), getsplitmode(B)) == B
     end
 
     @testset "add remove" begin
