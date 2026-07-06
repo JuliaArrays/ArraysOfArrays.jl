@@ -383,8 +383,9 @@ end
 
 
 Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArrays, idxs::AbstractUnitRange{<:Integer})
-    from = first(idxs)
-    to = last(idxs)
+    @boundscheck checkbounds(A, idxs)
+    # Empty ranges may lie outside the axes of A:
+    from, to = isempty(idxs) ? (firstindex(A), firstindex(A) - 1) : (Int(first(idxs)), Int(last(idxs)))
     elem_ptr = A.elem_ptr[from:(to+1)]
     kernel_size = A.kernel_size[from:to]
     data = A.data[first(elem_ptr):(last(elem_ptr) - 1)]
@@ -438,7 +439,7 @@ end
 
 Base.@propagate_inbounds function Base.setindex!(A::VectorOfArrays{T,N}, x::AbstractArray{U,N}, i::Integer) where {T,N,U}
     a = A[i]
-    # @boundscheck size(a) == size(x) || throw(DimensionMismatch("Can't assign array to element $i of VectorOfArrays, array size is incompatible"))
+    @boundscheck size(a) == size(x) || throw(DimensionMismatch("Can't assign array to element $i of VectorOfArrays, array size is incompatible"))
     a[:] = x
     return A
 end
@@ -595,7 +596,7 @@ end
 
 
 function Base.push!(A::VectorOfArrays{T,N}, x::AbstractArray{U,N}) where {T,N,U}
-    @assert last(A.elem_ptr) == lastindex(A.data) + 1
+    last(A.elem_ptr) == lastindex(A.data) + 1 || throw(ArgumentError("Cannot push to a VectorOfArrays that has unused trailing data"))
     append!(A.data, x)
     push!(A.elem_ptr, lastindex(A.data) + 1)
     push!(A.kernel_size, Base.front(size(x)))
