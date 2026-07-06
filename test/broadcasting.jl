@@ -18,7 +18,7 @@ using Test
 
             for Idxs in [
                 ([rand(eachindex(a), rand(1:length(a))) for a in A],),
-                (VectorOfVectors([rand(eachindex(a), rand(1:length(a))) for a in A]),),
+                (PartsView([rand(eachindex(a), rand(1:length(a))) for a in A]),),
                 (tuple(1:1),), (tuple([1, 1, 1]),), (tuple(:),),
                 (Ref(1:1),), (Ref([1, 1, 1]),), (Ref(:),),
             ]
@@ -32,7 +32,7 @@ using Test
 
             for Idxs in [
                 ([rand(eachindex(a), rand(1:length(a))) for a in A],),
-                (VectorOfVectors([rand(eachindex(a), rand(1:length(a))) for a in A]),),
+                (PartsView([rand(eachindex(a), rand(1:length(a))) for a in A]),),
             ]
                 @test @inferred(broadcast(getindex, A, Idxs...)) isa VectorOfArrays{eltype(eltype(A))}
                 @test getindex.(A, Idxs...) == getindex.(refA, Idxs...)

@@ -4,6 +4,47 @@
 const _RefLike{T} = Union{Tuple{T}, Ref{T}}
 
 
+"""
+    ArraysOfArrays.NestedArrayStyle{N}()
+
+Broadcast style of nested array types like [`VectorOfArrays`](@ref) and
+[`ArrayOfSimilarArrays`](@ref).
+
+Broadcasts over a single outer dimension that produce array-valued results
+(`f` receives whole element arrays and returns arrays, as in
+`(x -> 2 .* x).(A)`) return a [`VectorOfArrays`](@ref) instead of a `Vector`
+of arrays, where possible. All other broadcasts behave like the default
+broadcast machinery. Use [`bcastat`](@ref) to broadcast over the *contents*
+of the element arrays instead.
+"""
+struct NestedArrayStyle{N} <: Broadcast.AbstractArrayStyle{N} end
+
+NestedArrayStyle{M}(::Val{N}) where {M,N} = NestedArrayStyle{N}()
+
+Base.Broadcast.BroadcastStyle(::Type{<:AbstractArrayOfSimilarArrays{<:Any,<:Any,N}}) where {N} = NestedArrayStyle{N}()
+Base.Broadcast.BroadcastStyle(::Type{<:VectorOfArrays}) = NestedArrayStyle{1}()
+
+function Base.copy(bc::Broadcast.Broadcasted{NestedArrayStyle{N}}) where {N}
+    ElType = Broadcast.combine_eltypes(bc.f, bc.args)
+    if N == 1 && ElType <: Array && isconcretetype(ElType) && axes(bc, 1) isa Base.OneTo
+        return _collect_nested(bc, ElType)
+    else
+        # Everything else behaves like the default broadcast machinery:
+        return copy(convert(Broadcast.Broadcasted{Broadcast.DefaultArrayStyle{N}}, bc))
+    end
+end
+
+function _collect_nested(bc::Broadcast.Broadcasted, ::Type{Array{T,M}}) where {T,M}
+    dest = VectorOfArrays{T,M}()
+    sizehint!(dest.elem_ptr, length(axes(bc, 1)) + 1)
+    sizehint!(dest.kernel_size, length(axes(bc, 1)))
+    for i in eachindex(bc)
+        push!(dest, bc[i])
+    end
+    return dest
+end
+
+
 _idx_type(::VectorOfSimilarArrays) = Int
 _idx_type(A::VectorOfArrays) = eltype(A.elem_ptr)
 
@@ -35,7 +76,7 @@ _noreindex_view(A::AbstractArray{T,N}, ::Vararg{Colon,N}) where {T,N} = A
 _generic_size(A) = size(A)
 _generic_size(tpl::Tuple) = (length(tpl),)
 
-Base.Base.@propagate_inbounds function _to_indices(A, idxs)
+Base.@propagate_inbounds function _to_indices(A, idxs)
     new_idxs = Base.to_indices(A, idxs)
     @boundscheck Base.checkbounds(A, new_idxs...)
     return new_idxs
@@ -45,7 +86,7 @@ end
 # ToDo: Extend to vectors of arrays.
 function Base.Broadcast.broadcasted(
     ::typeof(getindex),
-    A::Union{VectorOfSimilarVectors, VectorOfVectors},
+    A::Union{VectorOfSimilarVectors, PartsView},
     Idxs::Union{AbstractVector{<:AbstractVector{<:Integer}},AbstractVector{Colon},_RefLike{<:Union{AbstractVector{<:Integer},Colon}}}...
 )
     # Checks size compatibility:
@@ -123,7 +164,7 @@ end
 
 function Base.Broadcast.broadcasted(
     ::typeof(findall),
-    A::Union{VectorOfSimilarVectors{Bool}, VectorOfVectors{Bool}}
+    A::Union{VectorOfSimilarVectors{Bool}, PartsView{Bool}}
 )
     new_lengths = _similar_idx_vector(A, _idx_type(A), length(A))
     new_lengths .= sum.(A)

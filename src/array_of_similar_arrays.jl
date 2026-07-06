@@ -1,137 +1,193 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 """
-    AbstractArrayOfSimilarArrays{T,M,N} <: AbstractArray{<:AbstractArray{T,M},N}
+    AbstractArrayOfSimilarArrays{T,M,N,ET<:AbstractArray{T,M}} <: AbstractSlices{ET,N}
 
 An array that contains arrays that have the same size/axes. The array is
 internally stored in flattened form as some kind of array of dimension
-`M + N`. The flattened form can be accessed via `flatview(A)`.
+`M + N`, in memory order. The flattened form can be accessed via
+`flatview(A)`.
 
-Subtypes must implement (in addition to typical array operations):
+Subtypes must implement (in addition to typical array operations)
 
-    flatview(A::SomeArrayOfSimilarArrays)::AbstractArray{T,M+N}
+    ArraysOfArrays.fused(A::SomeArrayOfSimilarArrays)::AbstractArray{T,M+N}
+
+which must return the underlying flat array. All split-mode operations
+([`getsplitmode`](@ref), [`stacked`](@ref), [`flatview`](@ref),
+[`innersize`](@ref), [`getslicemap`](@ref), etc.) are then provided
+automatically.
 
 The following type aliases are defined:
 
-* `AbstractVectorOfSimilarArrays{T,M} = AbstractArrayOfSimilarArrays{T,M,1}`
-* `AbstractArrayOfSimilarVectors{T,N} = AbstractArrayOfSimilarArrays{T,1,N}`
-* `AbstractVectorOfSimilarVectors{T} = AbstractArrayOfSimilarArrays{T,1,1}`
+* `AbstractVectorOfSimilarArrays{T,M,ET} = AbstractArrayOfSimilarArrays{T,M,1,ET}`
+* `AbstractArrayOfSimilarVectors{T,N,ET} = AbstractArrayOfSimilarArrays{T,1,N,ET}`
+* `AbstractVectorOfSimilarVectors{T,ET} = AbstractArrayOfSimilarArrays{T,1,1,ET}`
 """
-abstract type AbstractArrayOfSimilarArrays{T,M,N} <: AbstractArray{Array{T,M},N} end
+abstract type AbstractArrayOfSimilarArrays{T,M,N,ET<:AbstractArray{T,M}} <: AbstractSlices{ET,N} end
 export AbstractArrayOfSimilarArrays
 
-const AbstractVectorOfSimilarArrays{T,M} = AbstractArrayOfSimilarArrays{T,M,1}
+const AbstractVectorOfSimilarArrays{T,M,ET<:AbstractArray{T,M}} = AbstractArrayOfSimilarArrays{T,M,1,ET}
 export AbstractVectorOfSimilarArrays
 
-const AbstractArrayOfSimilarVectors{T,N} = AbstractArrayOfSimilarArrays{T,1,N}
+const AbstractArrayOfSimilarVectors{T,N,ET<:AbstractVector{T}} = AbstractArrayOfSimilarArrays{T,1,N,ET}
 export AbstractArrayOfSimilarVectors
 
-const AbstractVectorOfSimilarVectors{T} = AbstractArrayOfSimilarArrays{T,1,1}
+const AbstractVectorOfSimilarVectors{T,ET<:AbstractVector{T}} = AbstractArrayOfSimilarArrays{T,1,1,ET}
 export AbstractVectorOfSimilarVectors
 
 
 
 """
-    ArrayOfSimilarArrays{T,M,N,L,P} <: AbstractArrayOfSimilarArrays{T,M,N}
+    struct SplitSlices{M,N} <: AbstractSlicingMode{M,N}
 
-Represents a view of an array of dimension `L = M + N` as an array of
-dimension M with elements that are arrays with dimension N. All element arrays
+The split mode of [`ArrayOfSimilarArrays`](@ref): memory-ordered slicing
+with `M` inner and `N` outer dimensions.
+
+Constructor:
+
+```
+SplitSlices{M,N}()
+```
+
+See also [`AbstractSlicingMode`](@ref).
+"""
+struct SplitSlices{M,N} <: AbstractSlicingMode{M,N} end
+export SplitSlices
+
+is_memordered_splitmode(::SplitSlices) = true
+
+getinnerdims(obj::Tuple, ::SplitSlices{M,N}) where {M,N} = front_tuple(obj, Val(M))
+getouterdims(obj::Tuple, ::SplitSlices{M,N}) where {M,N} = back_tuple(obj, Val(N))
+
+@inline splitup(A::AbstractArray{T}, ::SplitSlices{M,N}) where {T,M,N} = ArrayOfSimilarArrays{T,M,N}(A)
+
+
+# Subtypes of AbstractArrayOfSimilarArrays only need to implement `fused`
+# (plus the typical array operations), all split-mode operations are derived
+# from it:
+
+function fused(A::AbstractArrayOfSimilarArrays)
+    throw(ArgumentError("Subtypes of AbstractArrayOfSimilarArrays like $(nameof(typeof(A))) must implement ArraysOfArrays.fused"))
+end
+
+@inline getsplitmode(::AbstractArrayOfSimilarArrays{T,M,N}) where {T,M,N} = SplitSlices{M,N}()
+@inline unstackmode(A::AbstractArrayOfSimilarArrays) = getsplitmode(A)
+
+@inline stacked(A::AbstractArrayOfSimilarArrays) = fused(A)
+
+@inline Base.parent(A::AbstractArrayOfSimilarArrays) = fused(A)
+
+@inline vecflattened(A::AbstractArrayOfSimilarArrays) = vec(fused(A))
+# Disambiguation:
+@inline vecflattened(A::AbstractVectorOfSimilarArrays) = vec(fused(A))
+@inline vecflattened(A::AbstractArrayOfSimilarVectors) = vec(fused(A))
+@inline vecflattened(A::AbstractVectorOfSimilarVectors) = vec(fused(A))
+
+function getslicemap(::AbstractArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+    return (_ncolons(Val{M}())..., _oneto_tpl(Val{N}())...)
+end
+
+# `stack` must return an independent array, unlike `stacked`. Julia does not
+# dispatch on keyword arguments, so dispatch on the value of `dims` instead:
+Base.stack(A::AbstractArrayOfSimilarArrays; dims::Union{Integer,Colon} = :) = _stack_impl(A, dims)
+
+# Fast path for the default layout: a single bulk copy instead of the
+# element-by-element copy that generic `stack` would do:
+_stack_impl(A::AbstractArrayOfSimilarArrays, ::Colon) = copy(fused(A))
+_stack_impl(A::AbstractArrayOfSimilarArrays, dims::Integer) = stack(collect(A); dims)
+
+# Per-element reductions reduce over the inner dimensions of the flat data:
+function _innermapreduce_impl(f, op, init, A::AbstractArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+    data = fused(A)
+    dims = ntuple(identity, Val(M))
+    r = if init isa _NoInit
+        mapreduce(f, op, data; dims = dims)
+    else
+        mapreduce(f, op, data; dims = dims, init = init)
+    end
+    return reshape(r, size(A))
+end
+
+
+@inline Base.:(==)(A::AbstractArrayOfSimilarArrays{<:Any,M,N}, B::AbstractArrayOfSimilarArrays{<:Any,M,N}) where {M,N} = (stacked(A) == stacked(B))
+@inline Base.isequal(A::AbstractArrayOfSimilarArrays{<:Any,M,N}, B::AbstractArrayOfSimilarArrays{<:Any,M,N}) where {M,N} = isequal(stacked(A), stacked(B))
+@inline Base.isapprox(A::AbstractArrayOfSimilarArrays{<:Any,M,N}, B::AbstractArrayOfSimilarArrays{<:Any,M,N}; kwargs...) where {M,N} = isapprox(stacked(A), stacked(B); kwargs...)
+
+
+"""
+    ArrayOfSimilarArrays{T,M,N,P,ET} <: AbstractArrayOfSimilarArrays{T,M,N,ET}
+
+Represents a view of an array of dimension `M + N` as an `N`-dimensional
+array with elements that are `M`-dimensional arrays. All element arrays
 implicitly have equal size/axes.
 
 Constructors:
 
-    ArrayOfSimilarArrays{T,M,N}(flat_data::AbstractArray)
-    ArrayOfSimilarArrays{T,M}(flat_data::AbstractArray)
+    ArrayOfSimilarArrays{T,M,N}(data::AbstractArray)
+    ArrayOfSimilarArrays{T,M}(data::AbstractArray)
 
 The following type aliases are defined:
 
-* `VectorOfSimilarArrays{T,M} = AbstractArrayOfSimilarArrays{T,M,1}`
-* `ArrayOfSimilarVectors{T,N} = AbstractArrayOfSimilarArrays{T,1,N}`
-* `VectorOfSimilarVectors{T} = AbstractArrayOfSimilarArrays{T,1,1}`
+* `VectorOfSimilarArrays{T,M} = ArrayOfSimilarArrays{T,M,1}`
+* `ArrayOfSimilarVectors{T,N} = ArrayOfSimilarArrays{T,1,N}`
+* `VectorOfSimilarVectors{T} = ArrayOfSimilarArrays{T,1,1}`
 
 `VectorOfSimilarArrays` supports `push!()`, etc., provided the underlying
-array supports resizing of it's last dimension (e.g. an `ElasticArray`).
+array supports resizing of its last dimension (e.g. an `ElasticArray`).
 
-The nested array can also be created using the function [`nestedview`](@ref)
+The nested array can also be created using the function [`sliced`](@ref)
 and the wrapped flat array can be accessed using [`flatview`](@ref)
 afterwards:
 
 ```julia
 A_flat = rand(2,3,4,5,6)
-A_nested = nestedview(A_flat, 2)
+A_nested = sliced(A_flat, Val(2))
 A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
 flatview(A_nested) === A_flat
 ```
 """
 struct ArrayOfSimilarArrays{
-    T, M, N, L,
-    P<:AbstractArray{T,L}
-} <: AbstractArrayOfSimilarArrays{T,M,N}
+    T, M, N,
+    P<:AbstractArray{T},
+    ET<:AbstractArray{T,M}
+} <: AbstractArrayOfSimilarArrays{T,M,N,ET}
     data::P
 
-    function ArrayOfSimilarArrays{T,M,N}(flat_data::AbstractArray{U,L}) where {T,M,N,L,U}
-        require_ndims(flat_data, _add_vals(Val{M}(), Val{N}()))
-        conv_parent = _convert_elype(T, flat_data)
-        P = typeof(conv_parent)
-        new{T,M,N,L,P}(conv_parent)
+    function ArrayOfSimilarArrays{T,M,N}(data::AbstractArray{T,L}) where {T,M,N,L}
+        _require_ndims(Val(L), _add_vals(Val(M), Val(N)))
+        P = typeof(data)
+        ET = Base.promote_op(view, P, _nColons(Val(M))..., _nInts(Val(N))...)
+        new{T,M,N,P,ET}(data)
     end
-end
-
-function ArrayOfSimilarArrays{T,M}(flat_data::AbstractArray{U,L}) where {T,M,L,U}
-    _, size_outer = split_tuple(size(flat_data), Val{M}())
-    N = length(size_outer)
-    ArrayOfSimilarArrays{T,M,N}(flat_data)
 end
 
 export ArrayOfSimilarArrays
 
-function ArrayOfSimilarArrays{T,M,N}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
-    B = ArrayOfSimilarArrays{T,M,N}(Array{T}(undef, innersize(A)..., size(A)...))
-    copyto!(B, A)
+
+function ArrayOfSimilarArrays{T,M,N}(orig_data::AbstractArray{U,L}) where {T,M,N,U,L}
+    conv_data = _convert_eltype(T, orig_data)::AbstractArray{T,L}
+    return ArrayOfSimilarArrays{T,M,N}(conv_data)
 end
 
-ArrayOfSimilarArrays{T}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
-    ArrayOfSimilarArrays{T,M,N}(A)
-
-ArrayOfSimilarArrays(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
-    ArrayOfSimilarArrays{T,M,N}(A)
-
-
-Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, flat_data::AbstractArray{U,L}) where {T,M,N,L,U} = R(flat_data)
-Base.convert(R::Type{ArrayOfSimilarArrays{T,M}}, flat_data::AbstractArray{U,L}) where {T,M,L,U} = R(flat_data)
-
-Base.convert(R::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
-Base.convert(R::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = R(A)
-Base.convert(R::Type{ArrayOfSimilarArrays}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = R(A)
-
-
-@inline function innersize(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
-    front_tuple(size(A.data), Val{M}())
+function ArrayOfSimilarArrays{T,M}(data::AbstractArray{U,L}) where {T,M,U,L}
+    N = _val_value(_subtract_vals(Val(L), Val(M)))
+    ArrayOfSimilarArrays{T,M,N}(data)
 end
 
+Base.convert(::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = ArrayOfSimilarArrays{T,M,N}(stacked(A))
+Base.convert(::Type{ArrayOfSimilarArrays{T}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} = ArrayOfSimilarArrays{T,M,N}(stacked(A))
+Base.convert(::Type{ArrayOfSimilarArrays}, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = ArrayOfSimilarArrays{T,M,N}(stacked(A))
 
-@inline function _innerlength(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
-    prod(innersize(A))
+
+@inline fused(A::ArrayOfSimilarArrays) = A.data
+
+function Base.Array(A::ArrayOfSimilarArrays{T,M,N,P,ET}) where {T,M,N,P,ET}
+    new_ET = Base.promote_op(similar, ET)
+    return Array{new_ET,N}(A)
 end
-
-
-import Base.==
-(==)(A::ArrayOfSimilarArrays{T,M,N}, B::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} =
-    (A.data == B.data)
-
-
-"""
-    flatview(A::ArrayOfSimilarArrays{T,M,N,L,P})::P
-
-Returns the array of dimensionality `L = M + N` wrapped by `A`. The shape of
-the result may be freely changed without breaking the inner consistency of
-`A`.
-"""
-flatview(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = A.data
 
 
 Base.size(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = split_tuple(size(A.data), Val{M}())[2]
-
 
 
 Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Integer,N}) where {T,M,N} =
@@ -140,6 +196,12 @@ Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Var
 
 Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarArrays{T,M,N}, x::AbstractArray{U,M}, idxs::Vararg{Integer,N}) where {T,M,N,U} =
     setindex!(A.data, x, _ncolons(Val{M}())..., idxs...)
+
+function Base.fill!(A::ArrayOfSimilarArrays{T,M,N}, x::AbstractArray{U,M}) where {T,M,N,U}
+    size(x) == innersize(A) || throw(DimensionMismatch("Can't fill ArrayOfSimilarArrays with an array of different size than its elements"))
+    A.data .= reshape(x, size(x)..., ntuple(_ -> 1, Val(N))...)
+    return A
+end
 
 Base.@propagate_inbounds function Base.unsafe_view(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Union{Real, AbstractArray},N}) where {T,M,N}
     dataview = view(A.data, _ncolons(Val{M}())..., idxs...)
@@ -157,9 +219,9 @@ end
 
 function Base.similar(A::ArrayOfSimilarArrays{T,M,N}, ::Type{<:AbstractArray{U}}, dims::Dims) where {T,M,N,U}
     data = A.data
-    size_inner, size_outer = split_tuple(size(data), Val{M}())
+    size_inner = front_tuple(size(data), Val{M}())
     # ToDo: Don't use similar if data is an ElasticArray?
-    ArrayOfSimilarArrays{T,M,N}(similar(data, U, size_inner..., dims...))
+    ArrayOfSimilarArrays{U,M,length(dims)}(similar(data, U, size_inner..., dims...))
 end
 
 
@@ -211,82 +273,19 @@ Base.map(::typeof(identity), A::ArrayOfSimilarArrays) = A
 Base.Broadcast.broadcasted(::typeof(identity), A::ArrayOfSimilarArrays) = A
 
 
-Base.@pure _result_is_nested(idxs_outer::Tuple, idxs_inner::Tuple) =
-    Val{!(Base.index_dimsum(idxs_outer...) isa Tuple{}) && !(Base.index_dimsum(idxs_inner...) isa Tuple{})}()
-
-Base.@pure ndims_after_getindex(idxs::Tuple) = Val{length(Base.index_dimsum(idxs...))}()
-
-
-Base.@propagate_inbounds function deepgetindex(A::ArrayOfSimilarArrays{T,M,N,L}, idxs::Vararg{Any,L}) where {T,M,N,L}
-    idxs_outer, idxs_inner = split_tuple(idxs, Val{N}())
-    nested = _result_is_nested(idxs_outer, idxs_inner)
-    _deepgetindex_impl_aosa(A, idxs_outer, idxs_inner, nested)
-end
-
-Base.@propagate_inbounds _deepgetindex_impl_aosa(A::ArrayOfSimilarArrays, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{false}) =
-    getindex(A.data, idxs_inner..., idxs_outer...)
-
-Base.@propagate_inbounds function _deepgetindex_impl_aosa(A::ArrayOfSimilarArrays, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{true})
-    new_data = getindex(A.data, idxs_inner..., idxs_outer...)
-    nestedview(new_data, ndims_after_getindex(idxs_inner))
-end
-
-
-Base.@propagate_inbounds function deepsetindex!(A::ArrayOfSimilarArrays{T,M,N,L}, x, idxs::Vararg{Any,L}) where {T,M,N,L}
-    idxs_outer, idxs_inner = split_tuple(idxs, Val{N}())
-    _deepsetindex_impl_aosa!(A, x, idxs_outer, idxs_inner, _result_is_nested(idxs_outer, idxs_inner))
-    A
-end
-
-Base.@propagate_inbounds _deepsetindex_impl_aosa!(A::ArrayOfSimilarArrays, x, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{false}) =
-    setindex!(A.data, x, idxs_inner..., idxs_outer...)
-
-Base.@propagate_inbounds _deepsetindex_impl_aosa!(A::ArrayOfSimilarArrays, x, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{true}) =
-    _deepsetindex_impl!(A, x, idxs_outer, idxs_inner)
-
-# TODO: Specialized method _deepsetindex_impl_aosa!(A::ArrayOfSimilarArrays, x::ArrayOfSimilarArrays, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{true}) =
-
-
-Base.@propagate_inbounds function deepview(A::ArrayOfSimilarArrays{T,M,N,L}, idxs::Vararg{Any,L}) where {T,M,N,L}
-    idxs_outer, idxs_inner = split_tuple(idxs, Val{N}())
-    nested = _result_is_nested(idxs_outer, idxs_inner)
-    _deepview_impl_aosa(A, idxs_outer, idxs_inner, nested)
-end
-
-Base.@propagate_inbounds _deepview_impl_aosa(A::ArrayOfSimilarArrays, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{false}) =
-    view(A.data, idxs_inner..., idxs_outer...)
-
-Base.@propagate_inbounds function _deepview_impl_aosa(A::ArrayOfSimilarArrays, idxs_outer::Tuple, idxs_inner::Tuple, nested::Val{true})
-    new_data = view(A.data, idxs_inner..., idxs_outer...)
-    nestedview(new_data, ndims_after_getindex(idxs_inner))
-end
-
-
-
 const VectorOfSimilarArrays{
-    T, M, L,
-    P<:AbstractArray{T,L}
-} = ArrayOfSimilarArrays{T,M,1,L,P}
+    T, M,
+    P<:AbstractArray{T},
+    ET<:AbstractArray{T,M}
+} = ArrayOfSimilarArrays{T,M,1,P,ET}
 
 export VectorOfSimilarArrays
 
-VectorOfSimilarArrays{T}(flat_data::AbstractArray{U,L}) where {T,U,L} =
-    ArrayOfSimilarArrays{T,length(Base.front(size(flat_data))),1}(flat_data)
+VectorOfSimilarArrays{T}(data::AbstractArray{U}) where {T,U} = ArrayOfSimilarArrays{T,length(Base.front(size(data))),1}(data)
+VectorOfSimilarArrays(data::AbstractArray{T}) where {T} = ArrayOfSimilarArrays{T,length(Base.front(size(data))),1}(data)
 
-VectorOfSimilarArrays(flat_data::AbstractArray{T,L}) where {T,L} =
-    ArrayOfSimilarArrays{T,length(Base.front(size(flat_data))),1}(flat_data)
-
-VectorOfSimilarArrays{T}(A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} =
-    VectorOfSimilarArrays{T,M}(A)
-
-VectorOfSimilarArrays(A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} =
-    VectorOfSimilarArrays{T,M}(A)
-
-
-Base.convert(R::Type{VectorOfSimilarArrays{T}}, flat_data::AbstractArray{U,L}) where {T,U,L} = R(flat_data)
-Base.convert(R::Type{VectorOfSimilarArrays}, flat_data::AbstractArray{T,L}) where {T,L} = R(flat_data)
-Base.convert(R::Type{VectorOfSimilarArrays{T}}, A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} = R(A)
-Base.convert(R::Type{VectorOfSimilarArrays}, A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} = R(A)
+Base.convert(::Type{VectorOfSimilarArrays{T}}, A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} = ArrayOfSimilarArrays{T,M,1}(stacked(A))
+Base.convert(::Type{VectorOfSimilarArrays}, A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} = ArrayOfSimilarArrays{T,M,1}(stacked(A))
 
 
 @inline Base.IndexStyle(::Type{<:VectorOfSimilarArrays}) = IndexLinear()
@@ -315,6 +314,20 @@ end
 # popfirst!(V::ArrayOfSimilarArrays) = ...
 
 
+# Concatenating vectors of similar arrays concatenates their underlying
+# data along its last dimension, with a single allocation:
+
+function _vcat_vosas(Vs)
+    isempty(Vs) && throw(ArgumentError("reducing over an empty collection is not allowed"))
+    new_data = _cat_lastdim(map(fused, Vs))
+    return VectorOfSimilarArrays(new_data)
+end
+
+Base.vcat(V1::AbstractVectorOfSimilarArrays, Vs::AbstractVectorOfSimilarArrays...) = _vcat_vosas((V1, Vs...))
+
+Base.reduce(::typeof(vcat), Vs::AbstractVector{<:AbstractVectorOfSimilarArrays}) = _vcat_vosas(Vs)
+
+
 function _empty_data_size(A::VectorOfSimilarArrays{T,M}) where {T,M}
     size_inner, size_outer = split_tuple(size(A.data), Val{M}())
     empty_size_outer = map(x -> zero(x), size_outer)
@@ -324,7 +337,7 @@ end
 function Base.empty(A::VectorOfSimilarArrays{T,M}, ::Type{<:AbstractArray{U}}) where {T,M,U}
     new_data_size = _empty_data_size(A)
     # ToDo: Don't use similar if data is an ElasticArray?
-    VectorOfSimilarArrays{T,M}(similar(A.data, U, new_data_size...))
+    ArrayOfSimilarArrays{U,M,1}(similar(A.data, U, new_data_size...))
 end
 
 function Base.empty!(A::VectorOfSimilarArrays{T,M}) where {T,M}
@@ -335,70 +348,117 @@ end
 
 
 const ArrayOfSimilarVectors{
-    T, N, L,
-    P<:AbstractArray{T,L}
-} = ArrayOfSimilarArrays{T,1,N,L,P}
+    T, N,
+    P<:AbstractArray{T},
+    ET<:AbstractVector{T}
+} = ArrayOfSimilarArrays{T,1,N,P,ET}
 
 export ArrayOfSimilarVectors
 
-ArrayOfSimilarVectors{T}(flat_data::AbstractArray{U,L}) where {T,U,L} =
-    ArrayOfSimilarArrays{T,1,length(Base.front(size(flat_data)))}(flat_data)
+ArrayOfSimilarVectors{T}(data::AbstractArray{U}) where {T,U} = ArrayOfSimilarArrays{T,1,length(Base.front(size(data)))}(data)
+ArrayOfSimilarVectors(data::AbstractArray{T}) where {T} = ArrayOfSimilarArrays{T,1,length(Base.front(size(data)))}(data)
 
-ArrayOfSimilarVectors(flat_data::AbstractArray{T,L}) where {T,L} =
-    ArrayOfSimilarArrays{T,1,length(Base.front(size(flat_data)))}(flat_data)
-
-ArrayOfSimilarVectors{T}(A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} =
-    ArrayOfSimilarVectors{T,N}(A)
-
-ArrayOfSimilarVectors(A::AbstractArray{<:AbstractVector{T},N}) where {T,N} =
-    ArrayOfSimilarVectors{T,N}(A)
-
-
-Base.convert(R::Type{ArrayOfSimilarVectors{T}}, flat_data::AbstractArray{U,L}) where {T,U,L} = R(flat_data)
-Base.convert(R::Type{ArrayOfSimilarVectors}, flat_data::AbstractArray{T,L}) where {T,L} = R(flat_data)
-Base.convert(R::Type{ArrayOfSimilarVectors{T}}, A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} = R(A)
-Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T},N}) where {T,N} = R(A)
+Base.convert(R::Type{ArrayOfSimilarVectors{T}}, A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} = R(stacked(A))
+Base.convert(R::Type{ArrayOfSimilarVectors}, A::AbstractArray{<:AbstractVector{T},N}) where {T,N} = R(stacked(A))
 
 
 const VectorOfSimilarVectors{
     T,
-    P<:AbstractArray{T,2}
-} = ArrayOfSimilarArrays{T,1,1,2,P}
+    P<:AbstractArray{T,2},
+    ET<:AbstractVector{T}
+} = ArrayOfSimilarArrays{T,1,1,P,ET}
 
 export VectorOfSimilarVectors
 
-VectorOfSimilarVectors{T}(flat_data::AbstractArray{U,2}) where {T,U} =
-    ArrayOfSimilarArrays{T,1,1}(flat_data)
+VectorOfSimilarVectors{T}(data::AbstractArray{U,2}) where {T,U} = ArrayOfSimilarArrays{T,1,1}(data)
+VectorOfSimilarVectors(data::AbstractArray{T,2}) where {T} = VectorOfSimilarVectors{T}(data)
 
-VectorOfSimilarVectors(flat_data::AbstractArray{T,2}) where {T} =
-    VectorOfSimilarVectors{T}(flat_data)
-
-VectorOfSimilarVectors{T}(A::AbstractVector{<:AbstractVector{U}}) where {T,U} =
-    ArrayOfSimilarArrays{T,1}(A)
-
-VectorOfSimilarVectors(A::AbstractVector{<:AbstractVector{T}}) where {T} =
-    VectorOfSimilarVectors{T}(A)
-
-Base.convert(R::Type{VectorOfSimilarVectors{T}}, flat_data::AbstractArray{U,2}) where {T,U} = R(flat_data)
-Base.convert(R::Type{VectorOfSimilarVectors}, flat_data::AbstractArray{T,2}) where {T} = R(flat_data)
-Base.convert(R::Type{VectorOfSimilarVectors{T}}, A::AbstractVector{<:AbstractVector{U}}) where {T,U} = R(A)
-Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector{T}}) where {T} = R(A)
+Base.convert(R::Type{VectorOfSimilarVectors{T}}, A::AbstractVector{<:AbstractVector{U}}) where {T,U} = R(stacked(A))
+Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector{T}}) where {T} = R(stacked(A))
 
 
-Base.sum(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} =
+# Fast paths over the flat data for the full (dims = :) reductions. Julia
+# does not dispatch on keyword arguments, so dispatch on the value of `dims`
+# instead and forward non-Colon dims to the generic implementations:
+
+Base.sum(X::AbstractVectorOfSimilarArrays; dims::Union{Colon,Integer} = :) = _aosa_sum(X, dims)
+
+_aosa_sum(X::AbstractVectorOfSimilarArrays{T,M}, ::Colon) where {T,M} =
     sum(flatview(X); dims = M + 1)[_ncolons(Val{M}())...]
+_aosa_sum(X::AbstractVectorOfSimilarArrays, dims::Integer) =
+    Base.@invoke sum(X::AbstractArray; dims = dims)
 
-Statistics.mean(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} =
+Statistics.mean(X::AbstractVectorOfSimilarArrays; dims::Union{Colon,Integer} = :) = _aosa_mean(X, dims)
+
+_aosa_mean(X::AbstractVectorOfSimilarArrays{T,M}, ::Colon) where {T,M} =
     mean(flatview(X); dims = M + 1)[_ncolons(Val{M}())...]
+_aosa_mean(X::AbstractVectorOfSimilarArrays, dims::Integer) =
+    Base.@invoke mean(X::AbstractArray; dims = dims)
 
-Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true, mean = nothing) where {T,M} =
+Statistics.var(X::AbstractVectorOfSimilarArrays; corrected::Bool = true, mean = nothing, dims::Union{Colon,Integer} = :) =
+    _aosa_var(X, corrected, mean, dims)
+
+_aosa_var(X::AbstractVectorOfSimilarArrays{T,M}, corrected::Bool, mean, ::Colon) where {T,M} =
     var(flatview(X); dims = M + 1, corrected = corrected, mean = mean)[_ncolons(Val{M}())...]
+_aosa_var(X::AbstractVectorOfSimilarArrays, corrected::Bool, mean, dims::Integer) =
+    Base.@invoke var(X::AbstractArray; corrected = corrected, mean = mean, dims = dims)
 
-Statistics.std(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true, mean = nothing) where {T,M} =
+Statistics.std(X::AbstractVectorOfSimilarArrays; corrected::Bool = true, mean = nothing, dims::Union{Colon,Integer} = :) =
+    _aosa_std(X, corrected, mean, dims)
+
+_aosa_std(X::AbstractVectorOfSimilarArrays{T,M}, corrected::Bool, mean, ::Colon) where {T,M} =
     std(flatview(X); dims = M + 1, corrected = corrected, mean = mean)[_ncolons(Val{M}())...]
+_aosa_std(X::AbstractVectorOfSimilarArrays, corrected::Bool, mean, dims::Integer) =
+    Base.@invoke std(X::AbstractArray; corrected = corrected, mean = mean, dims = dims)
 
 Statistics.cov(X::AbstractVectorOfSimilarVectors; corrected::Bool = true) =
     cov(flatview(X); dims = 2, corrected = corrected)
 
 Statistics.cor(X::AbstractVectorOfSimilarVectors) =
     cor(flatview(X); dims = 2)
+
+
+
+# Deprecations:
+
+@deprecate ArrayOfSimilarArrays{T,M,N}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} ArrayOfSimilarArrays{T,M,N}(stacked(A)) false
+@deprecate ArrayOfSimilarArrays{T}(A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} ArrayOfSimilarArrays{T,M,N}(stacked(A)) false
+@deprecate ArrayOfSimilarArrays(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} ArrayOfSimilarArrays{T,M,N}(stacked(A)) false
+
+@deprecate Base.convert(::Type{ArrayOfSimilarArrays{T,M,N}}, data::AbstractArray{U,L}) where {T,M,N,U<:Number,L} ArrayOfSimilarArrays{T,M,N}(data) false
+@deprecate Base.convert(::Type{ArrayOfSimilarArrays{T,M}}, data::AbstractArray{U,L}) where {T,M,U<:Number,L} ArrayOfSimilarArrays{T,M}(data) false
+
+
+@deprecate VectorOfSimilarArrays{T}(A::AbstractVector{<:AbstractArray{U,M}}) where {T,M,U} ArrayOfSimilarArrays{T,M,1}(stacked(A)) false
+@deprecate VectorOfSimilarArrays(A::AbstractVector{<:AbstractArray{T,M}}) where {T,M} ArrayOfSimilarArrays{T,M,1}(stacked(A)) false
+
+@deprecate Base.convert(::Type{VectorOfSimilarArrays{T}}, data::AbstractArray{U}) where {T,U<:Number} VectorOfSimilarArrays{T}(data) false
+@deprecate Base.convert(::Type{VectorOfSimilarArrays}, data::AbstractArray{T}) where {T<:Number} VectorOfSimilarArrays(data) false
+
+
+@deprecate ArrayOfSimilarVectors{T}(A::AbstractArray{<:AbstractVector{U},N}) where {T,N,U} ArrayOfSimilarArrays{T,1,N}(stacked(A)) false
+@deprecate ArrayOfSimilarVectors(A::AbstractArray{<:AbstractVector{T},N}) where {T,N} ArrayOfSimilarArrays{T,1,N}(stacked(A)) false
+
+@deprecate Base.convert(::Type{ArrayOfSimilarVectors{T}}, data::AbstractArray{U}) where {T,U<:Number} ArrayOfSimilarVectors{T}(data) false
+@deprecate Base.convert(::Type{ArrayOfSimilarVectors}, data::AbstractArray{T}) where {T<:Number} ArrayOfSimilarVectors(data) false
+
+
+@deprecate VectorOfSimilarVectors{T}(A::AbstractVector{<:AbstractVector{U}}) where {T,U} ArrayOfSimilarArrays{T,1,1}(stacked(A)) false
+@deprecate VectorOfSimilarVectors(A::AbstractVector{<:AbstractVector{T}}) where {T} ArrayOfSimilarArrays{T,1,1}(stacked(A)) false
+
+@deprecate Base.convert(::Type{VectorOfSimilarVectors{T}}, data::AbstractArray{U,2}) where {T,U<:Number} VectorOfSimilarVectors{T}(data) false
+@deprecate Base.convert(::Type{VectorOfSimilarVectors}, data::AbstractArray{T,2}) where {T<:Number} VectorOfSimilarVectors(data) false
+
+
+"""
+    nestedview(A::AbstractArray{T,M+N}, M::Integer)
+    nestedview(A::AbstractArray{T,2})
+
+Deprecated, use [`sliced`](@ref) instead.
+"""
+function nestedview end
+export nestedview
+
+@deprecate nestedview(A::AbstractArray, M::Integer) sliced(A, Val(M))
+@deprecate nestedview(A::AbstractArray, ::Val{M}) where {M} sliced(A, Val(M))
+@deprecate nestedview(A::AbstractArray{T,2}) where {T} sliced(A)

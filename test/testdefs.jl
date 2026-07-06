@@ -1,0 +1,175 @@
+# This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
+
+using ChainRulesCore: rrule, unthunk, AbstractThunk, Thunk, NoTangent
+
+using ArraysOfArrays: getinnerdims, getouterdims
+
+if !isdefined(Main, :test_api)
+    maptest_f(x::Number) = x^2
+    maptest_f(x::AbstractArray{<:Number}) = sum(x)^2
+    maptest_f(x::AbstractArray) = length(x)^2
+
+    function test_notangent_rrule(f, args::Vararg{Any,N}) where {N}
+        y, f_pullback = @inferred(rrule(f, args...))
+        @test y == f(args...)
+        dy = NoTangent()
+        @test @inferred(f_pullback(dy)) == ntuple(_ -> NoTangent(), Val(N+1))
+    end
+
+    function test_fused_rrule(A)
+        @testset "Test fused rrule for $(nameof(typeof(A)))" begin
+            A_joined, f_pullback = @inferred(rrule(fused, A))
+            @test A_joined == fused(A)
+            dy = Thunk(Returns(A_joined))
+            tangents = @inferred(f_pullback(dy))
+            @test tangents isa Tuple{NoTangent,<:AbstractThunk}
+            @test unthunk(tangents[2]) == A
+        end
+    end
+
+    function test_splitview_rrule(A, smode)
+        @testset "Test splitup rrule for $(nameof(typeof(A)))" begin
+            A_split, f_pullback = @inferred(rrule(splitup, A, smode))
+            @test A_split == splitup(A, smode)
+            dy = Thunk(Returns(A_split))
+            tangents = @inferred(f_pullback(dy))
+            @test tangents isa Tuple{NoTangent,<:AbstractThunk,NoTangent}
+            @test unthunk(tangents[2]) == A
+        end
+    end
+
+    function test_api(A, A_array_ref, A_unsplit_ref)
+        @testset "Test API for $(nameof(typeof(A)))" begin
+            global g_state = (;A, A_array_ref, A_unsplit_ref)
+
+            @test Array(A) isa Array{<:Any,ndims(A)}
+            A_array = Array(A)
+            @test A == A_array
+            @test isequal(A, A_array)
+            @test isequal(A_array, A_array_ref)
+
+            @test @inferred(getsplitmode(A)) isa AbstractSplitMode
+            smode = getsplitmode(A)
+            test_notangent_rrule(getsplitmode, A)
+    
+            @test @inferred(is_memordered_splitmode(smode)) isa Bool
+            test_notangent_rrule(is_memordered_splitmode, smode)
+
+            if A isa AbstractSlices
+                let M = ndims(eltype(A)), N = ndims(A)
+                    @test smode isa AbstractSlicingMode{M,N}
+                end
+            elseif eltype(A) <: Number
+                @test smode isa NonSplitMode{ndims(A)}
+            end
+
+            @test @inferred(eltype(A)) <: Union{Number,AbstractArray}
+            T_elem = eltype(A)
+
+            innersz = if smode isa NonSplitMode
+                @inferred(innersize(A))
+            elseif smode isa AbstractSlicingMode
+                @inferred(innersize(A))
+            else
+                let sz = (try innersize(A); catch err; err; end)
+                    sz isa Exception ? sz : @inferred(innersize(A))
+                end
+            end
+
+            if !(innersz isa Exception)
+                test_notangent_rrule(innersize, A)
+            end
+            
+            @test innersz isa Union{Exception, Dims}
+
+            if !isempty(A)
+                A_elem_1 = @inferred(A[first(eachindex(A))])
+                @test typeof(A_elem_1) == T_elem
+                if !(innersz isa Exception)
+                    @test all(size.(A) .== Ref(innersz))
+                end
+
+                @inferred(innermap(maptest_f, A)) == innermap(maptest_f, Array(A))
+                @inferred(deepmap(maptest_f, A)) == deepmap(maptest_f, Array(A))
+            end
+
+            _smode_M(::AbstractSlicingMode{M,N}) where {M,N} = M
+            _smode_N(::AbstractSlicingMode{M,N}) where {M,N} = N
+
+            dimstpl = ntuple(identity, Val(ndims(A_unsplit_ref)))
+
+            if smode isa AbstractSlicingMode
+                M, N = _smode_M(smode), _smode_N(smode)
+                A_array_stacked = stack(A_array)
+                @test M == ndims(eltype(A))
+                @test N == ndims(A)
+
+                @test Array(stack(A)) == A_array_stacked
+
+                @test @inferred(unstackmode(A)) isa AbstractSlicingMode{M,N}
+                umode = unstackmode(A)
+                @test @inferred(splitup(stacked(A), umode)) == A
+
+                if is_memordered_splitmode(smode)
+                    # stack(A) must return an independent array, even if the
+                    # parent array could be returned as-is:
+                    @test @inferred(stack(A)) == A_unsplit_ref
+                    @test stack(A) !== A_unsplit_ref
+                    @test @inferred(stacked(A)) === A_unsplit_ref
+                    @test @inferred(flatview(A)) === A_unsplit_ref
+                    @test stacked(splitup(stacked(A), umode)) === stacked(A)
+                else
+                    @test Array(@inferred(stack(A))) == A_array_stacked
+                    @test Array(@inferred(stacked(A))) == A_array_stacked
+                    @test_throws ArgumentError flatview(A)
+                end
+
+                @test @inferred(getinnerdims(dimstpl, smode)) isa NTuple{M,Int}
+                @test @inferred(getouterdims(dimstpl, smode)) isa NTuple{N,Int}
+                innerdims = getinnerdims(dimstpl, smode)
+                outerdims = getouterdims(dimstpl, smode)
+                @test permutedims(A_unsplit_ref, (innerdims..., outerdims...)) == A_array_stacked
+            elseif smode isa NonSplitMode
+                @test @inferred(stacked(A)) === A
+            else
+                stacked_A = try stack(A); catch err; err; end
+                if stacked_A isa Exception
+                    @test_throws typeof(stacked_A) stacked(A)
+                else
+                    @inferred(stacked(A)) == stacked_A
+                end
+            end
+
+            if smode isa UnknownSplitMode
+                @test @inferred(is_memordered_splitmode(smode)) == false
+                @test_throws ArgumentError fused(A)
+                @test_throws ArgumentError flatview(A)
+                @test_throws ArgumentError splitup(A_unsplit_ref, smode)
+                @test_throws ArgumentError getinnerdims(dimstpl, smode)
+                @test_throws ArgumentError getouterdims(dimstpl, smode)
+            elseif smode isa NonSplitMode
+                @test @inferred(is_memordered_splitmode(smode)) == true
+                @test @inferred(fused(A)) === A
+                @test @inferred(flatview(A)) === A
+                @test @inferred(splitup(A, smode)) === A
+                @test @inferred(getinnerdims(dimstpl, smode)) == ()
+                @test @inferred(getouterdims(dimstpl, smode)) == dimstpl
+
+                test_fused_rrule(A)
+                test_splitview_rrule(A, smode)
+            else
+                if A isa Slices
+                    @test fused(A) === parent(A)
+                end
+                @test @inferred(fused(A)) == A_unsplit_ref
+                A_unsplit = fused(A)
+                @test typeof(A_unsplit) == typeof(A_unsplit_ref)
+                @test typeof(splitup(A_unsplit, smode)) == typeof(A)
+                @test splitup(A_unsplit, smode) == A
+
+                test_fused_rrule(A)
+                test_splitview_rrule(A_unsplit, smode)
+            end
+        end
+    end
+end

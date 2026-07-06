@@ -5,7 +5,7 @@ module ArraysOfArraysAdaptExt
 import Adapt
 using Adapt: adapt
 
-using ArraysOfArrays: ArrayOfSimilarArrays, VectorOfArrays
+using ArraysOfArrays: ArrayOfSimilarArrays, VectorOfArrays, SplitParts
 using ArraysOfArrays: no_consistency_checks
 
 
@@ -21,6 +21,14 @@ function Adapt.adapt_structure(to, A::VectorOfArrays)
         adapt(to, A.elem_ptr),
         adapt(to, A.kernel_size),
         no_consistency_checks
+    )
+end
+
+
+function Adapt.adapt_structure(to, smode::SplitParts)
+    SplitParts(
+        adapt(to, smode.elem_ptr),
+        adapt(to, smode.kernel_size)
     )
 end
 

@@ -3,92 +3,111 @@
 using ArraysOfArrays
 using Test
 
-using StaticArrays
+using ArraysOfArrays: getinnerdims, getouterdims
 
+include("testdefs.jl")
 
 @testset "functions" begin
-    function gen_nested()
-        A11 = [1 2; 3 4]
-        A21 = [4 5 6; 7 8 9]
-        A12 = [10 11; 12 13; 14 15]
-        A22 = [16 17; 18 19]
-        hcat([A11, A21], [A12, A22])
+    A_0 = fill(Float32(42))
+    A_0_flat = fill(Float32(42))
+
+    A_1 = Float32[3, 8, 4, 6]
+    A_1_flat = Float32[3, 8, 4, 6]
+
+    A_1e = Float32[]
+    A_1e_flat = Float32[]
+
+    A_2 = [Float32[3 8; 4 6], Float32[1 2; 5 7; 9 0]]
+    A_2_flat = Float32[3, 8, 4, 6, 1, 2, 5, 7, 9, 0]
+
+    A_2e = Matrix{Float32}[]
+    A_2e_flat = Matrix{Float32}(undef, 0, 0)
+
+    A_2b = [Float32[3 8; 4 6], Float32[1 2; 9 0]]
+    A_2b_flat = stack(A_2b)
+
+    A_3 = [[Float32[3, 8, 4], Float32[1, 2, 5]], [Float32[6, 7], Float32[9, 0]]]
+    A_3_flat = reduce(vcat, A_3)
+
+    @testset "getsplitmode" begin
+        @test @inferred(getsplitmode(A_0)) isa NonSplitMode{0}
+        @test @inferred(getsplitmode(A_1)) isa NonSplitMode{1}
+        @test @inferred(getsplitmode(A_1e)) isa NonSplitMode{1}
+        @test @inferred(getsplitmode(A_2)) isa UnknownSplitMode{typeof(A_2)}
+        @test @inferred(getsplitmode(A_2e)) isa UnknownSplitMode{typeof(A_2e)}
+        @test @inferred(getsplitmode(A_2b)) isa UnknownSplitMode{typeof(A_2b)}
+        @test @inferred(getsplitmode(A_3)) isa UnknownSplitMode{typeof(A_3)}
     end
-
-
-    @testset "flatview and nestedview" begin
-        A = [(@SArray randn(3, 2, 4)) for i in 1:2, j in 1:2]
-        @test @inferred(nestedview(flatview(A), Val(3))) == A
-
-        B = rand(3, 2, 4)
-        @test @inferred(nestedview(flatview(B), SVector{3})) == @inferred(nestedview(B, Val(1)))
-    end
-
 
     @testset "innersize" begin
-        @test @inferred(innersize([[1, 2, 3], [4, 5, 6]])) == (3,)
-        @test @inferred(innersize([[]])) == (0,)
-        @test @inferred(innersize([2:5])) == (4,)
-        @test @inferred(innersize((2:5,))) == (4,)
-        @test @inferred(innersize(Ref(2:5))) == (4,)
-        @test_throws DimensionMismatch @inferred(innersize([[1, 2, 3], [4, 5]]))
+        @test @inferred(innersize(A_0)) == ()
+        @test @inferred(innersize(A_1)) == ()
+        @test @inferred(innersize(A_1e)) == ()
+        @test_throws DimensionMismatch innersize(A_2)
+        @test @inferred(innersize(A_2e)) == (0, 0)
+        @test @inferred(innersize(A_2b)) == (2, 2)
+        @test @inferred(innersize(A_3)) == (2,)
     end
 
+    @testset "innermap" begin
+        f = x -> x^2
+        @test @inferred(innermap(f, A_0)) == fill(1764)
+        @test @inferred(innermap(f, A_1)) == Float32[9, 64, 16, 36]
+        @test @inferred(innermap(f, A_2)) == [Float32[9 64; 16 36], Float32[1 4; 25 49; 81 0]]
+        @test_throws MethodError innermap(f, A_3)
 
-    @testset "deepgetindex" begin
-        A = gen_nested()
-        @test @inferred(deepgetindex(A, 1, 2)) === A[1, 2]
-        @test @inferred(deepgetindex(A, 1, 2, 2, 1)) == A[1, 2][2, 1]
-        @test @inferred(deepgetindex(A, 1, 2, 1:2, 1)) == A[1, 2][1:2, 1]
-        @test @inferred(deepgetindex(A, 1, 1:2, 2, 1)) == [A[1, 1][2, 1], A[1, 2][2, 1]]
-        @test @inferred(deepgetindex(A, 1, 1:2, 1:2, 2)) == [A[1, 1][1:2, 2], A[1, 2][1:2, 2]]
-        @test_throws MethodError deepgetindex(A, 1, 2, 2, 1, 2)
-
-        B = rand(3, 4, 5)
-        @test @inferred(deepgetindex(B, 2, 3, 4)) === getindex(B, 2, 3, 4)
-        @test_throws MethodError deepgetindex(B, 6)
-        @test_throws MethodError deepgetindex(B, 2, 3)
+        @test @inferred(innermap(length, A_0)) == fill(1)
+        @test @inferred(innermap(length, A_1)) == fill(1, 4)
+        @test @inferred(innermap(length, A_2)) == [fill(1, 2, 2), fill(1, 3, 2)]
+        @test @inferred(innermap(length, A_3)) == [fill(3, 2), fill(2, 2)]
     end
 
+    @testset "deepmap" begin
+        f = x -> x^2
+        @test @inferred(deepmap(f, A_0)) == fill(1764)
+        @test @inferred(deepmap(f, A_1)) == Float32[9, 64, 16, 36]
+        @test @inferred(deepmap(f, A_2)) == [Float32[9 64; 16 36], Float32[1 4; 25 49; 81 0]]
+        @test @inferred(deepmap(f, A_3)) == [[Float32[9, 64, 16], Float32[1, 4, 25]], [Float32[36, 49], Float32[81, 0]]]
 
-    @testset "deepsetindex!" begin
-        B12 = [20 21 22; 23 24 25]
-        X = [[41, 42], [43, 44]]
-
-        A = gen_nested()
-        @test @inferred(deepsetindex!(A, B12, 1, 2)) === A
-        @test A[1, 2] == B12
-
-        A = gen_nested()
-        @test @inferred(deepsetindex!(A, 42, 1, 2, 2, 1)) === A
-        @test A[1, 2][2, 1] == 42
-
-        A = gen_nested()
-        @test @inferred(deepsetindex!(A, X, 1, 1:2, 1:2, 2)) === A
-        @test deepgetindex(A, 1, 1:2, 1:2, 2) == X
+        @test @inferred(deepmap(length, A_0)) == fill(1)
+        @test @inferred(deepmap(length, A_1)) == fill(1, 4)
+        @test @inferred(deepmap(length, A_2)) == [fill(1, 2, 2), fill(1, 3, 2)]
+        @test @inferred(deepmap(length, A_3)) == [[fill(1, 3), fill(1, 3)], [fill(1, 2), fill(1, 2)]]
     end
 
+    @testset "mapat" begin
+        f = x -> x^2
+        @test @inferred(mapat(f, Val(1), A_1)) == map(f, A_1)
+        @test @inferred(mapat(f, Val(2), A_2)) == innermap(f, A_2)
+        @test @inferred(mapat(f, Val(3), A_3)) == deepmap(f, A_3)
+        @test mapat(length, Val(1), A_2) == length.(A_2)
 
-    @testset "deepview" begin
-        A = gen_nested()
-        @test @inferred(deepview(A, 1, 2)) == view(A, 1, 2)
-        @test @inferred(deepview(A, 1, 2, 2, 1)) == view(A[1, 2], 2, 1)
-        @test @inferred(deepview(A, 1, 2, 1:2, 1)) == view(A[1, 2], 1:2, 1)
-        @test_throws ArgumentError deepview(A, 1, 1:2, 2, 1)
-        @test @inferred(deepview(A, 1, 1:2, 1:2, 2)) == [A[1, 1][1:2, 2], A[1, 2][1:2, 2]]
-        @test_throws MethodError deepview(A, 1, 2, 2, 1, 2)
+        # Depth exceeding the nesting depth applies at the innermost level:
+        @test mapat(f, Val(5), A_1) == map(f, A_1)
 
-        B = rand(3, 4, 5)
-        @test @inferred(deepview(B, 2, 3, 4)) === view(B, 2, 3, 4)
-        @test_throws MethodError deepview(B, 6)
-        @test_throws MethodError deepview(B, 2, 3)
+        # Multiple inputs, zipped like map:
+        @test @inferred(mapat(+, Val(1), A_1, A_1)) == 2 .* A_1
+        @test mapat(+, Val(2), A_2, A_2) == innermap(x -> 2 * x, A_2)
+
+        # Integer depth relies on constant propagation for type stability:
+        mapat_intdepth(g, A) = mapat(g, 2, A)
+        @test @inferred(mapat_intdepth(f, A_2)) == innermap(f, A_2)
     end
 
+    @testset "innersizes and innerlengths" begin
+        @test @inferred(innersizes(A_2)) == size.(A_2)
+        @test @inferred(innerlengths(A_2)) == length.(A_2)
+        @test innersizes(A_3) == size.(A_3)
+        @test innerlengths(A_2e) == Int[]
+    end
 
-    @testset "abstract_nestedarray_type" begin
-        @test @inferred(abstract_nestedarray_type(Int, Val(()))) == Int
-        @test @inferred(abstract_nestedarray_type(Int, Val((2,)))) == AbstractArray{Int, 2}
-        @test @inferred(abstract_nestedarray_type(Float32, Val((2,3,4)))) ==
-            AbstractArray{<:AbstractArray{<:AbstractArray{Float32, 4}, 3}, 2}
+    @testset "Nested array API" begin
+        test_api(A_0, A_0, A_0_flat)
+        test_api(A_1, A_1, A_1_flat)
+        test_api(A_1e, A_1e, A_1e_flat)
+        test_api(A_2, A_2, A_2_flat)
+        test_api(A_2e, A_2e, A_2e_flat)
+        test_api(A_2b, A_2b, A_2b_flat)
+        test_api(A_3, A_3, A_3_flat)
     end
 end
