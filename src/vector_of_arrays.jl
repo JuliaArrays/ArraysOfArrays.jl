@@ -619,13 +619,13 @@ function Base.empty!(A::VectorOfArrays)
 end
 
 
-function innermap(f::Base.Callable, A::VectorOfArrays)
+function innermap(f, A::VectorOfArrays)
     new_data = map(f, A.data)
     VectorOfArrays(new_data, A.elem_ptr, A.kernel_size, simple_consistency_checks)
 end
 
 
-function deepmap(f::Base.Callable, A::VectorOfArrays)
+function deepmap(f, A::VectorOfArrays)
     new_data = deepmap(f, A.data)
     VectorOfArrays(new_data, A.elem_ptr, A.kernel_size, simple_consistency_checks)
 end

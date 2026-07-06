@@ -266,14 +266,14 @@ end
 Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
     prepend!(dest, convert(ArrayOfSimilarArrays, src))
 
-function innermap(f::Base.Callable, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+function innermap(f, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     new_data = map(f, A.data)
     U = eltype(new_data)
     ArrayOfSimilarArrays{U,M,N}(new_data)
 end
 
 
-function deepmap(f::Base.Callable, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+function deepmap(f, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     new_data = deepmap(f, A.data)
     U = eltype(new_data)
     ArrayOfSimilarArrays{U,M,N}(new_data)
