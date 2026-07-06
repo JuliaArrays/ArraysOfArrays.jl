@@ -452,7 +452,11 @@ end
 
 function Base.append!(A::VectorOfArrays{T,N}, B::VectorOfArrays{U,N}) where {T,N,U}
     if !isempty(B)
-        append!(A.data, B.data)
+        # append_elemptr! places the elements of B directly after the last
+        # element of A, so A must not contain unused trailing data and only
+        # the data covered by the elements of B may be appended:
+        last(A.elem_ptr) == lastindex(A.data) + 1 || throw(ArgumentError("Cannot append to a VectorOfArrays that has unused trailing data"))
+        append!(A.data, vecflattened(B))
         append_elemptr!(A.elem_ptr, B.elem_ptr)
         append!(A.kernel_size, B.kernel_size)
     end
@@ -482,21 +486,51 @@ function Base.append!(A::VectorOfArrays{T,N}, B::AbstractVector{<:AbstractArray{
 end
 
 
-Base.vcat(V::VectorOfArrays) = V
+# Concatenating vectors of arrays concatenates the data covered by their
+# elements, in a single pass:
 
-function Base.vcat(Vs::(VectorOfArrays{U,N} where U)...) where {N}
-    data = vcat(map(x -> x.data, Vs)...)
+function _vcat_voas(Vs)
+    isempty(Vs) && throw(ArgumentError("reducing over an empty collection is not allowed"))
+    V1 = first(Vs)
 
-    elem_ptr = similar(Vs[1].elem_ptr, 1)
-    elem_ptr[1] = firstindex(data)
-    @inbounds for i in eachindex(Vs)
-        append_elemptr!(elem_ptr, Vs[i].elem_ptr)
+    T = mapreduce(V -> eltype(V.data), promote_type, Vs)
+    n_parts = sum(length, Vs)
+    n_data = sum(V -> Int(last(V.elem_ptr) - first(V.elem_ptr)), Vs)
+
+    data = similar(V1.data, T, n_data)
+    elem_ptr = similar(V1.elem_ptr, n_parts + 1)
+    kernel_size = similar(V1.kernel_size, n_parts)
+
+    i_ptr = firstindex(elem_ptr)
+    elem_ptr[i_ptr] = firstindex(data)
+    i_ksz = firstindex(kernel_size)
+    i_data = firstindex(data)
+
+    for V in Vs
+        ep = V.elem_ptr
+        covered_len = last(ep) - first(ep)
+        copyto!(data, i_data, V.data, first(ep), covered_len)
+        i_data += covered_len
+
+        @inbounds for j in firstindex(ep):(lastindex(ep) - 1)
+            elem_ptr[i_ptr + 1] = elem_ptr[i_ptr] + (ep[j + 1] - ep[j])
+            i_ptr += 1
+        end
+
+        ksz = V.kernel_size
+        copyto!(kernel_size, i_ksz, ksz, firstindex(ksz), length(ksz))
+        i_ksz += length(ksz)
     end
 
-    kernel_size = vcat(map(x -> x.kernel_size, Vs)...)
-
-    VectorOfArrays(data, elem_ptr, kernel_size, no_consistency_checks)
+    return VectorOfArrays(data, elem_ptr, kernel_size, no_consistency_checks)
 end
+
+Base.vcat(V1::VectorOfArrays{<:Any,N}, Vs::VectorOfArrays{<:Any,N}...) where {N} = _vcat_voas((V1, Vs...))
+
+Base.reduce(::typeof(vcat), Vs::AbstractVector{<:VectorOfArrays}) = _vcat_voas(Vs)
+# Disambiguation:
+Base.reduce(::typeof(vcat), Vs::AbstractVector{<:VectorOfArrays{<:Any,1}}) = _vcat_voas(Vs)
+Base.reduce(::typeof(vcat), Vs::AbstractVector{<:VectorOfArrays{<:Any,2}}) = _vcat_voas(Vs)
 
 
 function Base.copy(V::VectorOfArrays)

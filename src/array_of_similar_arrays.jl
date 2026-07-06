@@ -301,6 +301,20 @@ end
 # popfirst!(V::ArrayOfSimilarArrays) = ...
 
 
+# Concatenating vectors of similar arrays concatenates their underlying
+# data along its last dimension, with a single allocation:
+
+function _vcat_vosas(Vs)
+    isempty(Vs) && throw(ArgumentError("reducing over an empty collection is not allowed"))
+    new_data = _cat_lastdim(map(fused, Vs))
+    return VectorOfSimilarArrays(new_data)
+end
+
+Base.vcat(V1::AbstractVectorOfSimilarArrays, Vs::AbstractVectorOfSimilarArrays...) = _vcat_vosas((V1, Vs...))
+
+Base.reduce(::typeof(vcat), Vs::AbstractVector{<:AbstractVectorOfSimilarArrays}) = _vcat_vosas(Vs)
+
+
 function _empty_data_size(A::VectorOfSimilarArrays{T,M}) where {T,M}
     size_inner, size_outer = split_tuple(size(A.data), Val{M}())
     empty_size_outer = map(x -> zero(x), size_outer)

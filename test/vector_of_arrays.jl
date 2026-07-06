@@ -85,7 +85,10 @@ include("testdefs.jl")
         B1 = VectorOfArrays(A1); B2 = VectorOfArrays(A2);
         B3 = VectorOfArrays(A3); B4 = VectorOfArrays(A4);
 
-        @test @inferred(vcat(B1)) === B1
+        # vcat must return an independent array:
+        @test @inferred(vcat(B1)) == B1
+        @test vcat(B1) !== B1
+        @test vcat(B1).data !== B1.data
         full_consistency_checks(vcat(B1))
 
         @test @inferred(vcat(B1, B2)) isa VectorOfArrays
@@ -107,6 +110,58 @@ include("testdefs.jl")
         B1_copy = @inferred(copy(B1)); B3_copy = @inferred(copy(B3))
         append!(B1_copy, B3_copy)
         @test B1_copy.data == vcat(B1.data, B3.data)
+
+        # reduce(vcat, ...) uses a single-pass implementation:
+        @test @inferred(reduce(vcat, [B1, B2, B3])) isa VectorOfArrays
+        @test reduce(vcat, [B1, B2, B3]) == vcat(A1, A2, A3)
+        @test reduce(vcat, [B1, B2, B3]) == vcat(B1, B2, B3)
+        full_consistency_checks(reduce(vcat, [B1, B2, B3]))
+
+        # vcat and append! of vectors of arrays with unused data regions
+        # must only use the data covered by their elements:
+        p_partial = partitioned(collect(1:10), [2, 3])
+        q = VectorOfArrays([[6], [7, 8]])
+        @test vcat(p_partial, q) == vcat(collect(p_partial), collect(q))
+        @test reduce(vcat, [p_partial, q]) == vcat(collect(p_partial), collect(q))
+        full_consistency_checks(vcat(p_partial, q))
+
+        q_copy = copy(q)
+        append!(q_copy, p_partial)
+        @test q_copy == vcat(collect(q), collect(p_partial))
+        full_consistency_checks(q_copy)
+
+        # Appending to a VectorOfArrays with unused trailing data would
+        # corrupt it:
+        @test_throws ArgumentError append!(partitioned(collect(1:10), [2, 3]), q)
+    end
+
+
+    @testset "vcat of VectorOfSimilarArrays" begin
+        VsoA = [VectorOfSimilarArrays(rand(Float32, 2, 3, n)) for n in (2, 0, 4)]
+        Vs_ref = vcat(map(collect, VsoA)...)
+
+        @test @inferred(vcat(VsoA[1])) isa VectorOfSimilarArrays
+        @test vcat(VsoA[1]) == VsoA[1]
+        @test vcat(VsoA[1]).data !== VsoA[1].data
+
+        @test @inferred(vcat(VsoA...)) isa VectorOfSimilarArrays
+        @test vcat(VsoA...) == Vs_ref
+        @test @inferred(reduce(vcat, VsoA)) isa VectorOfSimilarArrays
+        @test reduce(vcat, VsoA) == Vs_ref
+
+        # Element type promotion like Base.vcat:
+        V64 = VectorOfSimilarArrays(rand(Float64, 2, 3, 2))
+        @test eltype(eltype(vcat(VsoA[1], V64))) == Float64
+        @test vcat(VsoA[1], V64) == vcat(collect(VsoA[1]), collect(V64))
+
+        # Inner size mismatch:
+        V_bad = VectorOfSimilarArrays(rand(Float32, 3, 2, 2))
+        @test_throws DimensionMismatch vcat(VsoA[1], V_bad)
+
+        # Vectors of similar vectors:
+        VsoV = [VectorOfSimilarVectors(rand(3, n)) for n in (2, 4)]
+        @test @inferred(reduce(vcat, VsoV)) isa VectorOfSimilarVectors
+        @test reduce(vcat, VsoV) == vcat(map(collect, VsoV)...)
     end
 
 

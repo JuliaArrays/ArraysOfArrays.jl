@@ -41,3 +41,29 @@ function _require_ndims(::Val{N1}, ::Val{N2}) where {N1,N2}
 end
 
 Base.@pure _val_value(::Val{x}) where x = x
+
+
+# Concatenate arrays of equal ndims and equal size except in their last
+# dimension along their last dimension, with a single allocation:
+_cat_lastdim(datas) = _cat_lastdim_impl(datas, Val(ndims(first(datas))))
+
+function _cat_lastdim_impl(datas, ::Val{N}) where {N}
+    data1 = first(datas)
+    inner_sz = Base.front(size(data1))
+    foreach(datas) do d
+        ndims(d) == N && Base.front(size(d)) == inner_sz || throw(DimensionMismatch("Can't concatenate arrays with different sizes in their non-last dimensions along their last dimension"))
+    end
+
+    T = mapreduce(eltype, promote_type, datas)
+    n_lastdim = sum(d -> size(d, N), datas)
+    result = similar(data1, T, (inner_sz..., n_lastdim))
+
+    colons = ntuple(_ -> :, Val(N - 1))
+    offset = firstindex(result, N)
+    for d in datas
+        n = size(d, N)
+        result[colons..., offset:(offset + n - 1)] = d
+        offset += n
+    end
+    return result
+end
