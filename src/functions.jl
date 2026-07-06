@@ -523,6 +523,94 @@ end
 
 
 """
+    bcastat(f, ::Val{depth}, args...)
+
+Broadcast `f` over the contents of nested arrays at nesting depth `depth`,
+with AwkwardArrays-like alignment, but with array-of-arrays nesting
+semantics:
+
+* Nested (split) arrays with equal split modes are aligned at depth `depth`.
+* Arrays that match the outer structure of a shallower nesting level
+  contribute one value per element of that level, broadcast over everything
+  below it.
+* Scalars and `Ref`s broadcast over everything.
+
+`bcastat(f, Val(1), args...)` is equivalent to `broadcast(f, args...)`, and
+like [`mapat`](@ref), a `depth` that exceeds the nesting depth of the
+arguments applies `f` at the innermost level.
+
+Nested array arguments must be split arrays (like
+[`ArrayOfSimilarArrays`](@ref) and [`VectorOfArrays`](@ref)): for these,
+`bcastat` compiles to a single flat (GPU-compatible) broadcast per nesting
+level.
+"""
+function bcastat end
+export bcastat
+
+@inline bcastat(f, ::Val{1}, args...) = broadcast(f, args...)
+
+function bcastat(f, ::Val{depth}, args...) where {depth}
+    depth isa Integer && depth >= 1 || throw(ArgumentError("bcastat depth must be a positive integer"))
+    r = _bcast_ref(args...)
+    if r === nothing
+        # No nested arguments left, apply at the innermost level:
+        foreach(_require_known_mode, args)
+        return broadcast(f, args...)
+    else
+        smode, ref_flat = r
+        descended = map(arg -> _bcast_descend(arg, smode, ref_flat), args)
+        return splitup(bcastat(f, Val(depth - 1), descended...), smode)
+    end
+end
+
+function _bcast_ref(args...)
+    for a in args
+        if a isa AbstractArray
+            m = getsplitmode(a)
+            (m isa AbstractSlicingMode || m isa AbstractPartMode) && return (m, fused(a))
+        end
+    end
+    return nothing
+end
+
+_require_known_mode(@nospecialize(x)) = nothing
+
+function _require_known_mode(x::AbstractArray)
+    getsplitmode(x) isa UnknownSplitMode && throw(ArgumentError("bcastat requires nested array arguments to be split arrays with a known split mode, like VectorOfArrays or ArrayOfSimilarArrays"))
+    nothing
+end
+
+function _bcast_descend(x, smode::AbstractSplitMode, ref_flat::AbstractArray)
+    x isa AbstractArray || return x
+    ndims(x) == 0 && return x
+    m = getsplitmode(x)
+    if m isa UnknownSplitMode
+        throw(ArgumentError("bcastat requires nested array arguments to be split arrays with a known split mode, like VectorOfArrays or ArrayOfSimilarArrays"))
+    elseif m isa NonSplitMode
+        return _bcast_expand(x, smode, ref_flat)
+    else
+        isequal(m, smode) || throw(DimensionMismatch("bcastat requires nested array arguments with equal split modes"))
+        return fused(x)
+    end
+end
+
+function _bcast_expand(x::AbstractArray, smode::AbstractSlicingMode{M,N}, ref_flat::AbstractArray) where {M,N}
+    if axes(x) == getouterdims(axes(ref_flat), smode)
+        is_memordered_splitmode(smode) || throw(ArgumentError("bcastat does not support outer-value broadcasting for slicings that are not in memory order"))
+        return reshape(x, ntuple(_ -> 1, Val(M))..., size(x)...)
+    elseif axes(x) == axes(ref_flat)
+        return x
+    else
+        throw(DimensionMismatch("bcastat argument shape matches neither the outer structure nor the flat data of the nested arguments"))
+    end
+end
+
+function _bcast_expand(x::AbstractArray, smode::AbstractPartMode, ref_flat::AbstractArray)
+    throw(ArgumentError("bcastat does not support outer-value broadcasting for split mode $(nameof(typeof(smode)))"))
+end
+
+
+"""
     partitioned(A::AbstractVector, lengths::AbstractVector{<:Integer})
     partitioned(A::AbstractVector, shapes::AbstractVector{<:Dims})
 

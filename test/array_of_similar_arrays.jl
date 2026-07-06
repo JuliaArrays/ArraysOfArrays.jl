@@ -183,6 +183,13 @@ end
         @test @inferred(innersizes(A)) == fill(innersize(A), size(A))
         @test @inferred(innerlengths(A)) == fill(prod(innersize(A)), size(A))
 
+        # bcastat with outer-aligned, scalar and flat-matching arguments:
+        w = rand(size(A)...)
+        r_bc = @inferred bcastat(+, Val(2), A, w)
+        @test r_bc isa ArrayOfSimilarArrays
+        @test collect(r_bc) == [A[i] .+ w[i] for i in eachindex(A, w)]
+        @test fused(bcastat(muladd, Val(2), A, 2.0, A_flat)) == muladd.(A_flat, 2.0, A_flat)
+
         # vecflattened rrule:
         A_rr = ArrayOfSimilarArrays{Float64,1,1}(rand(3, 4))
         y, pb = rrule(vecflattened, A_rr)

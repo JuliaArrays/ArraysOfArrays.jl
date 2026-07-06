@@ -70,6 +70,13 @@ JLArrays.allowscalar(false)
         @test collect(innerlengths(V)) == [2, 3, 5]
         @test collect(innersizes(V2)) == [(2, 2), (2, 4)]
 
+        # bcastat compiles to flat device broadcasts:
+        v_outer = jl(Float32[10, 20, 30])
+        r_bc = bcastat(+, Val(2), V, v_outer)
+        @test r_bc isa VectorOfArrays
+        @test fused(r_bc) isa AbstractGPUArray
+        @test collect(fused(r_bc)) == collect(xv) .+ [10, 10, 20, 20, 20, 30, 30, 30, 30, 30]
+
         # Split mode round trip on device shape info:
         sm = getsplitmode(V)
         @test splitup(fused(V), sm) isa VectorOfArrays

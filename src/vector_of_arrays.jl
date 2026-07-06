@@ -307,6 +307,24 @@ function splitup(A::AbstractVector, smode::SplitParts)
     VectorOfArrays(A, smode.elem_ptr, smode.kernel_size, simple_consistency_checks)
 end
 
+function _bcast_expand(x::AbstractArray, smode::SplitParts, ref_flat::AbstractArray)
+    ep = smode.elem_ptr
+    n_parts = length(smode.kernel_size)
+    if x isa AbstractVector && length(x) == n_parts
+        # One value per part, broadcast over the contents of that part. The
+        # value of x used for data not covered by any part is arbitrary,
+        # such data does not contribute to the result:
+        idx = similar(ref_flat, Int)
+        idx .= firstindex(ref_flat):lastindex(ref_flat)
+        seg = clamp.(searchsortedlast.(Ref(ep), idx), firstindex(x), lastindex(x))
+        return x[seg]
+    elseif x isa AbstractVector && axes(x) == axes(ref_flat)
+        return x
+    else
+        throw(DimensionMismatch("bcastat argument shape matches neither the outer structure nor the flat data of the nested arguments"))
+    end
+end
+
 
 function partitioned(A::AbstractVector, lengths::AbstractVector{<:Integer})
     elem_ptr = _elem_ptr_from_lengths(A, lengths)

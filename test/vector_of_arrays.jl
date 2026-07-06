@@ -272,6 +272,45 @@ include("testdefs.jl")
     end
 
 
+    @testset "bcastat" begin
+        x = collect(Float32, 1:10)
+        p = partitioned(x, [2, 3, 5])
+        v = Float32[10, 20, 30]
+
+        # One value per element, broadcast over the element contents:
+        r = @inferred bcastat(+, Val(2), p, v)
+        @test r isa PartsView
+        @test r == [xi .+ vi for (xi, vi) in zip(p, v)]
+
+        # Scalars broadcast over everything:
+        @test bcastat(+, Val(2), p, 1) == [xi .+ 1 for xi in p]
+
+        # Aligned nested arguments and flat-matching arguments:
+        @test bcastat(+, Val(2), p, p) == [xi .+ xi for xi in p]
+        @test bcastat(+, Val(2), p, x) == [xi .+ xi for xi in p]
+
+        # Mixed argument kinds in one call:
+        @test bcastat(muladd, Val(2), p, v, 2) == [muladd.(xi, vi, 2) for (xi, vi) in zip(p, v)]
+
+        # Data not covered by any part gets no contribution:
+        p_part = partitioned(x, [2, 3])
+        @test bcastat(+, Val(2), p_part, Float32[10, 20]) == [Float32[11, 12], Float32[23, 24, 25]]
+
+        # Depth exceeding the nesting depth applies at the innermost level:
+        @test bcastat(+, Val(3), p, v) == bcastat(+, Val(2), p, v)
+
+        # Two nesting levels over a single flat buffer:
+        VV = VectorOfArrays(partitioned(collect(1.0:10.0), [2, 3, 5]), [1, 3, 4], [(), ()])
+        w = [100.0, 200.0]
+        r2 = bcastat(+, Val(3), VV, w)
+        @test r2 isa VectorOfArrays
+        @test fused(fused(r2)) == [101, 102, 103, 104, 105, 206, 207, 208, 209, 210]
+
+        @test_throws DimensionMismatch bcastat(+, Val(2), p, Float32[1, 2])
+        @test_throws DimensionMismatch bcastat(+, Val(2), p, partitioned(x, [4, 6]))
+        @test_throws ArgumentError bcastat(+, Val(2), [[1, 2], [3]], 1)
+    end
+
     @testset "rrules" begin
         x = collect(Float64, 1:10)
 
