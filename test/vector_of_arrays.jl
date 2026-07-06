@@ -240,13 +240,37 @@ include("testdefs.jl")
         @test @inferred(stacked(Bu)) == stack(Array(Bu))
         @test @inferred(splitup(stacked(Bu), unstackmode(Bu))) == Bu
 
-        # flatview on view-backed VectorOfArrays returns a view of only the
-        # covered data range, in a type-stable fashion:
+        # flatview returns the internal storage if the elements cover it
+        # completely, and a view of the covered data range otherwise:
         B3_view = view(B3, 2:3)
-        @test @inferred(flatview(B3_view)) isa SubArray
+        @test flatview(B3_view) isa SubArray
         @test flatview(B3_view) == B3.data[B3.elem_ptr[2]:(B3.elem_ptr[4] - 1)]
         @test @inferred(vecflattened(B3_view)) == flatview(B3_view)
-        @test @inferred(flatview(B3)) === B3.data
+        @test flatview(B3) === B3.data
+        @test flatview(view(B3, 1:3)) === B3.data
+    end
+
+
+    @testset "unused data regions" begin
+        # Views and partial partitions leave data that is not covered by
+        # any element; data-level operations must ignore it:
+        V = VectorOfArrays([[1.0], [4.0], [-1.0]])
+        Vv = view(V, 1:2)
+        @test flatview(Vv) == [1.0, 4.0]
+        @test @inferred(mapat(sqrt, Val(2), Vv)) == [[1.0], [2.0]]
+        @test @inferred(innermap(sqrt, Vv)) == [[1.0], [2.0]]
+        @test deepmap(sqrt, Vv) == [[1.0], [2.0]]
+        @test bcastat(*, Val(2), Vv, [10.0, 100.0]) == [[10.0], [400.0]]
+
+        # Arguments of equal structure combine regardless of how their data
+        # is laid out:
+        p = partitioned(collect(1.0:5.0), [2, 2])
+        q = VectorOfArrays([[1.0, 2.0], [3.0, 4.0]])
+        @test flatview(p) == 1.0:4.0
+        @test flatview(p) isa SubArray
+        @test mapat(+, Val(2), p, q) == [[2.0, 4.0], [6.0, 8.0]]
+        @test bcastat(+, Val(2), p, q) == [[2.0, 4.0], [6.0, 8.0]]
+        @test mapat(+, Val(2), view(V, 2:3), view(V, 1:2)) == [[5.0], [3.0]]
     end
 
 

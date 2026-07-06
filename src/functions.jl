@@ -501,8 +501,9 @@ split modes (see [`getsplitmode`](@ref)) must be equal on each nesting
 level.
 
 For split arrays (like [`ArrayOfSimilarArrays`](@ref) and
-[`VectorOfArrays`](@ref)) `mapat` operates on the underlying flat data
-directly, in a single (GPU-compatible) operation per nesting level.
+[`VectorOfArrays`](@ref)) `mapat` operates directly on the flat data
+covered by the elements, in a single (GPU-compatible) operation per
+nesting level.
 
 See also [`bcastat`](@ref) for broadcast semantics with arguments of
 different nesting depth.
@@ -510,20 +511,27 @@ different nesting depth.
 function mapat end
 export mapat
 
+# Data-level operations like mapat and bcastat process the flat data of
+# nested arrays. For array types that can have data regions not covered by
+# any element (like views of vectors of arrays), these return only the
+# covered data resp. a split mode rebased to it:
+@inline _flatdata(A::AbstractArray) = fused(A)
+@inline _flatdatamode(A::AbstractArray) = getsplitmode(A)
+
 @inline mapat(f, depth::Integer, As::Vararg{AbstractArray,NA}) where {NA} = mapat(f, Val(depth), As...)
 
 @inline mapat(f, ::Val{1}, As::Vararg{AbstractArray,NA}) where {NA} = map(f, As...)
 
 function mapat(f, ::Val{depth}, As::Vararg{AbstractArray,NA}) where {depth,NA}
     depth isa Integer && depth >= 1 || throw(ArgumentError("mapat depth must be a positive integer"))
-    smodes = map(getsplitmode, As)
+    smodes = map(_flatdatamode, As)
     smode = first(smodes)
     if smode isa UnknownSplitMode
         all(m -> m isa UnknownSplitMode, smodes) || throw(DimensionMismatch("mapat requires arrays with equal nesting structure, but split modes differ"))
         return map((xs...) -> mapat(f, Val(depth - 1), xs...), As...)
     else
         all(isequal(smode), smodes) || throw(DimensionMismatch("mapat requires arrays with equal nesting structure, but split modes differ"))
-        return splitup(mapat(f, Val(depth - 1), map(fused, As)...), smode)
+        return splitup(mapat(f, Val(depth - 1), map(_flatdata, As)...), smode)
     end
 end
 
@@ -627,8 +635,8 @@ end
 function _bcast_ref(args...)
     for a in args
         if a isa AbstractArray
-            m = getsplitmode(a)
-            (m isa AbstractSlicingMode || m isa AbstractPartMode) && return (m, fused(a))
+            m = _flatdatamode(a)
+            (m isa AbstractSlicingMode || m isa AbstractPartMode) && return (m, _flatdata(a))
         end
     end
     return nothing
@@ -644,14 +652,14 @@ end
 function _bcast_descend(x, smode::AbstractSplitMode, ref_flat::AbstractArray)
     x isa AbstractArray || return x
     ndims(x) == 0 && return x
-    m = getsplitmode(x)
+    m = _flatdatamode(x)
     if m isa UnknownSplitMode
         throw(ArgumentError("bcastat requires nested array arguments to be split arrays with a known split mode, like VectorOfArrays or ArrayOfSimilarArrays"))
     elseif m isa NonSplitMode
         return _bcast_expand(x, smode, ref_flat)
     else
         isequal(m, smode) || throw(DimensionMismatch("bcastat requires nested array arguments with equal split modes"))
-        return fused(x)
+        return _flatdata(x)
     end
 end
 

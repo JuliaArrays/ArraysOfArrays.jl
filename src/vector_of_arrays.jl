@@ -224,16 +224,22 @@ function Base.isequal(A::VectorOfArrays{<:Any,N}, B::VectorOfArrays{<:Any,N}) wh
 end
 
 """
-    flatview(A::VectorOfArrays{T})::Vector{T}
+    flatview(A::VectorOfArrays{T})::AbstractVector{T}
 
-Returns the internal serialized representation of all element arrays of `A` as
-a single vector. Do *not* change the length of the returned vector, as it
-would break the inner consistency of `A`.
+Returns the data of all element arrays of `A` as a single vector, without
+copying. If the elements of `A` cover its internal storage completely, this
+is the internal storage vector itself, otherwise (e.g. for views of vectors
+of arrays and partial [`partitioned`](@ref) views) a view of the covered
+region. Do *not* change the length of the returned vector, as this would
+break the inner consistency of `A`.
 """
-flatview(A::VectorOfArrays{<:Any,N,M,<:Any}) where {N,M} = A.data
-
-function flatview(A::VectorOfArrays{<:Any,N,M,<:Any,<:SubArray}) where {N,M}
-    view(A.data, A.elem_ptr[begin]:A.elem_ptr[end]-1)
+function flatview(A::VectorOfArrays)
+    ep_first, ep_last = _scalar_first_last(A.elem_ptr)
+    if ep_first == firstindex(A.data) && ep_last == lastindex(A.data) + 1
+        A.data
+    else
+        view(A.data, ep_first:(ep_last - 1))
+    end
 end
 
 
@@ -354,8 +360,19 @@ end
 
 
 function vecflattened(A::VectorOfArrays)
+    ep_first, ep_last = _scalar_first_last(A.elem_ptr)
+    view(A.data, ep_first:(ep_last - 1))
+end
+
+_flatdata(A::VectorOfArrays) = vecflattened(A)
+
+# vecflattened(A) is one-based, so the split mode is rebased accordingly:
+function _flatdatamode(A::VectorOfArrays)
     ep = A.elem_ptr
-    view(A.data, first(ep):(last(ep) - 1))
+    ep_first, _ = _scalar_first_last(ep)
+    delta = ep_first - 1
+    rebased_ep = delta == 0 ? _shapeinfo_copy(ep) : ep .- delta
+    SplitParts(rebased_ep, _shapeinfo_copy(A.kernel_size))
 end
 
 # Fast paths, must return independent arrays, unlike `vecflattened`:
@@ -619,16 +636,11 @@ function Base.empty!(A::VectorOfArrays)
 end
 
 
-function innermap(f, A::VectorOfArrays)
-    new_data = map(f, A.data)
-    VectorOfArrays(new_data, A.elem_ptr, A.kernel_size, simple_consistency_checks)
-end
+# Map over the covered data only, the result does not share shape
+# information with A:
+innermap(f, A::VectorOfArrays) = splitup(map(f, vecflattened(A)), _flatdatamode(A))
 
-
-function deepmap(f, A::VectorOfArrays)
-    new_data = deepmap(f, A.data)
-    VectorOfArrays(new_data, A.elem_ptr, A.kernel_size, simple_consistency_checks)
-end
+deepmap(f, A::VectorOfArrays) = splitup(deepmap(f, vecflattened(A)), _flatdatamode(A))
 
 
 Base.map(::typeof(identity), A::VectorOfArrays) = A
