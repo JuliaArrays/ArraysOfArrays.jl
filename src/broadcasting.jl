@@ -73,6 +73,13 @@ end
 _noreindex_view(A, idxs...) = SubArray(A, idxs)
 _noreindex_view(A::AbstractArray{T,N}, ::Vararg{Colon,N}) where {T,N} = A
 
+# SubArray is constructed directly and indexed with `@inbounds`, so indices
+# must be converted (e.g. logical masks) and bounds-checked here:
+function _elem_view(a, idxs...)
+    new_idxs = _to_indices(a, idxs)
+    _noreindex_view(a, Base.ensure_indexable(new_idxs)...)
+end
+
 _generic_size(A) = size(A)
 _generic_size(tpl::Tuple) = (length(tpl),)
 
@@ -89,6 +96,10 @@ function Base.Broadcast.broadcasted(
     A::Union{VectorOfSimilarVectors, PartsView},
     Idxs::Union{AbstractVector{<:AbstractVector{<:Integer}},AbstractVector{Colon},_RefLike{<:Union{AbstractVector{<:Integer},Colon}}}...
 )
+    return _bcast_getindex_impl(A, Idxs...)
+end
+
+function _bcast_getindex_impl(A, Idxs...)
     # Checks size compatibility:
     bcsz = Base.Broadcast.broadcast_shape(size(A), map(_generic_size, Idxs)...)
 
@@ -102,42 +113,43 @@ function Base.Broadcast.broadcasted(
 
     T = eltype(A.data)
     newA = _new_vector_of_arrays_with_lengths(A, T, new_kernel_size, new_lengths)
-    newA .= _noreindex_view.(A, Idxs...)
+    newA .= _elem_view.(A, Idxs...)
     return newA
 end
 
 
-# Limited to vectors of vectors for now.
-# ToDo: Extend to vectors of arrays.
+# Fast path: equal-length index vectors select the same number of entries
+# from each element, so the result is a VectorOfSimilarVectors again:
 function Base.Broadcast.broadcasted(
     ::typeof(getindex),
     A::VectorOfSimilarVectors,
-    Idxs::Union{VectorOfSimilarVectors{<:Integer},AbstractVector{Colon},_RefLike{<:Union{AbstractVector{<:Integer},Colon}}}...
+    Idx::VectorOfSimilarVectors{<:Integer}
 )
     # Checks size compatibility:
-    Base.Broadcast.broadcast_shape(size(A), map(size, Idxs)...)
+    bcsz = Base.Broadcast.broadcast_shape(size(A), size(Idx))
+    checkindex(Bool, axes(A.data, 1), Idx.data) || throw(BoundsError(A, (Idx,)))
 
-    sz_inner = map(only ∘ innersize, Idxs)
-    sz_outer = size(A)
-    new_data = similar(A.data, (sz_inner..., sz_outer...))
+    sz_inner = only(innersize(Idx))
+    new_data = similar(A.data, (sz_inner, bcsz...))
     newA = VectorOfSimilarVectors(new_data)
 
-    newA .= _noreindex_view.(A, Idxs...)
+    newA .= _noreindex_view.(A, Idx)
     return newA
 end
 
+# Logical masks require to_indices semantics, use the general implementation:
+Base.Broadcast.broadcasted(::typeof(getindex), A::VectorOfSimilarVectors, Idx::VectorOfSimilarVectors{Bool}) =
+    _bcast_getindex_impl(A, Idx)
 
-# Limited to vectors of vectors for now.
-# ToDo: Extend to vectors of arrays.
+
+# Fast path: a single index vector shared by all elements selects a
+# rectangular region of the underlying data:
 function Base.Broadcast.broadcasted(
     ::typeof(getindex),
     A::VectorOfSimilarVectors,
-    Idxs::_RefLike{<:Union{AbstractVector{<:Integer},Colon}}...
+    Idx::_RefLike{<:Union{AbstractVector{<:Integer},Colon}}
 )
-    data = A.data
-    inner_idxs = map(only, Idxs)
-    outer_idxs = (:,)
-    new_data = data[inner_idxs..., outer_idxs...]
+    new_data = A.data[only(Idx), :]
     return VectorOfSimilarVectors(new_data)
 end
 
