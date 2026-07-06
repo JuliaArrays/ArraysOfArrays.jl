@@ -173,18 +173,26 @@ function no_consistency_checks(A::VectorOfArrays)
 end
 
 
-Base.@propagate_inbounds function _elem_range_size(A::VectorOfArrays, i::Integer)
-    r = _voa_elem_range(A.elem_ptr, i)
-    len = length(r)
-
-    ksize = A.kernel_size[i]
+@inline function _elem_size(ksize::Dims, len::Integer)
     klen = prod(ksize)
     len_p, klen_p = promote(len, klen)
-    sz_lastdim = len == 0 ? len_p : div(len_p, klen_p)
-    sz = (ksize..., Int(sz_lastdim))
+    sz_lastdim = len == 0 ? zero(len_p) : div(len_p, klen_p)
+    return (ksize..., Int(sz_lastdim))
+end
 
+Base.@propagate_inbounds function _elem_range_size(A::VectorOfArrays, i::Integer)
+    r = _voa_elem_range(A.elem_ptr, i)
+    sz = _elem_size(A.kernel_size[i], length(r))
     (r, sz)
 end
+
+
+function innerlengths(A::VectorOfArrays)
+    ep = A.elem_ptr
+    return view(ep, firstindex(ep)+1:lastindex(ep)) .- view(ep, firstindex(ep):lastindex(ep)-1)
+end
+
+innersizes(A::VectorOfArrays) = _elem_size.(A.kernel_size, innerlengths(A))
 
 
 # Equality must be equivalent to elementwise comparison, but can be checked

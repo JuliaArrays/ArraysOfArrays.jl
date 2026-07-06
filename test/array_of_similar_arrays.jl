@@ -174,6 +174,15 @@ end
         V = VectorOfSimilarVectors(V_flat)
         test_api(V, Array(V), V_flat)
 
+        # mapat operates on the flat data and preserves structure:
+        @test @inferred(mapat(abs2, Val(2), A)) == innermap(abs2, A)
+        @test typeof(mapat(abs2, Val(2), A)) == typeof(A)
+        @test fused(@inferred(mapat(+, Val(2), A, A))) == 2 .* A_flat
+        @test_throws DimensionMismatch mapat(+, Val(2), A, ArrayOfSimilarArrays{Float64,3,2}(A_flat))
+
+        @test @inferred(innersizes(A)) == fill(innersize(A), size(A))
+        @test @inferred(innerlengths(A)) == fill(prod(innersize(A)), size(A))
+
         # vecflattened rrule:
         A_rr = ArrayOfSimilarArrays{Float64,1,1}(rand(3, 4))
         y, pb = rrule(vecflattened, A_rr)

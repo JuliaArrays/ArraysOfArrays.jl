@@ -209,6 +209,15 @@ include("testdefs.jl")
             test_api(B, Array(B), B.data)
         end
 
+        # mapat operates on the flat data and preserves structure:
+        @test @inferred(mapat(abs2, Val(2), B3)) == innermap(abs2, B3)
+        @test typeof(mapat(abs2, Val(2), B3)) == typeof(B3)
+        @test mapat(+, Val(2), B1, B1) == [x .+ x for x in B1]
+        @test_throws DimensionMismatch mapat(+, Val(2), B1, B3)
+
+        @test @inferred(innerlengths(B1)) == length.(collect(B1))
+        @test @inferred(innersizes(B3)) == size.(collect(B3))
+
         # getsplitmode must not be affected by later resizing:
         B_grow = VectorOfArrays([[1, 2], [3, 4, 5]])
         sm_grow = getsplitmode(B_grow)

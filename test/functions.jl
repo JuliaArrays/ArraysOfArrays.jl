@@ -75,6 +75,28 @@ include("testdefs.jl")
         @test @inferred(deepmap(length, A_3)) == [[fill(1, 3), fill(1, 3)], [fill(1, 2), fill(1, 2)]]
     end
 
+    @testset "mapat" begin
+        f = x -> x^2
+        @test @inferred(mapat(f, Val(1), A_1)) == map(f, A_1)
+        @test @inferred(mapat(f, Val(2), A_2)) == innermap(f, A_2)
+        @test @inferred(mapat(f, Val(3), A_3)) == deepmap(f, A_3)
+        @test mapat(length, Val(1), A_2) == length.(A_2)
+
+        # Depth exceeding the nesting depth applies at the innermost level:
+        @test mapat(f, Val(5), A_1) == map(f, A_1)
+
+        # Multiple inputs, zipped like map:
+        @test @inferred(mapat(+, Val(1), A_1, A_1)) == 2 .* A_1
+        @test mapat(+, Val(2), A_2, A_2) == innermap(x -> 2 * x, A_2)
+    end
+
+    @testset "innersizes and innerlengths" begin
+        @test @inferred(innersizes(A_2)) == size.(A_2)
+        @test @inferred(innerlengths(A_2)) == length.(A_2)
+        @test innersizes(A_3) == size.(A_3)
+        @test innerlengths(A_2e) == Int[]
+    end
+
     @testset "Nested array API" begin
         test_api(A_0, A_0, A_0_flat)
         test_api(A_1, A_1, A_1_flat)

@@ -64,6 +64,12 @@ JLArrays.allowscalar(false)
         @test_throws ArgumentError VectorOfArrays(xv, jl([1, 6, 3]), jl([(), ()]))
         @test_throws ArgumentError VectorOfArrays(xv, jl([1, 4, 11]), jl([(2,), (2,)]))
 
+        # mapat and innerlengths only touch device data and shape info:
+        @test collect(fused(mapat(abs2, Val(2), V))) == abs2.(collect(xv))
+        @test innerlengths(V) isa AbstractGPUArray
+        @test collect(innerlengths(V)) == [2, 3, 5]
+        @test collect(innersizes(V2)) == [(2, 2), (2, 4)]
+
         # Split mode round trip on device shape info:
         sm = getsplitmode(V)
         @test splitup(fused(V), sm) isa VectorOfArrays

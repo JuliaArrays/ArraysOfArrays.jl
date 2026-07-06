@@ -357,6 +357,35 @@ end
 
 
 """
+    innersizes(A::AbstractArray{<:AbstractArray{T,M}})
+
+Returns the sizes of the element arrays of `A`, as an array of `Dims{M}`
+shaped like `A`. In contrast to [`innersize`](@ref), the element arrays do
+not need to be of equal size.
+"""
+function innersizes end
+export innersizes
+
+innersizes(A::AbstractArray{<:AbstractArray}) = map(size, A)
+
+innersizes(A::AbstractSlices{<:AbstractArray{T,M},N}) where {T,M,N} = fill(innersize(A), size(A))
+
+
+"""
+    innerlengths(A::AbstractArray{<:AbstractArray})
+
+Returns the lengths of the element arrays of `A`, as an array of `Int`
+shaped like `A`.
+"""
+function innerlengths end
+export innerlengths
+
+innerlengths(A::AbstractArray{<:AbstractArray}) = map(length, A)
+
+innerlengths(A::AbstractSlices{<:AbstractArray{T,M},N}) where {T,M,N} = fill(prod(innersize(A)), size(A))
+
+
+"""
     innermap(f, A::AbstractArray)
     innermap(f, A::AbstractArray{<:AbstractArray})
 
@@ -450,6 +479,46 @@ function _generic_deepmap_impl(f, A::AbstractArray)
     mapped_joined_A = deepmap(f, joined_A)
     mapped_A = splitup(mapped_joined_A, getsplitmode(A))
     return mapped_A
+end
+
+
+"""
+    mapat(f, ::Val{depth}, As::AbstractArray...)
+
+Nested `map` at nesting depth `depth`: apply `f` elementwise to the objects
+at depth `depth` of the nested arrays `As`. Depth 1 refers to the elements
+of the arrays themselves, so `mapat(f, Val(1), As...)` is equivalent to
+`map(f, As...)` and `mapat(f, Val(2), A)` is equivalent to
+[`innermap`](@ref)`(f, A)`. If `depth` exceeds the nesting depth of the
+arrays, `f` is applied to the innermost elements, like [`deepmap`](@ref).
+
+All of `As` must have the same nesting structure down to `depth`, their
+split modes (see [`getsplitmode`](@ref)) must be equal on each nesting
+level.
+
+For split arrays (like [`ArrayOfSimilarArrays`](@ref) and
+[`VectorOfArrays`](@ref)) `mapat` operates on the underlying flat data
+directly, in a single (GPU-compatible) operation per nesting level.
+
+See also [`bcastat`](@ref) for broadcast semantics with arguments of
+different nesting depth.
+"""
+function mapat end
+export mapat
+
+@inline mapat(f, ::Val{1}, As::Vararg{AbstractArray,NA}) where {NA} = map(f, As...)
+
+function mapat(f, ::Val{depth}, As::Vararg{AbstractArray,NA}) where {depth,NA}
+    depth isa Integer && depth >= 1 || throw(ArgumentError("mapat depth must be a positive integer"))
+    smodes = map(getsplitmode, As)
+    smode = first(smodes)
+    if smode isa UnknownSplitMode
+        all(m -> m isa UnknownSplitMode, smodes) || throw(DimensionMismatch("mapat requires arrays with equal nesting structure, but split modes differ"))
+        return map((xs...) -> mapat(f, Val(depth - 1), xs...), As...)
+    else
+        all(isequal(smode), smodes) || throw(DimensionMismatch("mapat requires arrays with equal nesting structure, but split modes differ"))
+        return splitup(mapat(f, Val(depth - 1), map(fused, As)...), smode)
+    end
 end
 
 
