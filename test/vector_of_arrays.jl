@@ -340,6 +340,10 @@ include("testdefs.jl")
         A3 = VectorOfArrays(ref_AoA3(Float32, 3))
         @test @inferred(adapt(identity, A3)) == A3
         @test typeof(adapt(identity, A3)) == typeof(A3)
+
+        sm = getsplitmode(A3)
+        @test @inferred(adapt(identity, sm)) == sm
+        @test typeof(adapt(identity, sm)) == typeof(sm)
     end
 
 
