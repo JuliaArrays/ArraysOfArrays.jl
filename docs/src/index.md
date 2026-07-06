@@ -22,6 +22,10 @@ This package also defines and exports the following new functions applicable to 
 
 All four are zero-copy where possible and so may return arrays that share memory with `A`. In contrast, `Base.stack(A)` and `reduce(vcat, A)` always return independent arrays.
 
+## GPU support
+
+Both array types work with GPU-resident data. An `ArrayOfSimilarArrays` backed by a GPU array is fully functional. For a `VectorOfArrays`, the shape information (`elem_ptr` and `kernel_size`) can either stay on the host — element access then returns device views — or live on the device as well (e.g. via `Adapt.adapt`), which is the layout to use inside GPU kernels. `KernelAbstractions.get_backend` returns the backend of the underlying data.
+
 
 ## [ArrayOfSimilarArrays](@id section_ArrayOfSimilarArrays)
 
