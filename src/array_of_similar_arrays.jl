@@ -184,6 +184,12 @@ Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Var
 Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarArrays{T,M,N}, x::AbstractArray{U,M}, idxs::Vararg{Integer,N}) where {T,M,N,U} =
     setindex!(A.data, x, _ncolons(Val{M}())..., idxs...)
 
+function Base.fill!(A::ArrayOfSimilarArrays{T,M,N}, x::AbstractArray{U,M}) where {T,M,N,U}
+    size(x) == innersize(A) || throw(DimensionMismatch("Can't fill ArrayOfSimilarArrays with an array of different size than its elements"))
+    A.data .= reshape(x, size(x)..., ntuple(_ -> 1, Val(N))...)
+    return A
+end
+
 Base.@propagate_inbounds function Base.unsafe_view(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Union{Real, AbstractArray},N}) where {T,M,N}
     dataview = view(A.data, _ncolons(Val{M}())..., idxs...)
     L = length(size(dataview))
@@ -344,17 +350,39 @@ Base.convert(R::Type{VectorOfSimilarVectors{T}}, A::AbstractVector{<:AbstractVec
 Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector{T}}) where {T} = R(stacked(A))
 
 
-Base.sum(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} =
+# Fast paths over the flat data for the full (dims = :) reductions. Julia
+# does not dispatch on keyword arguments, so dispatch on the value of `dims`
+# instead and forward non-Colon dims to the generic implementations:
+
+Base.sum(X::AbstractVectorOfSimilarArrays; dims::Union{Colon,Integer} = :) = _aosa_sum(X, dims)
+
+_aosa_sum(X::AbstractVectorOfSimilarArrays{T,M}, ::Colon) where {T,M} =
     sum(flatview(X); dims = M + 1)[_ncolons(Val{M}())...]
+_aosa_sum(X::AbstractVectorOfSimilarArrays, dims::Integer) =
+    Base.@invoke sum(X::AbstractArray; dims = dims)
 
-Statistics.mean(X::AbstractVectorOfSimilarArrays{T,M}) where {T,M} =
+Statistics.mean(X::AbstractVectorOfSimilarArrays; dims::Union{Colon,Integer} = :) = _aosa_mean(X, dims)
+
+_aosa_mean(X::AbstractVectorOfSimilarArrays{T,M}, ::Colon) where {T,M} =
     mean(flatview(X); dims = M + 1)[_ncolons(Val{M}())...]
+_aosa_mean(X::AbstractVectorOfSimilarArrays, dims::Integer) =
+    Base.@invoke mean(X::AbstractArray; dims = dims)
 
-Statistics.var(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true, mean = nothing) where {T,M} =
+Statistics.var(X::AbstractVectorOfSimilarArrays; corrected::Bool = true, mean = nothing, dims::Union{Colon,Integer} = :) =
+    _aosa_var(X, corrected, mean, dims)
+
+_aosa_var(X::AbstractVectorOfSimilarArrays{T,M}, corrected::Bool, mean, ::Colon) where {T,M} =
     var(flatview(X); dims = M + 1, corrected = corrected, mean = mean)[_ncolons(Val{M}())...]
+_aosa_var(X::AbstractVectorOfSimilarArrays, corrected::Bool, mean, dims::Integer) =
+    Base.@invoke var(X::AbstractArray; corrected = corrected, mean = mean, dims = dims)
 
-Statistics.std(X::AbstractVectorOfSimilarArrays{T,M}; corrected::Bool = true, mean = nothing) where {T,M} =
+Statistics.std(X::AbstractVectorOfSimilarArrays; corrected::Bool = true, mean = nothing, dims::Union{Colon,Integer} = :) =
+    _aosa_std(X, corrected, mean, dims)
+
+_aosa_std(X::AbstractVectorOfSimilarArrays{T,M}, corrected::Bool, mean, ::Colon) where {T,M} =
     std(flatview(X); dims = M + 1, corrected = corrected, mean = mean)[_ncolons(Val{M}())...]
+_aosa_std(X::AbstractVectorOfSimilarArrays, corrected::Bool, mean, dims::Integer) =
+    Base.@invoke std(X::AbstractArray; corrected = corrected, mean = mean, dims = dims)
 
 Statistics.cov(X::AbstractVectorOfSimilarVectors; corrected::Bool = true) =
     cov(flatview(X); dims = 2, corrected = corrected)

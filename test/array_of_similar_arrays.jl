@@ -292,6 +292,12 @@ end
         VA = [rand(2,3,3) for i in 1:10]
         VA_aosa = ArrayOfSimilarArrays(VA)
 
+        # Non-Colon dims must forward to the generic implementations:
+        @test sum(VV_aosa; dims = 1) == sum(collect(VV_aosa); dims = 1)
+        @test mean(VV_aosa; dims = 1) == mean(collect(VV_aosa); dims = 1)
+        @test @inferred(sum(VV_aosa)) ≈ sum(collect(VV_aosa))
+        @test @inferred(mean(VV_aosa)) ≈ mean(collect(VV_aosa))
+
         array_cmp(A, B) = (A ≈ B) && (size(A) == size(B))
 
         function test_statistics_op(op::Function)
