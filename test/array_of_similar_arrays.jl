@@ -326,7 +326,7 @@ end
 
     @testset "empty" begin
         A = [rand(2,3), rand(2,3), rand(2,3)]
-        B = ArrayOfSimilarArrays(A)
+        B = convert(ArrayOfSimilarArrays, A)
         @test typeof(@inferred empty(B)) == typeof(B)
         @test empty(A) == empty(B)
 
@@ -340,10 +340,10 @@ end
 
     @testset "stats" begin
         VV = [rand(3) for i in 1:10]
-        VV_aosa = ArrayOfSimilarArrays(VV)
+        VV_aosa = convert(ArrayOfSimilarArrays, VV)
 
         VA = [rand(2,3,3) for i in 1:10]
-        VA_aosa = ArrayOfSimilarArrays(VA)
+        VA_aosa = convert(ArrayOfSimilarArrays, VA)
 
         # Non-Colon dims must forward to the generic implementations:
         @test sum(VV_aosa; dims = 1) == sum(collect(VV_aosa); dims = 1)
@@ -444,7 +444,7 @@ end
         r = vcat(r1,r2,r3,r4)
         VSV = VectorOfSimilarVectors(r)
         VSA = VectorOfSimilarArrays(r)
-        ASA = ArrayOfSimilarArrays([r1,r2,r3,r4])
+        ASA = convert(ArrayOfSimilarArrays, [r1,r2,r3,r4])
 
         f = x -> x.*2
 

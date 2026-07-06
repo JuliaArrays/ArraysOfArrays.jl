@@ -254,7 +254,7 @@ function Base.append!(dest::ArrayOfSimilarArrays{T,M,N}, src::ArrayOfSimilarArra
 end
 
 Base.append!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
-    append!(dest, ArrayOfSimilarArrays(src))
+    append!(dest, convert(ArrayOfSimilarArrays, src))
 
 
 function Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::ArrayOfSimilarArrays{U,M,N}) where {T,M,N,U}
@@ -264,7 +264,7 @@ function Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::ArrayOfSimilarArr
 end
 
 Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
-    prepend!(dest, ArrayOfSimilarArrays(src))
+    prepend!(dest, convert(ArrayOfSimilarArrays, src))
 
 function innermap(f::Base.Callable, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     new_data = map(f, A.data)
