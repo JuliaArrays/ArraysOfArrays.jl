@@ -568,8 +568,8 @@ innerreduce(op, A::AbstractArray{<:AbstractArray}; init = _NoInit()) = _innermap
 """
     innersum(A::AbstractArray{<:AbstractArray})
 
-Per-element sum over the contents of the element arrays of `A`, empty
-element arrays sum to zero.
+Per-element sum over the contents of the element arrays of `A`. For
+numerical element types, empty element arrays sum to zero.
 """
 function innersum end
 export innersum
