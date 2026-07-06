@@ -446,6 +446,9 @@ vecflattened(A::AbstractVector{<:AbstractVector}) = reduce(vcat, A)
 vecflattened(A::AbstractArray{<:AbstractArray}) = mapreduce(vec, vcat, A)
 ```
 
+Memory-ordered slicings (see [`is_memordered_splitmode`](@ref)) return
+`vec(fused(A))` without copying data.
+
 Specialize `vecflattened` for custom nested array types that can provide a
 zero-copy implementation.
 """
@@ -458,6 +461,20 @@ export vecflattened
 @inline vecflattened(A::AbstractVector{<:AbstractArray}) = mapreduce(vec, vcat, A)
 @inline vecflattened(A::AbstractArray{<:AbstractVector}) = mapreduce(vec, vcat, A)
 @inline vecflattened(A::AbstractArray{<:AbstractArray}) = mapreduce(vec, vcat, A)
+
+vecflattened(A::AbstractSlices{<:AbstractArray}) = _slices_vecflattened(A)
+# Disambiguation:
+vecflattened(A::AbstractSlices{<:AbstractVector}) = _slices_vecflattened(A)
+vecflattened(A::AbstractSlices{<:AbstractArray,1}) = _slices_vecflattened(A)
+vecflattened(A::AbstractSlices{<:AbstractVector,1}) = _slices_vecflattened(A)
+
+function _slices_vecflattened(A::AbstractSlices)
+    if is_memordered_splitmode(getsplitmode(A))
+        vec(fused(A))
+    else
+        mapreduce(vec, vcat, A)
+    end
+end
 
 
 """

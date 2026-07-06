@@ -43,4 +43,14 @@ include("testdefs.jl")
     test_api(Aes3, Array(Aes3), A_orig)
     test_api(Aec, Array(Aec), A_orig_mat)
     test_api(Aer, Array(Aer), A_orig_mat)
+
+    # vecflattened of memory-ordered slicings is a zero-copy view of the
+    # underlying data, otherwise the elements are concatenated:
+    vf_col = @inferred(vecflattened(Aec))
+    @test vf_col == vec(A_orig_mat)
+    vf_col[1] = 42
+    @test A_orig_mat[1, 1] == 42
+    @test vecflattened(Aes1) == vec(A_orig)
+    @test vecflattened(Aer) == reduce(vcat, collect(Aer))
+    @test vecflattened(Aes2) == mapreduce(vec, vcat, collect(Aes2))
 end
