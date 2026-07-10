@@ -129,6 +129,13 @@ include("testdefs.jl")
         @test reduce(vcat, [B1, B2, B3]) == vcat(B1, B2, B3)
         full_consistency_checks(reduce(vcat, [B1, B2, B3]))
 
+        # N=1 and N=2 need dedicated methods to disambiguate against Base's
+        # reduce(vcat, ::AbstractVector{<:AbstractVecOrMat}):
+        M1 = VectorOfArrays([rand(Float32, 2, 3), rand(Float32, 2, 4)])
+        M2 = VectorOfArrays([rand(Float32, 3, 2)])
+        @test @inferred(reduce(vcat, [M1, M2])) isa VectorOfArrays
+        @test reduce(vcat, [M1, M2]) == vcat(collect(M1), collect(M2))
+
         # vcat and append! of vectors of arrays with unused data regions
         # must only use the data covered by their elements:
         p_partial = partitioned(collect(1:10), [2, 3])
@@ -235,6 +242,10 @@ include("testdefs.jl")
         sm_grow = getsplitmode(B_grow)
         push!(B_grow, [6])
         @test splitup(collect(1:5), sm_grow) == [[1, 2], [3, 4, 5]]
+
+        # Equal split modes compare and hash equally:
+        @test getsplitmode(B3) == getsplitmode(copy(B3))
+        @test hash(getsplitmode(B3)) == hash(getsplitmode(copy(B3)))
 
         # Uniform element size, so stackable:
         @test @inferred(stacked(Bu)) == stack(Array(Bu))
@@ -349,6 +360,8 @@ include("testdefs.jl")
         @test_throws DimensionMismatch bcastat(+, Val(2), p, Float32[1, 2])
         @test_throws DimensionMismatch bcastat(+, Val(2), p, partitioned(x, [4, 6]))
         @test_throws ArgumentError bcastat(+, Val(2), [[1, 2], [3]], 1)
+        # A nested argument with unknown split mode alongside a valid one:
+        @test_throws ArgumentError bcastat(+, Val(2), p, [[1, 2], [3]])
     end
 
     @testset "outer broadcast" begin

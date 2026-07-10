@@ -213,6 +213,8 @@ end
         @test r_bc isa ArrayOfSimilarArrays
         @test collect(r_bc) == [A[i] .+ w[i] for i in eachindex(A, w)]
         @test fused(bcastat(muladd, Val(2), A, 2.0, A_flat)) == muladd.(A_flat, 2.0, A_flat)
+        # An argument matching neither the outer structure nor the flat data:
+        @test_throws DimensionMismatch bcastat(+, Val(2), A, rand(length(A) + 1))
 
         # vecflattened rrule:
         A_rr = ArrayOfSimilarArrays{Float64,1,1}(rand(3, 4))
@@ -240,6 +242,7 @@ end
         @test @inferred(stack(B)) == data
         @test stack(B) !== data
         @test B == VectorOfSimilarVectors(data)
+        @test isequal(B, VectorOfSimilarVectors(data))
         @test isapprox(B, VectorOfSimilarVectors(data .+ 1e-14))
         @test splitup(fused(B), getsplitmode(B)) == B
     end
@@ -269,6 +272,13 @@ end
         prepend!(A1, A1)
         len = @inferred(length(A1.data))
         @test A1.data[1:Int(len/2)] == A1.data[Int(len/2 + 1):end]
+
+        # append!/prepend! from a generic array of arrays go through convert:
+        D = VectorOfSimilarArrays(ElasticArray(rand(3, 2)))
+        append!(D, [rand(3), rand(3)])
+        @test length(D) == 4 && innersize(D) == (3,)
+        prepend!(D, [rand(3)])
+        @test length(D) == 5
     end
 
     @testset "similar and copyto!" begin
@@ -323,6 +333,37 @@ end
         @test @inferred(flatview(B)) === B.data
         @test flatview(B) == stacked(A)
         @test_throws ArgumentError flatview(A)
+    end
+
+    @testset "differentiation rules" begin
+        # stacked of a non-nested array passes the cotangent through:
+        X = rand(3, 4)
+        y, pb = rrule(stacked, X)
+        @test y === stacked(X)
+        t = pb(fill(1.0, 3, 4))
+        @test t[1] === NoTangent()
+        @test unthunk(t[2]) == fill(1.0, 3, 4)
+
+        # stacked, stack and flatview of an ArrayOfSimilarArrays route the
+        # cotangent back into a matching split array:
+        A = ArrayOfSimilarArrays{Float64,1,1}(rand(3, 4))
+        ct = rand(3, 4)
+        for f in (stacked, stack, flatview)
+            y, pb = rrule(f, A)
+            @test y == f(A)
+            t = pb(ct)
+            @test t[1] === NoTangent()
+            @test unthunk(t[2]) isa ArrayOfSimilarArrays
+            @test fused(unthunk(t[2])) == reshape(ct, size(A.data))
+        end
+
+        # stacked of a generic nested array reconstructs the nesting:
+        nested = [rand(2) for _ in 1:3]
+        y, pb = rrule(stacked, nested)
+        @test y == stacked(nested)
+        t = pb(stacked(nested))
+        @test t[1] === NoTangent()
+        @test unthunk(t[2]) == nested
     end
 
 
