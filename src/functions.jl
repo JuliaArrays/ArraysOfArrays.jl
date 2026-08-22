@@ -2,101 +2,448 @@
 
 
 """
-    innermap(f::Base.Callable, A::AbstractArray{<:AbstractArray})
+    abstract type AbstractSplitMode <: Function
 
-Nested `map` at depth 2. Equivalent to `map(X -> map(f, X) A)`.
+Abstract supertype for array split modes.
+
+Use [`getsplitmode`](@ref) to get the split mode of an array.
+
+Use [`splitup`](@ref) or call `smode::AbstractSplitMode` as a function to
+split an array:
+
+```julia
+splitup(A, smode) === smode(A)
+```
+
+See also [`fused`](@ref).
+
+# Implementation
+
+Subtypes of `AbstractSplitMode` should specialize
+
+* `splitup(A, smode::SomeSplitMode)` for arrays `A`
+* `is_memordered_splitmode(smode::SomeSplitMode)`
+* [`ArraysOfArrays.getinnerdims`](@ref) and
+  [`ArraysOfArrays.getouterdims`](@ref), which slicing modes require
+* `==` and `hash`, if the mode carries state
+
+`(smode::SomeSplitMode)(A)` calls `splitup(A, smode)` by default and should
+not be specialized.
 """
-function innermap end
-export innermap
+abstract type AbstractSplitMode <: Function end
+export AbstractSplitMode
 
-innermap(f::Base.Callable, A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} =
-    map(X -> map(f, X), A)
-
+(smode::AbstractSplitMode)(A::AbstractArray) = splitup(A, smode)
 
 
 """
-    deepmap(f::Base.Callable, x::Any)
-    deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray{<:...}})
+    is_memordered_splitmode(smode::AbstractSplitMode)::Bool
 
-Applies `map` at the deepest possible layer of nested arrays. If `A` is not
-a nested array, `deepmap` behaves identical to `Base.map`.
+Check whether `smode` splits in memory order.
+
+If true, inner arrays are stored contiguously in memory in Julia-native
+dimension order, and the same is true for the outer dimensions (no dimension
+reordering).
+
+If true, `flatview` and `fused` are equivalent, provided that the elements
+of the array cover the underlying data completely (see [`flatview`](@ref)).
 """
-function deepmap end
-export deepmap
-
-deepmap(f::Base.Callable, x::Any) = map(f, x)
-
-deepmap(f::Base.Callable, A::AbstractArray{<:AbstractArray}) =
-    map(X -> deepmap(f, X), A)
+function is_memordered_splitmode end
+export is_memordered_splitmode
 
 
 """
-    getslicemap(A::AbstractSlices)
+    struct NonSplitMode{N} <: AbstractSplitMode
 
-Get the slicemap of an `A`.
+The split mode of unsplit collections that have `N` dimensions.
 
-A slicemap must have type `Tuple{Vararg{Union{Colon,Integer}}}`, e.g.
-`(:, :, :, 1, 2)` or `(:, 2, :, 1, :)`.
+Constructor: `NonSplitMode{N}()`
 """
-function getslicemap end
-export getslicemap
+struct NonSplitMode{N} <: AbstractSplitMode end
+export NonSplitMode
 
-getslicemap(A::Slices) = A.slicemap
+is_memordered_splitmode(::NonSplitMode) = true
+
+
+"""
+    struct UnknownSplitMode{AT} <: AbstractSplitMode
+
+Split mode of generic split objects of type `AT` that have been split in an
+unknown way, e.g. nested arrays of type `Array{<:Array}`.
+
+Since the split parts may be non-contiguous in memory (and typically are),
+this split mode does not support `fused` or `flatview`. Nor can it be
+inferred whether the split object should be interpreted as a sliced array,
+a ragged array, or something else.
+
+Constructor: `UnknownSplitMode{T}()`
+"""
+struct UnknownSplitMode{AT} <: AbstractSplitMode end
+export UnknownSplitMode
+
+is_memordered_splitmode(::UnknownSplitMode) = false
+
+
+"""
+    getsplitmode(A::AbstractArray)::NonSplitMode
+    getsplitmode(A::AbstractArray{<:AbstractArray})::AbstractSplitMode
+
+Get the split mode of `A`.
+
+`splitup(fused(A), getsplitmode(A))` must equal `A`, and should have
+the same type as `A` if at all possible, except if `getsplitmode(A)` is an
+`UnknownSplitMode`.
+
+`getsplitmode` should be a zero-copy O(1) operation, if at all possible.
+"""
+function getsplitmode end
+export getsplitmode
+
+@inline getsplitmode(::AbstractArray{<:Any,N}) where N = NonSplitMode{N}()
+
+@inline getsplitmode(A::AbstractArray{<:AbstractArray}) = UnknownSplitMode{typeof(A)}()
+
+
+"""
+    splitup(A::AbstractArray, smode::AbstractSplitMode)
+
+View array `A` in split form, as an array of arrays.
+
+`splitup` should be a zero-copy operation, if at all possible. Splitting
+with a [`SplitParts`](@ref) mode validates the mode against the data (an
+O(n) check), since an inconsistent mode would result in silently corrupt
+elements.
+
+See also [`fused`](@ref) and [`getsplitmode`](@ref).
+"""
+function splitup end
+export splitup
+
+@inline function splitup(A::AbstractArray, ::NonSplitMode{N}) where N
+    _require_ndims(Val(ndims(A)), Val(N))
+    return A
+end
+
+function splitup(::AbstractArray, ::UnknownSplitMode)
+    throw(ArgumentError("splitup cannot be used with UnknownSplitMode"))
+end
+
+
+"""
+    fused(A::AbstractArray)
+    fused(A::AbstractArray{<:AbstractArray})
+
+View array `A` in unsplit form.
+
+If `A` is not a nested array, return `A` itself. If `A` is a split array,
+return the original unsplit array.
+
+`splitup(fused(A), getsplitmode(A))` must equal `A`, and should have
+the same type as `A` if at all possible, except if `getsplitmode(A)` is an
+`UnknownSplitMode`.
+
+If `is_memordered_splitmode(getsplitmode(A))` is true and the elements of
+`A` cover the underlying data completely, `fused(A)` is equivalent to
+[`flatview(A)`](@ref).
+
+`fused` should be a zero-copy O(1) operation, if at all possible.
+"""
+function fused end
+export fused
+
+@inline fused(A::AbstractArray) = A
+
+@inline fused(A::AbstractArray{<:AbstractArray}) = _fused_impl(A, getsplitmode(A))
+
+@inline _fused_impl(obj, ::NonSplitMode) = obj
+
+function _fused_impl(@nospecialize(obj), ::UnknownSplitMode)
+    throw(ArgumentError("fused not implemented for objects of type $(nameof(typeof(obj))) with unknown split mode"))
+end
 
 
 """
     flatview(A::AbstractArray)
-    flatview(A::AbstractArray{<:AbstractArray{<:...}})
+    flatview(A::AbstractArray{<:AbstractArray})
 
-View array `A` in a suitable flattened form. The shape of the flattened form
-will depend on the type of `A`. If the `A` is not a nested array, the return
-value is `A` itself. Only specific types of nested arrays are supported.
+View array `A` in a flattened form, with inner dimensions first. The shape of
+the flattened form will depend on the type of `A`. If `A` is not a
+nested array, the return value is `A` itself. Only specific types of nested
+arrays are supported.
+
+`flatview` is a zero-copy O(1) operation.
+
+If `is_memordered_splitmode(getsplitmode(A))` is true and the elements of
+`A` cover the underlying data completely, `flatview(A)` is equivalent to
+[`fused(A)`](@ref).
+
+For sliced arrays the result of `flatview(A)` will equal [`stacked(A)`](@ref).
+For partitioned vectors it will equal [`vecflattened(A)`](@ref), provided
+that the parts cover the underlying data completely.
 """
 function flatview end
 export flatview
 
 @inline flatview(A::AbstractArray) = A
-@inline flatview(A::AbstractArray{<:AbstractArray}) = throw(ArgumentError("flatview not implemented nested arrays of type $(nameof(typeof(A)))"))
+function flatview(A::AbstractArray{<:AbstractArray})
+    throw(ArgumentError("flatview not implemented for nested arrays of type $(nameof(typeof(A)))"))
+end
 
-function flatview(A::AbstractSlices)
-    if _is_aoa_slicemap(A.slicemap)
-        return parent(A)
+function flatview(A::AbstractSlices{<:AbstractArray})
+    smode = getsplitmode(A)
+    if is_memordered_splitmode(smode)
+        return fused(A)
     else
-        throw(ArgumentError("flatview for AbstractSlices requires inner dimensions to be first and no dimension reordering, but slicemap is $(A.slicemap)"))
+        throw(ArgumentError("flatview requires memory-ordered split/slicing, but array has split mode $smode"))
+    end
+end
+
+
+
+"""
+    abstract type AbstractSlicingMode{M,N} <: AbstractSplitMode
+
+Abstract supertype for array slicing modes with `M` inner dimensions and `N`
+outer dimensions.
+
+Use `getsplitmode` to get the split mode of a split array.
+
+# Implementation
+
+In addition to the requirements of [`AbstractSplitMode`](@ref), subtypes
+must specialize [`ArraysOfArrays.getinnerdims`](@ref) and
+[`ArraysOfArrays.getouterdims`](@ref), which the slicing-specific
+operations rely on.
+"""
+abstract type AbstractSlicingMode{M,N} <: AbstractSplitMode end
+export AbstractSlicingMode
+
+
+"""
+    getslicemap(A::AbstractArray{<:AbstractArray})
+
+Return the slicemap of `A` with respect to `B = fused(A)`: a tuple with one
+entry per dimension of `B`, `Colon()` for sliced (inner) dimensions and `k`
+for dimensions indexed by dimension `k` of `A`, so that
+
+```julia
+A[i...] == view(B, map(s -> s isa Colon ? (:) : i[s], getslicemap(A))...)
+```
+
+E.g. `A = eachslice(B, dims = (3,1,5))` of a five-dimensional `B` has the
+slicemap `(2, :, 1, :, 3)`, since `A[i1, i2, i3] == view(B, i2, :, i1, :, i3)`.
+
+Equals the `slicemap` field of `Base.Slices` objects.
+"""
+function getslicemap end
+export getslicemap
+
+
+"""
+    ArraysOfArrays.getinnerdims(tpl::Tuple, smode::AbstractSplitMode)
+
+Get the entries of `tpl` corresponding to the inner dimensions of split
+mode `smode`, in the order specified by `smode`.
+"""
+function getinnerdims end
+
+@inline getinnerdims(::Tuple, ::NonSplitMode) = ()
+
+function getinnerdims(::Tuple, ::UnknownSplitMode)
+    throw(ArgumentError("getinnerdims cannot be used with UnknownSplitMode"))
+end
+
+
+"""
+    ArraysOfArrays.getouterdims(tpl::Tuple, smode::AbstractSplitMode)
+
+Get the entries of `tpl` corresponding to the outer dimensions of split
+mode `smode`, in the order specified by `smode`.
+"""
+function getouterdims end
+
+@inline getouterdims(x::Tuple, ::NonSplitMode) = x
+
+function getouterdims(::Tuple, ::UnknownSplitMode)
+    throw(ArgumentError("getouterdims cannot be used with UnknownSplitMode"))
+end
+
+
+"""
+    unstackmode(A::AbstractArray)
+    unstackmode(A::AbstractArray{<:AbstractArray})
+
+Get the split mode required to restore `A` from `stacked(A)`, so that
+`splitup(stacked(A), unstackmode(A)) == A`.
+
+The result of `splitup(stacked(A), unstackmode(A))` may have a different
+type and underlying memory layout than `A`.
+"""
+function unstackmode end
+export unstackmode
+
+@inline unstackmode(::AbstractArray{<:Any,N}) where N = NonSplitMode{N}()
+
+@inline unstackmode(A::AbstractArray{<:AbstractArray}) = UnknownSplitMode{typeof(A)}()
+
+function unstackmode(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
+    innersize(A)  # Ensure element arrays have equal size
+    # splitup of the stacked array cannot reproduce offset outer axes:
+    all(r -> isone(first(r)), axes(A)) || return UnknownSplitMode{typeof(A)}()
+    return SplitSlices{M,N}()
+end
+
+
+"""
+    stacked(A::AbstractArray{T,N})::AbstractArray{T,N}
+    stacked(A::AbstractArray{<:AbstractArray{T,M},N})::AbstractArray{T,M+N}
+
+Join the element arrays of a nested array into a single array along one or
+more new dimensions, return non-nested arrays unchanged.
+
+Similar to `Base.stack`, but can return the original underlying array of
+sliced arrays in more cases.
+"""
+function stacked end
+export stacked
+
+@inline stacked(A::AbstractArray) = A
+@inline stacked(A::AbstractArray{<:AbstractArray}) = _stacked_impl(A, getsplitmode(A))
+
+_stacked_impl(A::AbstractArray{<:AbstractArray}, ::AbstractSplitMode) = stack(A)
+
+function _stacked_impl(A::AbstractSlices{<:AbstractArray}, smode::AbstractSlicingMode)
+    A_joined = fused(A)
+    is_memordered_splitmode(smode) ? A_joined : _stacked_permutedims(A_joined, smode)
+end
+
+function _stacked_permutedims(A_joined::AbstractArray{T,N}, smode::AbstractSlicingMode) where {T,N}
+    dimnumbers = _oneto_tpl(Val(N))
+    dimorder = (getinnerdims(dimnumbers, smode)..., getouterdims(dimnumbers, smode)...)
+    return permutedims(A_joined, dimorder)
+end
+
+
+"""
+    sliced(A::AbstractArray{T,2})
+    sliced(A::AbstractArray{T,M+N}, Val(M))
+    sliced(A::AbstractArray{T,M+N}, M::Integer)
+
+Return a sliced view of `A`, using the columns or the first `M` dimensions as
+inner dimensions.
+
+With StaticArrays loaded, `sliced(A, SVector{S})` returns a reinterpreted
+array with `SVector{S}` elements instead of an array of views.
+"""
+function sliced end
+export sliced
+
+@inline sliced(A::AbstractArray, M::Integer) = sliced(A, Val(M))
+
+@inline function sliced(A::AbstractArray{T,L}, ::Val{M}) where {T,L,M}
+    M isa Integer && 0 <= M <= L || throw(ArgumentError("Cannot slice an array with $L dimensions using $M inner dimensions"))
+    return splitup(A, SplitSlices{M,L-M}())
+end
+
+@inline sliced(A::AbstractArray{T,2}) where {T} = sliced(A, Val(1))
+
+
+"""
+    abstract type AbstractPartMode{M,N} <: AbstractSplitMode
+
+Abstract supertype for array partition modes with `M` inner dimensions and `N`
+outer dimensions.
+
+The mode need not represent a true partition, a partition that discards part
+of the original array is allowed. The elements of the partition may also
+be reshaped, depending on the mode.
+
+Use `getsplitmode` to get the split mode of a split array.
+
+# Implementation
+
+In addition to the requirements of [`AbstractSplitMode`](@ref), subtypes
+must specialize `ArraysOfArrays._bcast_expand` to support outer-value
+arguments in [`bcastat`](@ref).
+"""
+abstract type AbstractPartMode{M,N} <: AbstractSplitMode end
+export AbstractPartMode
+
+
+"""
+    partitioned(A::AbstractVector, lengths::AbstractVector{<:Integer})
+    partitioned(A::AbstractVector, shapes::AbstractVector{<:Dims})
+
+Return a partitioned view of `A`, as a vector of arrays.
+
+The parts are consecutive, non-overlapping views of `A`, with sizes given by
+`lengths` (resulting in a vector of vectors) or `shapes` (resulting in a
+vector of arrays).
+"""
+function partitioned end
+export partitioned
+
+# partitioned methods are defined in vector_of_arrays.jl.
+
+# ToDo: Add partitioned(A::AbstractVector, n::Integer) and partitioned(A::AbstractVector, shape::Dims) ?
+
+
+"""
+    vecflattened(A::AbstractArray{T})::AbstractVector{T}
+    vecflattened(A::AbstractArray{<:AbstractArray})::AbstractVector{T}
+
+Concatenate nested arrays into a single vector, return non-nested vectors
+unchanged.
+
+If `A` is a nested view of a vector, `vecflattened(A)` should return the
+underlying vector in a zero-copy O(1) fashion. So in contrast to
+`reduce(vcat, A)` and `mapreduce(vec, vcat, A)`, the result may share
+memory with `A`.
+
+# Implementation
+
+The default implementations are
+
+```julia
+vecflattened(A::AbstractVector) = A
+vecflattened(A::AbstractArray) = vec(A)
+vecflattened(A::AbstractVector{<:AbstractVector}) = reduce(vcat, A)
+vecflattened(A::AbstractArray{<:AbstractArray}) = mapreduce(vec, vcat, A)
+```
+
+Memory-ordered slicings (see [`is_memordered_splitmode`](@ref)) return
+`vec(fused(A))` without copying data.
+
+Specialize `vecflattened` for custom nested array types that can provide a
+zero-copy implementation.
+"""
+function vecflattened end
+export vecflattened
+
+@inline vecflattened(A::AbstractVector) = A
+@inline vecflattened(A::AbstractArray) = vec(A)
+@inline vecflattened(A::AbstractVector{<:AbstractVector}) = reduce(vcat, A)
+@inline vecflattened(A::AbstractVector{<:AbstractArray}) = mapreduce(vec, vcat, A)
+@inline vecflattened(A::AbstractArray{<:AbstractVector}) = mapreduce(vec, vcat, A)
+@inline vecflattened(A::AbstractArray{<:AbstractArray}) = mapreduce(vec, vcat, A)
+
+vecflattened(A::AbstractSlices{<:AbstractArray}) = _slices_vecflattened(A)
+# Disambiguation:
+vecflattened(A::AbstractSlices{<:AbstractVector}) = _slices_vecflattened(A)
+vecflattened(A::AbstractSlices{<:AbstractArray,1}) = _slices_vecflattened(A)
+vecflattened(A::AbstractSlices{<:AbstractVector,1}) = _slices_vecflattened(A)
+
+function _slices_vecflattened(A::AbstractSlices)
+    if is_memordered_splitmode(getsplitmode(A))
+        vec(fused(A))
+    else
+        mapreduce(vec, vcat, A)
     end
 end
 
 
 """
-    nestedview(A::AbstractArray{T,M+N}, M::Integer)
-    nestedview(A::AbstractArray{T,2})
-
-AbstractArray{<:AbstractArray{T,M},N}
-
-View array `A` in as an `N`-dimensional array of `M`-dimensional arrays by
-wrapping it into an [`ArrayOfSimilarArrays`](@ref).
-
-It's also possible to use a `StaticVector` of length `S` as the type of the
-inner arrays via
-
-    nestedview(A::AbstractArray{T}, ::Type{StaticArrays.SVector{S}})
-    nestedview(A::AbstractArray{T}, ::Type{StaticArrays.SVector{S,T}})
-"""
-function nestedview end
-export nestedview
-
-@inline nestedview(A::AbstractArray{T,L}, M::Integer) where {T,L} =
-    ArrayOfSimilarArrays{T,M}(A)
-
-@inline nestedview(A::AbstractArray{T,L}, ::Val{M}) where {T,L,M} =
-    ArrayOfSimilarArrays{T,M}(A)
-
-@inline nestedview(A::AbstractArray{T,2}) where {T} =
-    VectorOfSimilarVectors{T}(A)
-
-
-"""
-    innersize(A:AbstractArray{<:AbstractArray}, [dim])
+    innersize(A::AbstractArray{<:AbstractArray}, [dim])
 
 Returns the size of the element arrays of `A`. Fails if the element arrays
 are not of equal size.
@@ -104,7 +451,13 @@ are not of equal size.
 function innersize end
 export innersize
 
-function innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
+@inline innersize(A::AbstractArray{<:AbstractArray}, dim::Integer) = innersize(A)[dim]
+
+innersize(::AbstractArray{<:Number}) = ()
+
+innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N} = _generic_innersize(A)
+
+function _generic_innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
     s = if !isempty(A)
         let sz_A = size(first(A))
             ntuple(i -> Int(sz_A[i]), Val(M))
@@ -119,39 +472,93 @@ function innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
         end
     end
 
-    s
+    return s
 end
 
-@inline innersize(A::AbstractSlices) = _extract_innerdims(size(parent(A)), getslicemap(A))
+@inline innersize(A::AbstractSlices{<:AbstractArray{T,M},N}) where {T,M,N} = _slices_innersize(A, getsplitmode(A))
 
-@inline innersize(A::AbstractArray{<:AbstractArray}, dim::Integer) =
-    innersize(A)[dim]
-
-@inline innersize(tpl::Tuple{T}) where T = size(only(tpl))
-@inline innersize(ref::Ref) = size(only(ref))
+@inline _slices_innersize(A::AbstractSlices, smode::AbstractSlicingMode) = getinnerdims(size(fused(A)), smode)
+_slices_innersize(A::AbstractSlices, ::AbstractSplitMode) = _generic_innersize(A)
 
 
 """
-    abstract_nestedarray_type(T_inner::Type, ::Val{ndims_tuple})
+    innersizes(A::AbstractArray{<:AbstractArray{T,M}})
 
-Return the type of nested `AbstractArray`s. `T_inner` specifies the element
-type of the innermost layer of arrays, `ndims_tuple` specifies the
-dimensionality of each nesting layer (outer arrays first).
-
-If `ndims_tuple` is empty, the returns is the (typically scalar) type
-`T_inner` itself.
+Returns the sizes of the element arrays of `A`, as an array of `Dims{M}`
+shaped like `A`. In contrast to [`innersize`](@ref), the element arrays do
+not need to be of equal size.
 """
-function abstract_nestedarray_type end
-export abstract_nestedarray_type
+function innersizes end
+export innersizes
+
+innersizes(A::AbstractArray{<:AbstractArray}) = map(size, A)
+
+innersizes(A::AbstractSlices{<:AbstractArray{T,M},N}) where {T,M,N} = fill!(similar(A, Dims{M}), innersize(A))
 
 
-Base.@pure function abstract_nestedarray_type(::Type{T_inner}, outer::Val{ndims_tuple}) where {T_inner,ndims_tuple}
-    _abstract_nestedarray_type_impl(T_inner, ndims_tuple...)
+"""
+    innerlengths(A::AbstractArray{<:AbstractArray})
+
+Returns the lengths of the element arrays of `A`, as an array of `Int`
+shaped like `A`.
+"""
+function innerlengths end
+export innerlengths
+
+innerlengths(A::AbstractArray{<:AbstractArray}) = map(length, A)
+
+innerlengths(A::AbstractSlices{<:AbstractArray{T,M},N}) where {T,M,N} = fill!(similar(A, Int), prod(innersize(A)))
+
+
+"""
+    innermap(f, A::AbstractArray)
+    innermap(f, A::AbstractArray{<:AbstractArray})
+
+Nested `map` at depth 2. Equivalent to `map(X -> map(f, X), A)` for arrays
+of arrays, otherwise equivalent to `Base.map`.
+"""
+function innermap end
+export innermap
+
+innermap(f, A::AbstractArray) = map(f, A)
+innermap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(map, f), A)
+innermap(f, A::AbstractSlices{<:AbstractArray}) = _generic_innermap_impl(f, A)
+
+function _generic_innermap_impl(f, A::AbstractArray)
+    smode = getsplitmode(A)
+    smode isa UnknownSplitMode && return map(Base.Fix1(map, f), A)
+    return _splitup_trusted(map(f, fused(A)), smode)
 end
 
-Base.@pure _abstract_nestedarray_type_impl(::Type{T_inner}) where {T_inner} = T_inner
 
-Base.@pure _abstract_nestedarray_type_impl(::Type{T_inner}, N) where {T_inner} = AbstractArray{T_inner, N}
+"""
+    deepmap(f, A::AbstractArray)
+    deepmap(f, A::AbstractArray{<:AbstractArray{<:...}})
 
-Base.@pure _abstract_nestedarray_type_impl(::Type{T_inner}, N, M, ndims_tuple...) where {T_inner} =
-    AbstractArray{<:_abstract_nestedarray_type_impl(T_inner, M, ndims_tuple...), N}
+Applies `map` at the deepest layer of nested arrays. If `A` is not
+a nested array, `deepmap` behaves identically to `Base.map`.
+"""
+function deepmap end
+export deepmap
+
+deepmap(f, A::AbstractArray) = map(f, A)
+deepmap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(deepmap, f), A)
+deepmap(f, A::AbstractSlices{<:AbstractArray}) = _generic_deepmap_impl(f, A)
+
+function _generic_deepmap_impl(f, A::AbstractArray)
+    smode = getsplitmode(A)
+    smode isa UnknownSplitMode && return map(Base.Fix1(deepmap, f), A)
+    return _splitup_trusted(deepmap(f, fused(A)), smode)
+end
+
+
+# Data-level operations like mapat and bcastat process the flat data of
+# nested arrays. For array types that can have data regions not covered by
+# any element (like views of vectors of arrays), these return only the
+# covered data resp. a split mode rebased to it:
+@inline _flatdata(A::AbstractArray) = fused(A)
+@inline _flatdatamode(A::AbstractArray) = getsplitmode(A)
+
+# Internal splitup for data and split modes that are known to be consistent
+# with each other, skipping the full validation of the public splitup:
+@inline _splitup_trusted(A::AbstractArray, smode::AbstractSplitMode) = splitup(A, smode)

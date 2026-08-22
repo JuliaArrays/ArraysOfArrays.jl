@@ -4,11 +4,7 @@ using ArraysOfArrays
 using Test
 
 @testset "broadcasting" begin
-    ref_flatview(A::AbstractVector{<:AbstractArray}) = vcat(map(vec, Array(A))...)
-
     ref_VoA1(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 5)][1:0] : [rand(T, rand(1:9)) for i in 1:n]
-    ref_VoA2(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 4, 2)][1:0] : [rand(T, rand(1:4), rand(1:4)) for i in 1:n]
-    ref_VoA3(T::Type, n::Integer) = n == 0 ? [Array{T}(undef, 3, 2, 4)][1:0] : [rand(T, rand(1:3), rand(1:3), rand(1:3)) for i in 1:n]
 
     ref_AosA1(T::Type, n::Integer) = [rand(T, 7) for i in 1:n]
 
@@ -18,7 +14,7 @@ using Test
 
             for Idxs in [
                 ([rand(eachindex(a), rand(1:length(a))) for a in A],),
-                (VectorOfVectors([rand(eachindex(a), rand(1:length(a))) for a in A]),),
+                (PartsView([rand(eachindex(a), rand(1:length(a))) for a in A]),),
                 (tuple(1:1),), (tuple([1, 1, 1]),), (tuple(:),),
                 (Ref(1:1),), (Ref([1, 1, 1]),), (Ref(:),),
             ]
@@ -27,34 +23,43 @@ using Test
             end
         end
 
-        let A = ArrayOfSimilarArrays(ref_AosA1(Float32, 100))
+        let A = convert(ArrayOfSimilarArrays, ref_AosA1(Float32, 100))
             refA = Array(A)
 
             for Idxs in [
                 ([rand(eachindex(a), rand(1:length(a))) for a in A],),
-                (VectorOfVectors([rand(eachindex(a), rand(1:length(a))) for a in A]),),
+                (PartsView([rand(eachindex(a), rand(1:length(a))) for a in A]),),
+                (fill(:, length(A)),),
             ]
                 @test @inferred(broadcast(getindex, A, Idxs...)) isa VectorOfArrays{eltype(eltype(A))}
                 @test getindex.(A, Idxs...) == getindex.(refA, Idxs...)
             end
 
             for Idxs in [
-                (VectorOfSimilarVectors([rand(eachindex(a), 5) for a in A]),),
+                (convert(VectorOfSimilarVectors, [rand(eachindex(a), 5) for a in A]),),
                 (tuple(3:5),), (tuple([2, 5, 6]),), (tuple(:),),
                 (Ref(3:5),), (Ref([2, 5, 6]),), (Ref(:),),
             ]
                 refA = Array(A)
-            
+
                 @test @inferred(broadcast(getindex, A, Idxs...)) isa ArrayOfSimilarArrays{eltype(eltype(A))}
                 @test getindex.(A, Idxs...) == getindex.(refA, Idxs...)
             end
+
+            # Logical masks per element:
+            masks = convert(VectorOfSimilarVectors, [isodd.(eachindex(a)) for a in A])
+            @test getindex.(A, masks) == getindex.(refA, Array(masks))
+
+            # Out-of-bounds indices must be caught:
+            @test_throws BoundsError getindex.(A, [fill(length(first(A)) + 1, 2) for a in A])
+            @test_throws BoundsError getindex.(A, convert(VectorOfSimilarVectors, [fill(length(first(A)) + 1, 2) for a in A]))
         end
     end
 
     @testset "findall" begin
         for A in [
             VectorOfArrays(ref_VoA1(Bool, 100)),
-            ArrayOfSimilarArrays(ref_AosA1(Bool, 100))
+            convert(ArrayOfSimilarArrays, ref_AosA1(Bool, 100))
         ]
             refA = Array(A)
         

@@ -1,7 +1,5 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
-__precompile__(true)
-
 """
     module ArraysOfArrays
 
@@ -17,6 +15,7 @@ using Statistics
 
 include("util.jl")
 include("functions.jl")
+include("base_slices.jl")
 include("array_of_similar_arrays.jl")
 include("vector_of_arrays.jl")
 include("broadcasting.jl")
