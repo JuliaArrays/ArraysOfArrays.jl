@@ -234,6 +234,11 @@ innersizes(A::VectorOfArrays) = _elem_size.(A.kernel_size, innerlengths(A))
 # be offset relative to their element pointers, so only element sizes and the
 # data regions covered by the elements may be compared:
 
+# Device-resident data needs vectorized comparisons, the GPUArraysCore
+# extension specializes these:
+_vecdata_equal(a::AbstractVector, b::AbstractVector) = a == b
+_vecdata_isequal(a::AbstractVector, b::AbstractVector) = isequal(a, b)
+
 function _elem_lengths_equal(elem_ptr_A::AbstractVector{<:Integer}, elem_ptr_B::AbstractVector{<:Integer})
     length(elem_ptr_A) == length(elem_ptr_B) || return false
     iA, iB = firstindex(elem_ptr_A), firstindex(elem_ptr_B)
@@ -246,15 +251,15 @@ end
 import Base.==
 function ==(A::VectorOfArrays{<:Any,N}, B::VectorOfArrays{<:Any,N}) where {N}
     axes(A) == axes(B) || return false
-    A.kernel_size == B.kernel_size || return false
+    _shapeinfo_equal(A.kernel_size, B.kernel_size) || return false
     _elem_lengths_equal(A.elem_ptr, B.elem_ptr) || return false
-    return vecflattened(A) == vecflattened(B)
+    return _vecdata_equal(vecflattened(A), vecflattened(B))
 end
 
 function Base.isequal(A::VectorOfArrays{<:Any,N}, B::VectorOfArrays{<:Any,N}) where {N}
-    axes(A) == axes(B) && isequal(A.kernel_size, B.kernel_size) &&
+    axes(A) == axes(B) && _shapeinfo_equal(A.kernel_size, B.kernel_size) &&
         _elem_lengths_equal(A.elem_ptr, B.elem_ptr) &&
-        isequal(vecflattened(A), vecflattened(B))
+        _vecdata_isequal(vecflattened(A), vecflattened(B))
 end
 
 """
@@ -345,6 +350,12 @@ getsplitmode(A::VectorOfArrays) = SplitParts(_shapeinfo_copy(A.elem_ptr), _shape
 
 @inline fused(A::VectorOfArrays) = A.data
 
+# Comparing the part boundaries is O(n), vectorized on GPUs. splitup
+# shares the shape vectors of the mode it was created from, so round
+# trips take the egal fast path:
+_shapeinfo_equal(a::AbstractVector, b::AbstractVector) =
+    a === b || (axes(a) == axes(b) && a == b)
+
 function splitup(A::AbstractVector, smode::SplitParts)
     VectorOfArrays(A, smode.elem_ptr, smode.kernel_size, full_consistency_checks)
 end
@@ -397,7 +408,7 @@ end
 function _elem_ptr_from_lengths(A::AbstractVector, lengths::AbstractVector{<:Integer})
     all(>=(0), lengths) || throw(ArgumentError("Part lengths must not be negative"))
     elem_ptr = _elem_ptr_cumsum!(similar(lengths, Int, length(lengths) + 1), A, lengths)
-    last(elem_ptr) - 1 <= lastindex(A) || throw(ArgumentError("Sum of part lengths exceeds length of data vector"))
+    _scalar_first_last(elem_ptr)[2] - 1 <= lastindex(A) || throw(ArgumentError("Sum of part lengths exceeds length of data vector"))
     return elem_ptr
 end
 
@@ -448,8 +459,9 @@ Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArray
     from, to = isempty(idxs) ? (firstindex(A), firstindex(A) - 1) : (Int(first(idxs)), Int(last(idxs)))
     elem_ptr = A.elem_ptr[from:(to+1)]
     kernel_size = A.kernel_size[from:to]
-    data = A.data[first(elem_ptr):(last(elem_ptr) - 1)]
-    broadcast!(+, elem_ptr, elem_ptr, firstindex(data) - first(elem_ptr))
+    ep_first, ep_last = _scalar_first_last(elem_ptr)
+    data = A.data[ep_first:(ep_last - 1)]
+    broadcast!(+, elem_ptr, elem_ptr, firstindex(data) - ep_first)
     VectorOfArrays(data, elem_ptr, kernel_size, no_consistency_checks)
 end
 
@@ -623,28 +635,32 @@ function _vcat_voas(Vs)
 
     T = mapreduce(V -> eltype(V.data), promote_type, Vs)
     n_parts = sum(length, Vs)
-    n_data = sum(V -> Int(last(V.elem_ptr) - first(V.elem_ptr)), Vs)
+    ep_bounds = map(V -> _scalar_first_last(V.elem_ptr), Vs)
+    n_data = sum(((ep_first, ep_last),) -> Int(ep_last - ep_first), ep_bounds)
 
     data = similar(V1.data, T, n_data)
     elem_ptr = similar(V1.elem_ptr, n_parts + 1)
     _require_elem_ptr_range(elem_ptr, firstindex(data) + n_data)
     kernel_size = similar(V1.kernel_size, n_parts)
 
+    # The pointers are constructed with vectorized operations, the shape
+    # information may reside on a device:
+    fill!(view(elem_ptr, firstindex(elem_ptr):firstindex(elem_ptr)), firstindex(data))
     i_ptr = firstindex(elem_ptr)
-    elem_ptr[i_ptr] = firstindex(data)
     i_ksz = firstindex(kernel_size)
     i_data = firstindex(data)
+    base = Int(firstindex(data))
 
-    for V in Vs
+    for (V, (ep_first, ep_last)) in zip(Vs, ep_bounds)
         ep = V.elem_ptr
-        covered_len = last(ep) - first(ep)
-        copyto!(data, i_data, V.data, first(ep), covered_len)
-        i_data += covered_len
+        covered_len = Int(ep_last - ep_first)
+        copyto!(data, i_data, V.data, ep_first, covered_len)
 
-        @inbounds for j in firstindex(ep):(lastindex(ep) - 1)
-            elem_ptr[i_ptr + 1] = elem_ptr[i_ptr] + (ep[j + 1] - ep[j])
-            i_ptr += 1
-        end
+        m = length(ep) - 1
+        @views elem_ptr[(i_ptr + 1):(i_ptr + m)] .= ep[(begin + 1):end] .- (Int(ep_first) - base)
+        i_ptr += m
+        i_data += covered_len
+        base += covered_len
 
         ksz = V.kernel_size
         copyto!(kernel_size, i_ksz, ksz, firstindex(ksz), length(ksz))

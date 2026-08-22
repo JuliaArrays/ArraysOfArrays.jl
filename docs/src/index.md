@@ -18,11 +18,11 @@ This package also defines and exports the following new functions applicable to 
 Similar to axis-targeted operations in Python's AwkwardArrays, but with array-of-arrays nesting semantics:
 
 * [`mapat(f, Val(d), As...)`](@ref) maps `f` over the objects at nesting depth `d` (`d = 1` ≡ `map`, `d = 2` ≡ `innermap`).
-* [`bcastat(f, Val(d), args...)`](@ref) broadcasts `f` at depth `d`: nested arguments align, shallower arrays contribute one value per element of their level, scalars broadcast over everything.
+* [`bcastat(f, Val(d), args...)`](@ref) broadcasts `f` at depth `d`: nested arguments align; shallower arrays contribute one value per element of their level; scalars broadcast over everything.
 * [`innermapreduce`](@ref), [`innerreduce`](@ref) and [`innersum`](@ref) reduce over the contents of each element array.
 * [`innersizes`](@ref) and [`innerlengths`](@ref) return per-element sizes/lengths (elements need not be of equal size).
 
-For split arrays these operate on the underlying flat data, avoiding per-element iteration (GPU-compatible).
+For split arrays these operate on the underlying flat data, without per-element iteration, and so work on GPU arrays. Outer-level broadcasts like `(x -> 2 .* x).(A)` keep their usual Julia semantics (`f` receives whole element arrays), but return a `VectorOfArrays` when the results are arrays.
 
 ## Which flattening function do I want?
 
@@ -32,6 +32,11 @@ For split arrays these operate on the underlying flat data, avoiding per-element
 * [`vecflattened(A)`](@ref): elements concatenated into a single vector, like `reduce(vcat, A)`.
 
 All four are zero-copy where possible and so may return arrays that share memory with `A`. In contrast, `Base.stack(A)` and `reduce(vcat, A)` always return independent arrays.
+
+## GPU support
+
+Both array types work with GPU-resident data. An `ArrayOfSimilarArrays` backed by a GPU array requires no special handling. For a `VectorOfArrays`, the shape information (`elem_ptr` and `kernel_size`) can either stay on the host, so that element access returns device views, or live on the device as well (e.g. via `Adapt.adapt`), which is the layout to use inside GPU kernels. Host-side element access (`V[i]`, iteration) requires the shape information on the host, as it would otherwise scalar-index device arrays. `KernelAbstractions.get_backend` returns the backend of the underlying data.
+
 
 ## [ArrayOfSimilarArrays](@id section_ArrayOfSimilarArrays)
 
