@@ -456,6 +456,57 @@ include("testdefs.jl")
         @test_throws DimensionMismatch bcastat(+, Val(2), p, offsetvec(v))
     end
 
+    @testset "outer broadcast" begin
+        A = VectorOfArrays([[1.0, 2.0], [3.0, 4.0, 5.0], [6.0]])
+        A_ref = collect(A)
+
+        # Array-valued results at the outer level yield a VectorOfArrays:
+        r = (x -> 2 .* x).(A)
+        @test r isa VectorOfArrays{Float64,1}
+        @test r == [2 .* x for x in A_ref]
+        full_consistency_checks(r)
+
+        # Results may be ragged in new ways:
+        r2 = (x -> vcat(x, sum(x))).(A)
+        @test r2 isa VectorOfArrays{Float64,1}
+        @test r2 == [vcat(x, sum(x)) for x in A_ref]
+
+        # Zero-dimensional results cannot be stored as element arrays, so
+        # they use the default broadcast machinery:
+        r0 = (x -> fill(sum(x))).(A)
+        @test r0 isa Vector{<:Array{Float64,0}}
+        @test r0 == [fill(sum(x)) for x in A_ref]
+
+        # Multiple and mixed arguments:
+        @test broadcast((x, y) -> x .+ y, A, A) == [x .+ x for x in A_ref]
+        @test broadcast((x, y) -> x .+ y, A, A) isa VectorOfArrays
+        @test broadcast((x, s) -> x .* s, A, 2.0) isa VectorOfArrays
+        @test broadcast((x, s) -> x .+ s, A, [10.0, 20.0, 30.0]) == [x .+ s for (x, s) in zip(A_ref, [10.0, 20.0, 30.0])]
+
+        # Scalar-valued results stay plain arrays:
+        @test sum.(A) isa Vector{Float64}
+        @test sum.(A) == sum.(A_ref)
+
+        # Matrix elements:
+        B = VectorOfArrays([rand(2, 2), rand(3, 2)])
+        rB = (x -> 2 .* x).(B)
+        @test rB isa VectorOfArrays{Float64,2}
+        @test rB == [2 .* x for x in collect(B)]
+
+        # VectorOfSimilarArrays broadcasts to VectorOfArrays too:
+        C = VectorOfSimilarVectors(rand(3, 4))
+        rC = (x -> x .+ 1).(C)
+        @test rC isa VectorOfArrays{Float64,1}
+        @test rC == [x .+ 1 for x in collect(C)]
+
+        # Multi-dimensional outer structure falls back to the default
+        # behavior:
+        D = ArrayOfSimilarArrays{Float64,1,2}(rand(2, 3, 4))
+        rD = (x -> 2 .* x).(D)
+        @test rD isa Matrix{Vector{Float64}}
+        @test rD == [2 .* D[i, j] for i in axes(D, 1), j in axes(D, 2)]
+    end
+
     @testset "inner reductions" begin
         x = collect(Float32, 1:10)
         p = partitioned(x, [2, 3, 5])
@@ -785,6 +836,12 @@ include("testdefs.jl")
             @test fused(r) === fused(A)
             @test r.elem_ptr !== A.elem_ptr
         end
+
+        # Only concretely-inferred Array-valued outer broadcasts preserve
+        # structure, others use the default broadcast machinery:
+        rv = (x -> view(x, :, 1)).(A)
+        @test rv isa Vector{<:SubArray}
+        @test rv == [view(x, :, 1) for x in A]
     end
 
     @testset "resize" begin
