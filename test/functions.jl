@@ -6,6 +6,8 @@ using Test
 using ArraysOfArrays: getinnerdims, getouterdims
 using OffsetArrays: OffsetArray
 
+struct _TestPartMode <: ArraysOfArrays.AbstractPartMode{1,1} end
+
 include("testdefs.jl")
 
 @testset "functions" begin
@@ -82,6 +84,28 @@ include("testdefs.jl")
         @test @inferred(deepmap(length, A_3)) == [[fill(1, 3), fill(1, 3)], [fill(1, 2), fill(1, 2)]]
     end
 
+    @testset "mapat" begin
+        f = x -> x^2
+        @test @inferred(mapat(f, Val(1), A_1)) == map(f, A_1)
+        @test @inferred(mapat(f, Val(2), A_2)) == innermap(f, A_2)
+        @test @inferred(mapat(f, Val(3), A_3)) == deepmap(f, A_3)
+        @test mapat(length, Val(1), A_2) == length.(A_2)
+
+        # Depth exceeding the nesting depth applies at the innermost level:
+        @test mapat(f, Val(5), A_1) == map(f, A_1)
+
+        # Generic nested arrays combine elementwise and may differ in type:
+        @test mapat(+, Val(2), [[1, 2], [3]], [[10.0, 20.0], [30.0]]) == [[11.0, 22.0], [33.0]]
+
+        # Multiple inputs, zipped like map:
+        @test @inferred(mapat(+, Val(1), A_1, A_1)) == 2 .* A_1
+        @test mapat(+, Val(2), A_2, A_2) == innermap(x -> 2 * x, A_2)
+
+        # Integer depth relies on constant propagation for type stability:
+        mapat_intdepth(g, A) = mapat(g, 2, A)
+        @test @inferred(mapat_intdepth(f, A_2)) == innermap(f, A_2)
+    end
+
     @testset "sliced" begin
         m = rand(2, 3)
         @test sliced(m) == sliced(m, Val(1)) == eachcol(m)
@@ -112,6 +136,12 @@ include("testdefs.jl")
         @test vecflattened(eachslice(A, dims = 3)) == vec(A)
     end
 
+    @testset "innersum" begin
+        @test innersum(A_2) == [sum(x) for x in A_2]
+        # Element arrays that don't contain numbers are summed elementwise:
+        @test innersum([[[1, 2], [3, 4]], [[5, 6]]]) == [[4, 6], [5, 6]]
+    end
+
     @testset "innersizes and innerlengths" begin
         @test @inferred(innersizes(A_2)) == size.(A_2)
         @test @inferred(innerlengths(A_2)) == length.(A_2)
@@ -140,5 +170,9 @@ include("testdefs.jl")
         @test unstackmode(OffsetArray([[1, 2], [3, 4]], 0:1)) isa UnknownSplitMode
         @test unstackmode(eachcol(reshape(collect(1.0:12.0), 3, 4))) === SplitSlices{1,1}()
         @test ArraysOfArrays._fused_impl(fill(1.0, 2), NonSplitMode{1}()) == fill(1.0, 2)
+
+        # Third-party part modes must specialize _bcast_expand for
+        # outer-value bcastat arguments:
+        @test_throws ArgumentError ArraysOfArrays._bcast_expand([1, 2], _TestPartMode(), [1, 2, 3])
     end
 end

@@ -301,6 +301,12 @@ include("testdefs.jl")
             test_api(B, B.data)
         end
 
+        # mapat operates on the flat data and preserves structure:
+        @test @inferred(mapat(abs2, Val(2), B3)) == innermap(abs2, B3)
+        @test typeof(mapat(abs2, Val(2), B3)) == typeof(B3)
+        @test mapat(+, Val(2), B1, B1) == [x .+ x for x in B1]
+        @test_throws DimensionMismatch mapat(+, Val(2), B1, B3)
+
         @test @inferred(innerlengths(B1)) == length.(collect(B1))
         @test @inferred(innersizes(B3)) == size.(collect(B3))
 
@@ -335,8 +341,10 @@ include("testdefs.jl")
         V = VectorOfArrays([[1.0], [4.0], [-1.0]])
         Vv = view(V, 1:2)
         @test flatview(Vv) == [1.0, 4.0]
+        @test @inferred(mapat(sqrt, Val(2), Vv)) == [[1.0], [2.0]]
         @test @inferred(innermap(sqrt, Vv)) == [[1.0], [2.0]]
         @test deepmap(sqrt, Vv) == [[1.0], [2.0]]
+        @test bcastat(*, Val(2), Vv, [10.0, 100.0]) == [[10.0], [400.0]]
 
         # Arguments of equal structure combine regardless of how their data
         # is laid out:
@@ -344,6 +352,9 @@ include("testdefs.jl")
         q = VectorOfArrays([[1.0, 2.0], [3.0, 4.0]])
         @test flatview(p) == 1.0:4.0
         @test flatview(p) isa SubArray
+        @test mapat(+, Val(2), p, q) == [[2.0, 4.0], [6.0, 8.0]]
+        @test bcastat(+, Val(2), p, q) == [[2.0, 4.0], [6.0, 8.0]]
+        @test mapat(+, Val(2), view(V, 2:3), view(V, 1:2)) == [[5.0], [3.0]]
     end
 
 
@@ -396,6 +407,72 @@ include("testdefs.jl")
     end
 
 
+    @testset "bcastat" begin
+        x = collect(Float32, 1:10)
+        p = partitioned(x, [2, 3, 5])
+        v = Float32[10, 20, 30]
+
+        # One value per element, broadcast over the element contents:
+        r = @inferred bcastat(+, Val(2), p, v)
+        @test r isa PartsView
+        @test r == [xi .+ vi for (xi, vi) in zip(p, v)]
+
+        # Scalars broadcast over everything:
+        @test bcastat(+, Val(2), p, 1) == [xi .+ 1 for xi in p]
+
+        # Aligned nested arguments and flat-matching arguments:
+        @test bcastat(+, Val(2), p, p) == [xi .+ xi for xi in p]
+        @test bcastat(+, Val(2), p, x) == [xi .+ xi for xi in p]
+
+        # Mixed argument kinds in one call:
+        @test bcastat(muladd, Val(2), p, v, 2) == [muladd.(xi, vi, 2) for (xi, vi) in zip(p, v)]
+
+        # Data not covered by any part gets no contribution:
+        p_part = partitioned(x, [2, 3])
+        @test bcastat(+, Val(2), p_part, Float32[10, 20]) == [Float32[11, 12], Float32[23, 24, 25]]
+
+        # Depth exceeding the nesting depth applies at the innermost level:
+        @test bcastat(+, Val(3), p, v) == bcastat(+, Val(2), p, v)
+        @test bcastat(+, Val(3), p, 1) == [xi .+ 1 for xi in p]
+
+        # Integer depth relies on constant propagation for type stability:
+        bcastat_intdepth(g, A, y) = bcastat(g, 2, A, y)
+        @test @inferred(bcastat_intdepth(+, p, v)) == bcastat(+, Val(2), p, v)
+
+        # Two nesting levels over a single flat buffer:
+        VV = VectorOfArrays(partitioned(collect(1.0:10.0), [2, 3, 5]), [1, 3, 4], [(), ()])
+        w = [100.0, 200.0]
+        r2 = bcastat(+, Val(3), VV, w)
+        @test r2 isa VectorOfArrays
+        @test fused(fused(r2)) == [101, 102, 103, 104, 105, 206, 207, 208, 209, 210]
+
+        @test_throws DimensionMismatch bcastat(+, Val(2), p, Float32[1, 2])
+        @test_throws DimensionMismatch bcastat(+, Val(2), p, partitioned(x, [4, 6]))
+        @test_throws ArgumentError bcastat(+, Val(2), [[1, 2], [3]], 1)
+        # A nested argument with unknown split mode alongside a valid one:
+        @test_throws ArgumentError bcastat(+, Val(2), p, [[1, 2], [3]])
+        # An offset outer-value vector matches neither the outer structure
+        # nor the flat data:
+        @test_throws DimensionMismatch bcastat(+, Val(2), p, offsetvec(v))
+    end
+
+    @testset "inner reductions" begin
+        x = collect(Float32, 1:10)
+        p = partitioned(x, [2, 3, 5])
+
+        @test @inferred(innermapreduce(abs2, +, p)) == [sum(abs2, xi) for xi in p]
+        @test @inferred(innerreduce(max, p)) == [maximum(xi) for xi in p]
+        @test @inferred(innersum(p)) == [sum(xi) for xi in p]
+
+        # Empty element arrays require an init value, except for innersum:
+        pe = partitioned(collect(Float32, 1:5), [2, 0, 3])
+        @test innersum(pe) == Float32[3, 0, 12]
+        # The exception type of empty reductions is up to Base and has
+        # changed between Julia versions:
+        @test_throws "reducing over an empty collection" innerreduce(max, pe)
+        @test innerreduce(max, pe; init = -Inf32) == Float32[2, -Inf32, 5]
+    end
+
     @testset "rrules" begin
         x = collect(Float64, 1:10)
 
@@ -425,6 +502,19 @@ include("testdefs.jl")
         @test t[2] == [[1.0, 2.0], [3.0, 4.0, 5.0]]
         @test fused(t[2])[6:10] == zeros(5)
         @test pb3(ZeroTangent()) == (NoTangent(), ZeroTangent())
+
+        # Allocated tangents carry the element type of the primal, no matter
+        # how much of the data the elements cover:
+        for V in (VectorOfArrays([[1.0, 2.0], [3.0, 4.0, 5.0]]), partitioned(x, [2, 3]))
+            @test eltype(fused(rrule(vecflattened, V)[2](fill(1f0, 5))[2])) == Float64
+        end
+        for lengths in ([2, 3, 5], [2, 3])
+            @test eltype(rrule(partitioned, x, lengths)[2]([fill(1f0, l) for l in lengths])[2]) == Float64
+        end
+        let sm = SplitParts([1, 3, 6, 11], fill((), 3))
+            Δ = VectorOfArrays([fill(1f0, 2), fill(1f0, 3), fill(1f0, 5)])
+            @test eltype(unthunk(rrule(splitup, x, sm)[2](Δ)[2])) == Float64
+        end
 
         # Elements that cover the data completely need no scattering:
         Vfull = VectorOfArrays([[1.0, 2.0], [3.0]])
@@ -695,12 +785,6 @@ include("testdefs.jl")
             @test fused(r) === fused(A)
             @test r.elem_ptr !== A.elem_ptr
         end
-
-        # Only concretely-inferred Array-valued outer broadcasts preserve
-        # structure, others use the default broadcast machinery:
-        rv = (x -> view(x, :, 1)).(A)
-        @test rv isa Vector{<:SubArray}
-        @test rv == [view(x, :, 1) for x in A]
     end
 
     @testset "resize" begin

@@ -88,6 +88,19 @@ Base.stack(A::AbstractArrayOfSimilarArrays; dims::Union{Integer,Colon} = :) = _s
 _stack_impl(A::AbstractArrayOfSimilarArrays, ::Colon) = copy(fused(A))
 _stack_impl(A::AbstractArrayOfSimilarArrays, dims::Integer) = stack(collect(A); dims)
 
+# Per-element reductions reduce over the inner dimensions of the flat data:
+function _innermapreduce_impl(f, op, init, A::AbstractArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+    data = fused(A)
+    dims = ntuple(identity, Val(M))
+    r = if init isa _NoInit
+        mapreduce(f, op, data; dims = dims)
+    else
+        mapreduce(f, op, data; dims = dims, init = init)
+    end
+    return reshape(r, size(A))
+end
+
+
 # Comparisons must be equivalent to elementwise comparison: empty arrays
 # with equal outer axes are equal even if their element sizes differ.
 @inline Base.:(==)(A::AbstractArrayOfSimilarArrays{<:Any,M,N}, B::AbstractArrayOfSimilarArrays{<:Any,M,N}) where {M,N} =
@@ -256,20 +269,6 @@ end
 
 Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
     prepend!(dest, convert(ArrayOfSimilarArrays, src))
-
-function innermap(f, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
-    new_data = map(f, A.data)
-    U = eltype(new_data)
-    ArrayOfSimilarArrays{U,M,N}(new_data)
-end
-
-
-function deepmap(f, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
-    new_data = deepmap(f, A.data)
-    U = eltype(new_data)
-    ArrayOfSimilarArrays{U,M,N}(new_data)
-end
-
 
 # Like Base's map/broadcast of identity over vectors of views, the result
 # shares the element data. ArrayOfSimilarArrays is an immutable wrapper

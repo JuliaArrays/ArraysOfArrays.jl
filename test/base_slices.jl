@@ -73,6 +73,12 @@ include("testdefs.jl")
         @test axes(innerlengths(S)) == axes(S)
         @test all(isequal(3), innerlengths(S))
         @test splitup(fused(S), getsplitmode(S)) == S
+
+        # Outer-value broadcasting must not silently rebase offset axes:
+        wpar = [0.0, 10.0, 20.0, 30.0]
+        w = view(wpar, Base.IdentityUnitRange(2:3))
+        @test axes(w) == axes(S)
+        @test_throws DimensionMismatch bcastat(+, Val(2), S, w)
     end
 
     @testset "eachslice with drop = false" begin

@@ -5,7 +5,7 @@ module ArraysOfArraysChainRulesCoreExt
 using ChainRulesCore: ChainRulesCore, NoTangent, AbstractThunk, AbstractZero, unthunk, @thunk, @non_differentiable
 
 using ArraysOfArrays: getsplitmode, is_memordered_splitmode, splitup, fused, stacked, unstackmode,
-    flatview, innersize, vecflattened, partitioned, _scalar_first_last
+    flatview, innersize, vecflattened, partitioned, innersum, _scalar_first_last
 using ArraysOfArrays: getslicemap, getinnerdims, getouterdims, consgrouped_ptrs
 using ArraysOfArrays: _convert_eltype
 using ArraysOfArrays: NonSplitMode, AbstractSplitMode, AbstractSlicingMode
@@ -52,53 +52,51 @@ end
 # with the primal data, and the primal data may contain regions not covered
 # by any element. So the element cotangents are scattered into a zero array
 # of the primal's shape:
-function _splitup_cotangent(Δ, A::AbstractArray, smode::AbstractSplitMode)
+function _scatter_cotangent(Δ, A::AbstractArray, smode::AbstractSplitMode)
     ΔA = fill!(similar(A), zero(eltype(A)))
     splitup(ΔA, smode) .= Δ
     return ΔA
 end
 
+_splitup_cotangent(Δ, A::AbstractArray, smode::AbstractSplitMode) = _scatter_cotangent(Δ, A, smode)
+
 # Slicings cover their data completely, so equally-sliced cotangents can be
 # reused directly:
 function _splitup_cotangent(Δ::AbstractArray{<:AbstractArray}, A::AbstractArray, smode::AbstractSlicingMode)
-    if getsplitmode(Δ) == smode && axes(fused(Δ)) == axes(A)
-        return fused(Δ)
-    else
-        ΔA = fill!(similar(A), zero(eltype(A)))
-        splitup(ΔA, smode) .= Δ
-        return ΔA
-    end
+    getsplitmode(Δ) == smode && axes(fused(Δ)) == axes(A) && return _convert_eltype(eltype(A), fused(Δ))
+    return _scatter_cotangent(Δ, A, smode)
 end
 
 
 
-ChainRulesCore.rrule(::typeof(fused), A::AbstractArray) = fused(A), _nofuse_pullback
-_nofuse_pullback(ΔΩ) = NoTangent(), ΔΩ
+# Fusing and stacking are identity-like on non-nested arrays, and split the
+# cotangent again for nested ones:
+_passthrough_pullback(ΔΩ) = NoTangent(), ΔΩ
+_resplit_pullback(ΔΩ, smode) = NoTangent(), mapthunk(Base.Fix2(splitup, smode), ΔΩ)
+
+ChainRulesCore.rrule(::typeof(fused), A::AbstractArray) = fused(A), _passthrough_pullback
 
 function ChainRulesCore.rrule(::typeof(fused), A::AbstractArray{<:AbstractArray})
-    return fused(A), Base.Fix2(_fused_pullback, getsplitmode(A))
+    return fused(A), Base.Fix2(_resplit_pullback, getsplitmode(A))
 end
-_fused_pullback(ΔΩ, smode) = NoTangent(), mapthunk(Base.Fix2(splitup, smode), ΔΩ)
 
 
-ChainRulesCore.rrule(::typeof(stacked), A::AbstractArray) = stacked(A), _nostack_pullback
-_nostack_pullback(ΔΩ) = NoTangent(), ΔΩ
+ChainRulesCore.rrule(::typeof(stacked), A::AbstractArray) = stacked(A), _passthrough_pullback
 
 function ChainRulesCore.rrule(::typeof(stacked), A::AbstractArray{<:AbstractArray})
-    return stacked(A), Base.Fix2(_stacked_pullback, unstackmode(A))
+    return stacked(A), Base.Fix2(_resplit_pullback, unstackmode(A))
 end
 function ChainRulesCore.rrule(::typeof(stack), A::AbstractArrayOfSimilarArrays)
-    return stack(A), Base.Fix2(_stacked_pullback, unstackmode(A))
+    return stack(A), Base.Fix2(_resplit_pullback, unstackmode(A))
 end
-_stacked_pullback(ΔΩ, smode) = NoTangent(), mapthunk(Base.Fix2(splitup, smode), ΔΩ)
 
 
 
 # reshape rebases to one-based axes, so tangents for flat data with offset
 # axes are built on an array that has the axes of the primal data:
 function _unflatten_like(Δ::AbstractVector, data::AbstractArray)
-    all(isone ∘ first, axes(data)) && return reshape(Δ, size(data))
-    Δdata = similar(data, eltype(Δ))
+    all(isone ∘ first, axes(data)) && return reshape(_convert_eltype(eltype(data), Δ), size(data))
+    Δdata = similar(data)
     copyto!(reshape(Δdata, length(Δdata)), Δ)
     return Δdata
 end
@@ -128,21 +126,10 @@ end
 function ChainRulesCore.rrule(::typeof(vecflattened), A::VectorOfArrays)
     smode = getsplitmode(A)  # makes a defensive copy, safe to close over
     data = A.data
-    covered_from, ep_last = _scalar_first_last(A.elem_ptr)
-    covered_len = ep_last - covered_from
+    covered_from, _ = _scalar_first_last(A.elem_ptr)
     function voa_vecflattened_pullback(ΔΩ)
         ΔΩ isa AbstractZero && return NoTangent(), ΔΩ
-        Δ = unthunk(ΔΩ)
-        # The cotangent of the one-based flattened view must be scattered
-        # back into the index space of the primal data, which may have
-        # offset axes and regions not covered by any element:
-        Δdata = if axes(Δ) == axes(data)
-            Δ
-        else
-            padded = fill!(similar(data), zero(eltype(data)))
-            copyto!(padded, covered_from, Δ, firstindex(Δ), covered_len)
-            padded
-        end
+        Δdata = _scatter_flat_cotangent(unthunk(ΔΩ), data, covered_from)
         return NoTangent(), splitup(Δdata, smode)
     end
     return vecflattened(A), voa_vecflattened_pullback
@@ -168,6 +155,24 @@ function _partitioned_pullback_for(A::AbstractVector)
 end
 
 
+# Each element of the innersum cotangent expands uniformly over the inner
+# dimensions of the tangent:
+function ChainRulesCore.rrule(::typeof(innersum), A::AbstractArrayOfSimilarArrays{T,M,N}) where {T,M,N}
+    smode = getsplitmode(A)
+    data = fused(A)
+    function innersum_pullback(ΔΩ)
+        ΔΩ isa AbstractZero && return NoTangent(), ΔΩ
+        Δ = unthunk(ΔΩ)
+        Δdata = similar(data)
+        # reshape rebases to one-based axes, so flat data with offset axes
+        # can be filled from the one-based cotangent:
+        reshape(Δdata, size(Δdata)) .= reshape(Δ, ntuple(_ -> 1, Val(M))..., size(Δ)...)
+        return NoTangent(), splitup(Δdata, smode)
+    end
+    return innersum(A), innersum_pullback
+end
+
+
 function _aosa_ctor_fromflat_pullback(ΔΩ)
     ΔΩ isa AbstractZero && return NoTangent(), ΔΩ
     NoTangent(), flatview(convert(ArrayOfSimilarArrays, unthunk(ΔΩ)))
@@ -177,10 +182,8 @@ function ChainRulesCore.rrule(::Type{ArrayOfSimilarArrays{T,M,N}}, flat_data::Ab
     return ArrayOfSimilarArrays{T,M,N}(flat_data), _aosa_ctor_fromflat_pullback
 end
 
-_aosa_ctor_fromnested_pullback(ΔΩ) = NoTangent(), ΔΩ
-
 function ChainRulesCore.rrule(::Type{ArrayOfSimilarArrays{T,M,N}}, A::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U}
-    return ArrayOfSimilarArrays{T,M,N}(A), _aosa_ctor_fromnested_pullback
+    return ArrayOfSimilarArrays{T,M,N}(A), _passthrough_pullback
 end
 
 

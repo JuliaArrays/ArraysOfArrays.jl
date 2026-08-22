@@ -354,9 +354,9 @@ end
 Abstract supertype for array partition modes with `M` inner dimensions and `N`
 outer dimensions.
 
-The mode need not represent a true partition, a partition that discards part
-of the original array is allowed. The elements of the partition may also
-be reshaped, depending on the mode.
+The mode need not represent a true partition: partitions that discard part
+of the original array are allowed. Depending on the mode, the parts may also
+be reshaped.
 
 Use `getsplitmode` to get the split mode of a split array.
 
@@ -521,14 +521,7 @@ function innermap end
 export innermap
 
 innermap(f, A::AbstractArray) = map(f, A)
-innermap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(map, f), A)
-innermap(f, A::AbstractSlices{<:AbstractArray}) = _generic_innermap_impl(f, A)
-
-function _generic_innermap_impl(f, A::AbstractArray)
-    smode = getsplitmode(A)
-    smode isa UnknownSplitMode && return map(Base.Fix1(map, f), A)
-    return _splitup_trusted(map(f, fused(A)), smode)
-end
+innermap(f, A::AbstractArray{<:AbstractArray}) = mapat(f, Val(2), A)
 
 
 """
@@ -546,11 +539,40 @@ deepmap(f, A::AbstractArray{<:AbstractArray}) = map(Base.Fix1(deepmap, f), A)
 deepmap(f, A::AbstractSlices{<:AbstractArray}) = _generic_deepmap_impl(f, A)
 
 function _generic_deepmap_impl(f, A::AbstractArray)
-    smode = getsplitmode(A)
+    smode = _flatdatamode(A)
     smode isa UnknownSplitMode && return map(Base.Fix1(deepmap, f), A)
-    return _splitup_trusted(deepmap(f, fused(A)), smode)
+    return _splitup_trusted(deepmap(f, _flatdata(A)), smode)
 end
 
+
+"""
+    mapat(f, ::Val{depth}, As::AbstractArray...)
+    mapat(f, depth::Integer, As::AbstractArray...)
+
+Nested `map` at nesting depth `depth`: apply `f` elementwise to the objects
+at depth `depth` of the nested arrays `As`. Depth 1 refers to the elements
+of the arrays themselves, so `mapat(f, Val(1), As...)` is equivalent to
+`map(f, As...)` and `mapat(f, Val(2), A)` is equivalent to
+[`innermap`](@ref)`(f, A)`. If `depth` exceeds the nesting depth of the
+arrays, `f` is applied to the innermost elements, like [`deepmap`](@ref).
+
+The `Integer` form relies on constant propagation for type stability; use
+the `Val` form when passing a non-constant depth.
+
+All of `As` must have the same nesting structure down to `depth`. Split
+arrays must have equal split modes (see [`getsplitmode`](@ref)) on each
+nesting level; generic nested arrays are combined elementwise like `map`
+and so may differ in type as long as their shapes match.
+
+For split arrays (like [`ArrayOfSimilarArrays`](@ref) and
+[`VectorOfArrays`](@ref)) `mapat` operates directly on the flat data covered
+by the elements, without per-element iteration, and so works on GPU arrays.
+
+See also [`bcastat`](@ref) for broadcast semantics with arguments of
+different nesting depth.
+"""
+function mapat end
+export mapat
 
 # Data-level operations like mapat and bcastat process the flat data of
 # nested arrays. For array types that can have data regions not covered by
@@ -562,3 +584,163 @@ end
 # Internal splitup for data and split modes that are known to be consistent
 # with each other, skipping the full validation of the public splitup:
 @inline _splitup_trusted(A::AbstractArray, smode::AbstractSplitMode) = splitup(A, smode)
+
+@inline mapat(f, depth::Integer, As::Vararg{AbstractArray,NA}) where {NA} = mapat(f, Val(depth), As...)
+
+@inline mapat(f, ::Val{1}, As::Vararg{AbstractArray,NA}) where {NA} = map(f, As...)
+
+function mapat(f, ::Val{depth}, As::Vararg{AbstractArray,NA}) where {depth,NA}
+    depth isa Integer && depth >= 1 || throw(ArgumentError("mapat depth must be a positive integer"))
+    smodes = map(_flatdatamode, As)
+    smode = first(smodes)
+    if smode isa UnknownSplitMode
+        all(m -> m isa UnknownSplitMode, smodes) || throw(DimensionMismatch("mapat requires arrays with equal nesting structure, but split modes differ"))
+        return map((xs...) -> mapat(f, Val(depth - 1), xs...), As...)
+    else
+        all(isequal(smode), smodes) || throw(DimensionMismatch("mapat requires arrays with equal nesting structure, but split modes differ"))
+        return _splitup_trusted(mapat(f, Val(depth - 1), map(_flatdata, As)...), smode)
+    end
+end
+
+
+"""
+    innermapreduce(f, op, A::AbstractArray{<:AbstractArray}; [init])
+
+Per-element `mapreduce` over the contents of the element arrays of `A`:
+returns an array shaped like `A` that contains
+`mapreduce(f, op, A[i]; [init])` for each element `A[i]`.
+
+For split arrays (like [`ArrayOfSimilarArrays`](@ref) and
+[`VectorOfArrays`](@ref)) this uses segmented reductions over the underlying
+flat data where possible, and works on GPU arrays.
+"""
+function innermapreduce end
+export innermapreduce
+
+innermapreduce(f, op, A::AbstractArray{<:AbstractArray}; init = _NoInit()) = _innermapreduce_impl(f, op, init, A)
+
+function _innermapreduce_impl(f, op, init, A::AbstractArray{<:AbstractArray})
+    if init isa _NoInit
+        map(x -> mapreduce(f, op, x), A)
+    else
+        map(x -> mapreduce(f, op, x; init = init), A)
+    end
+end
+
+
+"""
+    innerreduce(op, A::AbstractArray{<:AbstractArray}; [init])
+
+Per-element `reduce` over the contents of the element arrays of `A`,
+equivalent to `innermapreduce(identity, op, A; [init])`.
+"""
+function innerreduce end
+export innerreduce
+
+innerreduce(op, A::AbstractArray{<:AbstractArray}; init = _NoInit()) = _innermapreduce_impl(identity, op, init, A)
+
+
+"""
+    innersum(A::AbstractArray{<:AbstractArray})
+
+Per-element sum over the contents of the element arrays of `A`. For
+numerical element types, empty element arrays sum to zero.
+"""
+function innersum end
+export innersum
+
+innersum(A::AbstractArray{<:AbstractArray}) = innermapreduce(identity, +, A)
+innersum(A::AbstractArray{<:AbstractArray{T}}) where {T<:Number} = innermapreduce(identity, +, A, init = zero(T))
+
+
+"""
+    bcastat(f, ::Val{depth}, args...)
+    bcastat(f, depth::Integer, args...)
+
+Broadcast `f` over the contents of nested arrays at nesting depth `depth`,
+with AwkwardArrays-like alignment, but with array-of-arrays nesting
+semantics:
+
+* Nested (split) arrays with equal split modes are aligned at depth `depth`.
+* Arrays that match the outer structure of a shallower nesting level
+  contribute one value per element of that level, broadcast over everything
+  below it.
+* Scalars and `Ref`s broadcast over everything.
+
+`bcastat(f, Val(1), args...)` is equivalent to `broadcast(f, args...)`, and
+as with [`mapat`](@ref), a `depth` that exceeds the nesting depth of the
+arguments applies `f` at the innermost level. The `Integer` form relies on
+constant propagation for type stability; use the `Val` form when passing a
+non-constant depth.
+
+Nested array arguments must be split arrays (like
+[`ArrayOfSimilarArrays`](@ref) and [`VectorOfArrays`](@ref)): `bcastat`
+operates on their flat data with split-mode-specific argument expansions,
+without per-element iteration, and so works on GPU arrays.
+"""
+function bcastat end
+export bcastat
+
+@inline bcastat(f, depth::Integer, args...) = bcastat(f, Val(depth), args...)
+
+@inline bcastat(f, ::Val{1}, args...) = broadcast(f, args...)
+
+function bcastat(f, ::Val{depth}, args...) where {depth}
+    depth isa Integer && depth >= 1 || throw(ArgumentError("bcastat depth must be a positive integer"))
+    r = _bcast_ref(args...)
+    if r === nothing
+        # No nested arguments left, apply at the innermost level:
+        foreach(_require_known_mode, args)
+        return broadcast(f, args...)
+    else
+        smode, ref_flat = r
+        descended = map(arg -> _bcast_descend(arg, smode, ref_flat), args)
+        return _splitup_trusted(bcastat(f, Val(depth - 1), descended...), smode)
+    end
+end
+
+function _bcast_ref(args...)
+    for a in args
+        if a isa AbstractArray
+            m = _flatdatamode(a)
+            (m isa AbstractSlicingMode || m isa AbstractPartMode) && return (m, _flatdata(a))
+        end
+    end
+    return nothing
+end
+
+_require_known_mode(@nospecialize(x)) = nothing
+
+function _require_known_mode(x::AbstractArray)
+    getsplitmode(x) isa UnknownSplitMode && throw(ArgumentError("bcastat requires nested array arguments to be split arrays with a known split mode, like VectorOfArrays or ArrayOfSimilarArrays"))
+    nothing
+end
+
+function _bcast_descend(x, smode::AbstractSplitMode, ref_flat::AbstractArray)
+    x isa AbstractArray || return x
+    ndims(x) == 0 && return x
+    m = _flatdatamode(x)
+    if m isa UnknownSplitMode
+        throw(ArgumentError("bcastat requires nested array arguments to be split arrays with a known split mode, like VectorOfArrays or ArrayOfSimilarArrays"))
+    elseif m isa NonSplitMode
+        return _bcast_expand(x, smode, ref_flat)
+    else
+        isequal(m, smode) || throw(DimensionMismatch("bcastat requires nested array arguments with equal split modes"))
+        return _flatdata(x)
+    end
+end
+
+function _bcast_expand(@nospecialize(x::AbstractArray), smode::AbstractPartMode, ::AbstractArray)
+    throw(ArgumentError("bcastat requires ArraysOfArrays._bcast_expand to be specialized for split mode $(nameof(typeof(smode))) to support outer-value arguments"))
+end
+
+function _bcast_expand(x::AbstractArray, smode::AbstractSlicingMode{M,N}, ref_flat::AbstractArray) where {M,N}
+    if axes(x) == getouterdims(axes(ref_flat), smode)
+        is_memordered_splitmode(smode) || throw(ArgumentError("bcastat does not support outer-value broadcasting for slicings that are not in memory order"))
+        return reshape(x, ntuple(_ -> 1, Val(M))..., size(x)...)
+    elseif axes(x) == axes(ref_flat)
+        return x
+    else
+        throw(DimensionMismatch("bcastat argument shape matches neither the outer structure nor the flat data of the nested arguments"))
+    end
+end

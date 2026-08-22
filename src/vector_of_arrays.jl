@@ -352,6 +352,24 @@ end
 _splitup_trusted(A::AbstractVector, smode::SplitParts) =
     VectorOfArrays(A, smode.elem_ptr, smode.kernel_size, simple_consistency_checks)
 
+function _bcast_expand(x::AbstractArray, smode::SplitParts, ref_flat::AbstractArray)
+    ep = smode.elem_ptr
+    if x isa AbstractVector && axes(x) == axes(smode.kernel_size)
+        # One value per part, broadcast over the contents of that part. The
+        # value of x used for data not covered by any part is arbitrary,
+        # such data does not contribute to the result:
+        idx = similar(ref_flat, Int)
+        idx .= firstindex(ref_flat):lastindex(ref_flat)
+        seg = clamp.(searchsortedlast.(Ref(ep), idx), firstindex(x), lastindex(x))
+        return x[seg]
+    elseif x isa AbstractVector && axes(x) == axes(ref_flat)
+        return x
+    else
+        throw(DimensionMismatch("bcastat argument shape matches neither the outer structure nor the flat data of the nested arguments"))
+    end
+end
+
+
 function partitioned(A::AbstractVector, lengths::AbstractVector{<:Integer})
     elem_ptr = _elem_ptr_from_lengths(A, lengths)
     kernel_size = fill!(similar(lengths, Dims{0}, length(lengths)), ())
@@ -699,9 +717,7 @@ end
 
 # Map over the covered data only, the result does not share shape
 # information with A:
-innermap(f, A::VectorOfArrays) = _splitup_trusted(map(f, vecflattened(A)), _flatdatamode(A))
-
-deepmap(f, A::VectorOfArrays) = _splitup_trusted(deepmap(f, vecflattened(A)), _flatdatamode(A))
+deepmap(f, A::VectorOfArrays) = _generic_deepmap_impl(f, A)
 
 
 # Like Base's map/broadcast of identity over vectors of views, the result

@@ -195,6 +195,7 @@ end
         @test innersize(Ao) == (3,)
         @test axes(Ao[2]) == (Base.IdentityUnitRange(axes(data, 1)),)
         @test [Ao[2][i] for i in axes(Ao[2], 1)] == [data[i, 2] for i in axes(data, 1)]
+        @test innersum(Ao) == vec(sum(parent(data), dims = 1))
 
         # Element arrays with offset axes can be filled from a value of
         # matching size, whose axes need not match:
@@ -205,6 +206,10 @@ end
         # Tangents live in the index space of the flat data:
         y, pb = rrule(vecflattened, Ao)
         @test axes(fused(unthunk(pb(collect(1.0:12.0))[2]))) == axes(data)
+        y2, pb2 = rrule(innersum, Ao)
+        t2 = unthunk(pb2(collect(1.0:4.0))[2])
+        @test axes(fused(t2)) == axes(data)
+        @test parent(fused(t2)) == repeat(collect(1.0:4.0)', 3, 1)
     end
 
     @testset "split mode API" begin
@@ -216,8 +221,28 @@ end
         V = VectorOfSimilarVectors(V_flat)
         test_api(V, V_flat)
 
+        # mapat operates on the flat data and preserves structure:
+        @test @inferred(mapat(abs2, Val(2), A)) == innermap(abs2, A)
+        @test typeof(mapat(abs2, Val(2), A)) == typeof(A)
+        @test fused(@inferred(mapat(+, Val(2), A, A))) == 2 .* A_flat
+        @test_throws DimensionMismatch mapat(+, Val(2), A, ArrayOfSimilarArrays{Float64,3,2}(A_flat))
+
         @test @inferred(innersizes(A)) == fill(innersize(A), size(A))
         @test @inferred(innerlengths(A)) == fill(prod(innersize(A)), size(A))
+
+        # Per-element reductions over the inner dimensions of the flat data:
+        @test @inferred(innersum(A)) == [sum(x) for x in A]
+        @test @inferred(innermapreduce(abs2, +, A)) ≈ [sum(abs2, x) for x in A]
+        @test @inferred(innerreduce(max, A)) == [maximum(x) for x in A]
+
+        # bcastat with outer-aligned, scalar and flat-matching arguments:
+        w = rand(size(A)...)
+        r_bc = @inferred bcastat(+, Val(2), A, w)
+        @test r_bc isa ArrayOfSimilarArrays
+        @test collect(r_bc) == [A[i] .+ w[i] for i in eachindex(A, w)]
+        @test fused(bcastat(muladd, Val(2), A, 2.0, A_flat)) == muladd.(A_flat, 2.0, A_flat)
+        # An argument matching neither the outer structure nor the flat data:
+        @test_throws DimensionMismatch bcastat(+, Val(2), A, rand(length(A) + 1))
 
         # vecflattened rrule:
         A_rr = ArrayOfSimilarArrays{Float64,1,1}(rand(3, 4))
@@ -228,6 +253,13 @@ end
         @test t[2] isa ArrayOfSimilarArrays
         @test fused(t[2]) == reshape(1.0:12.0, 3, 4)
         @test pb(ZeroTangent()) == (NoTangent(), ZeroTangent())
+
+        # Allocated tangents carry the element type of the primal:
+        @test eltype(fused(pb(fill(1f0, 12))[2])) == Float64
+        @test eltype(fused(rrule(innersum, A_rr)[2](fill(1f0, 4))[2])) == Float64
+        let sm = getsplitmode(A_rr)
+            @test eltype(unthunk(rrule(splitup, A_rr.data, sm)[2](splitup(fill(1f0, 3, 4), sm))[2])) == Float64
+        end
     end
 
     @testset "custom subtypes" begin
@@ -405,6 +437,16 @@ end
         t = pb(stacked(nested))
         @test t[1] === NoTangent()
         @test unthunk(t[2]) == nested
+
+        # innersum cotangents expand uniformly over the inner dimensions:
+        A2 = ArrayOfSimilarArrays{Float64,2,1}(rand(2, 3, 4))
+        y2, pb2 = rrule(innersum, A2)
+        @test y2 == innersum(A2)
+        t2 = pb2(collect(1.0:4.0))
+        @test t2[1] === NoTangent()
+        @test t2[2] isa ArrayOfSimilarArrays
+        @test collect(t2[2]) == [fill(Float64(i), 2, 3) for i in 1:4]
+        @test pb2(ZeroTangent()) == (NoTangent(), ZeroTangent())
     end
 
 
