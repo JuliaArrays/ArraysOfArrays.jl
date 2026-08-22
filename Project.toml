@@ -11,6 +11,7 @@ ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
 FixedSizeArrays = "3821ddf9-e5b5-40d5-8e25-6813ab96b5e2"
 GPUArraysCore = "46192b85-c4d5-4398-a991-12ede77f4527"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
+Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
 StaticArraysCore = "1e83bf80-4336-4d27-bf5d-d5a4f845583c"
 
 [extensions]
@@ -20,6 +21,7 @@ ArraysOfArraysFixedSizeArraysExt = "FixedSizeArrays"
 ArraysOfArraysGPUArraysCoreExt = "GPUArraysCore"
 ArraysOfArraysGPUKernelsExt = ["GPUArraysCore", "KernelAbstractions"]
 ArraysOfArraysKernelAbstractionsExt = "KernelAbstractions"
+ArraysOfArraysMooncakeExt = "Mooncake"
 ArraysOfArraysStaticArraysCoreExt = "StaticArraysCore"
 
 [compat]
@@ -28,6 +30,7 @@ ChainRulesCore = "1"
 FixedSizeArrays = "1"
 GPUArraysCore = "0.2"
 KernelAbstractions = "0.9"
+Mooncake = "0.5"
 StaticArraysCore = "1"
 Statistics = "1"
 julia = "1.10"
