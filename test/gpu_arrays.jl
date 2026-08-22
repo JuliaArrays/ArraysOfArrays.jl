@@ -134,4 +134,24 @@ JLArrays.allowscalar(false)
         @test adapt(Array, V[2:2]) == V_host[2:2]
     end
 
+    @testset "reductions over long element arrays" begin
+        # Element arrays that are long compared to their number are reduced
+        # in chunks, recursively if necessary, so that a single long
+        # element array does not serialize the whole reduction:
+        lens = [5000, 3, 20000, 0, 1]
+        ep = cumsum(vcat(1, lens))
+        x = rand(Float32, last(ep) - 1)
+        parts = [x[ep[i]:(ep[i+1] - 1)] for i in eachindex(lens)]
+        V = VectorOfArrays(jl(x), jl(ep), jl(fill((), length(lens))))
+
+        @test collect(innersum(V)) ≈ sum.(parts)
+        @test collect(innermapreduce(abs2, +, V; init = 0f0)) ≈ [sum(abs2, p) for p in parts]
+        @test collect(innerreduce(max, V; init = -Inf32)) ≈ [maximum(p; init = -Inf32) for p in parts]
+        # Empty element arrays still require an init value:
+        @test_throws ArgumentError innerreduce(max, V)
+
+        # More than one level of chunking:
+        V2 = VectorOfArrays(jl(collect(1f0:100000f0)), jl([1, 100001]), jl([()]))
+        @test collect(innersum(V2)) ≈ [sum(1f0:100000f0)]
+    end
 end
