@@ -5,21 +5,40 @@ const _RefLike{T} = Union{Tuple{T}, Ref{T}}
 
 
 """
+    abstract type ArraysOfArrays.AbstractNestedArrayStyle{N} <: Broadcast.AbstractArrayStyle{N}
+
+Supertype of the broadcast styles of nested array types like
+[`VectorOfArrays`](@ref) and [`ArrayOfSimilarArrays`](@ref).
+
+Packages that define array types with their own broadcast style can
+resolve style combination by specializing
+`Base.Broadcast.BroadcastStyle(::AbstractNestedArrayStyle{N}, ::TheirStyle)`.
+Dispatch on this supertype, not on its subtypes.
+"""
+abstract type AbstractNestedArrayStyle{N} <: Broadcast.AbstractArrayStyle{N} end
+@compat public AbstractNestedArrayStyle
+
+
+"""
     ArraysOfArrays.NestedArrayStyle{N}()
 
 Broadcast style of nested array types like [`VectorOfArrays`](@ref) and
 [`ArrayOfSimilarArrays`](@ref).
 
-Broadcasts over a single outer dimension that produce array-valued results
-(`f` receives whole element arrays and returns arrays, as in
-`(x -> 2 .* x).(A)`) return a [`VectorOfArrays`](@ref) instead of a `Vector`
-of arrays if the broadcast has one-based axes and the inferred result type
-is a concrete `Array` type. All other broadcasts (view-valued or otherwise
-abstractly-inferred results, multiple outer dimensions, etc.) behave like
-the default broadcast machinery. Use [`bcastat`](@ref) to broadcast over
-the *contents* of the element arrays instead.
+Broadcasts at this level apply `f` to whole element arrays, as in
+`(x -> 2 .* x).(A)`. Such a broadcast returns a [`VectorOfArrays`](@ref)
+instead of a `Vector` of arrays if it runs over a single outer dimension
+with `Base.OneTo` axes and its result type is inferred as a concrete `Array`
+type with at least one dimension. The elements may be ragged, even if `A` is
+an [`ArrayOfSimilarArrays`](@ref). All other broadcasts behave like the
+default broadcast machinery. Use [`bcastat`](@ref) to broadcast over the
+*contents* of the element arrays instead.
+
+See [`ArraysOfArrays.AbstractNestedArrayStyle`](@ref) for resolving
+broadcast style combination with foreign array styles.
 """
-struct NestedArrayStyle{N} <: Broadcast.AbstractArrayStyle{N} end
+struct NestedArrayStyle{N} <: AbstractNestedArrayStyle{N} end
+@compat public NestedArrayStyle
 
 NestedArrayStyle{M}(::Val{N}) where {M,N} = NestedArrayStyle{N}()
 

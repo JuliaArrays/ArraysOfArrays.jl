@@ -11,6 +11,7 @@ ArraysOfArrays provides two different types of nested arrays:
 """
 module ArraysOfArrays
 
+using Compat: @compat
 using Statistics
 
 include("util.jl")

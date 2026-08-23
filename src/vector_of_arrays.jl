@@ -135,7 +135,7 @@ Base.convert(::Type{VectorOfArrays}, A::VectorOfArrays) = A
 
 
 """
-    internal_element_ptr(A::VectorOfArrays)
+    ArraysOfArrays.internal_element_ptr(A::VectorOfArrays)
 
 Returns the internal element pointer vector of `A`.
 
@@ -143,22 +143,41 @@ Do *not* modify the returned vector: this would break the internal
 consistency of `A`. See [`element_ptr`](@ref) for a safe alternative.
 """
 internal_element_ptr(A::VectorOfArrays) = A.elem_ptr
+@compat public internal_element_ptr
 
 
 """
-    element_ptr(A::VectorOfArrays)
+    ArraysOfArrays.element_ptr(A::VectorOfArrays)
 
-Returns a copy of the internal element pointer vector of `A`.
+Returns a copy of the internal element pointer vector of `A`. The pointers
+are absolute indices into `fused(A)` and need not start at one, e.g. for
+views and partial [`partitioned`](@ref) results.
+
+See also [`getsplitmode`](@ref), which returns the element pointers
+together with the kernel sizes.
 """
 element_ptr(A::VectorOfArrays) = copy(internal_element_ptr(A))
+@compat public element_ptr
 
 
+"""
+    ArraysOfArrays.full_consistency_checks(A::VectorOfArrays)
 
+Check the internal consistency of `A` completely, including whether the
+length of each element is compatible with its kernel size. Takes O(length(A))
+time, and synchronizes with the device for device-resident structural
+vectors.
+
+This is the default value of the `checks` argument of the
+[`VectorOfArrays`](@ref) constructor.
+"""
 function full_consistency_checks(A::VectorOfArrays)
     simple_consistency_checks(A)
     _partition_sizes_valid(A.elem_ptr, A.kernel_size) || throw(ArgumentError("VectorOfArrays inconsistent: Content of elem_ptr and kernel_size is inconsistent"))
     nothing
 end
+@compat public full_consistency_checks
+
 
 # Package extensions specialize this for GPU arrays, to avoid scalar indexing:
 function _partition_sizes_valid(elem_ptr::AbstractVector{<:Integer}, kernel_size::AbstractVector)
@@ -174,6 +193,17 @@ function _partition_sizes_valid(elem_ptr::AbstractVector{<:Integer}, kernel_size
 end
 
 
+"""
+    ArraysOfArrays.simple_consistency_checks(A::VectorOfArrays)
+
+Check the internal consistency of `A` without scanning its structural
+vectors: only the first and last element pointer are read, so the check
+takes O(1) time. On device-resident structural vectors those two reads
+require a device synchronization each.
+
+Suitable as the `checks` argument of the [`VectorOfArrays`](@ref)
+constructor.
+"""
 function simple_consistency_checks(A::VectorOfArrays{T,N,M}) where {T,N,M}
     M == N - 1 || throw(ArgumentError("VectorOfArrays{T,N,M} inconsistent: M must equal N - 1"))
     # Structural vectors must be one-based, only the flat data may have
@@ -185,6 +215,7 @@ function simple_consistency_checks(A::VectorOfArrays{T,N,M}) where {T,N,M}
     ep_last - 1 <= lastindex(A.data) || throw(ArgumentError("VectorOfArrays inconsistent: Last elem_ptr inconsistent with data indices"))
     nothing
 end
+@compat public simple_consistency_checks
 
 # Package extensions specialize this for GPU arrays, to allow the two scalar
 # reads explicitly:
@@ -202,9 +233,25 @@ function _require_elem_ptr_range(elem_ptr::AbstractVector{T}, i::Integer) where 
 end
 
 
+"""
+    ArraysOfArrays.no_consistency_checks(A::VectorOfArrays)
+
+Don't check the internal consistency of `A` at all.
+
+Suitable as the `checks` argument of the [`VectorOfArrays`](@ref)
+constructor for data and structural vectors that are known to be
+consistent with each other.
+
+!!! warning
+    Like `@inbounds`, this shifts responsibility to the caller:
+    inconsistent structural vectors go undetected and yield silently
+    truncated or empty elements, or out-of-bounds access when elements are
+    indexed with `@inbounds`.
+"""
 function no_consistency_checks(A::VectorOfArrays)
     nothing
 end
+@compat public no_consistency_checks
 
 
 @inline function _elem_size(ksize::Dims, len::Integer)
@@ -306,8 +353,9 @@ See also [`AbstractPartMode`](@ref).
 # Implementation
 
 [`getsplitmode(A::VectorOfArrays)`](@ref) copies the shape information of
-`A` (an O(length) operation), so the resulting mode is not affected if `A`
-is resized afterwards. A `VectorOfArrays` created via
+`A` where required (typically an O(length) operation), so the resulting
+mode is not affected if `A` is resized afterwards. Shape vectors that
+cannot be resized may be shared instead. A `VectorOfArrays` created via
 [`splitup`](@ref), on the other hand, shares the vectors of the mode it was
 created from, like the `VectorOfArrays` inner constructor.
 """

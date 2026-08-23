@@ -246,6 +246,7 @@ Get the entries of `tpl` corresponding to the inner dimensions of split
 mode `smode`, in the order specified by `smode`.
 """
 function getinnerdims end
+@compat public getinnerdims
 
 @inline getinnerdims(::Tuple, ::NonSplitMode) = ()
 
@@ -261,6 +262,7 @@ Get the entries of `tpl` corresponding to the outer dimensions of split
 mode `smode`, in the order specified by `smode`.
 """
 function getouterdims end
+@compat public getouterdims
 
 @inline getouterdims(x::Tuple, ::NonSplitMode) = x
 
