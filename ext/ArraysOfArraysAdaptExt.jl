@@ -14,6 +14,13 @@ function Adapt.adapt_structure(to, A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N}
     ArrayOfSimilarArrays{eltype(adapted_data),M,N}(adapted_data)
 end
 
+# Declares ArrayOfSimilarArrays a wrapped array, so that packages like
+# Reactant can convert it by rebuilding it around a converted parent.
+# Old Adapt versions do not provide parent_type:
+@static if isdefined(Adapt, :parent_type)
+    Adapt.parent_type(::Type{ArrayOfSimilarArrays{T,M,N,P,ET}}) where {T,M,N,P,ET} = P
+end
+
 
 function Adapt.adapt_structure(to, A::VectorOfArrays)
     VectorOfArrays(

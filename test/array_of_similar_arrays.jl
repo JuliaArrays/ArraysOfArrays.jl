@@ -382,6 +382,9 @@ end
         A_nested = sliced(A_flat, 2)
         @test @inferred(adapt(identity, A_nested)) == A_nested
         @test typeof(adapt(identity, A_nested)) == typeof(A_nested)
+        @static if isdefined(Adapt, :parent_type)
+            @test Adapt.parent_type(typeof(A_nested)) == typeof(A_flat)
+        end
     end
 
 
