@@ -307,6 +307,54 @@ end
 
 
 """
+    struct StaticSlices{AT<:AbstractArray,M} <: AbstractSlicingMode{M}
+
+Memory-ordered slicing with inner arrays of type `T`: `splitup`
+reinterprets a flat array as an array with element type `T` and `fused`
+reinterprets it back, both without copying data.
+
+Constructor: `StaticSlices(AT::Type{<:AbstractArray})`
+
+A primary use case is slicing a flat array into an array of static arrays.
+For example:
+
+```julia
+using StaticArrays
+A = rand(2, 3, 1000)
+smode = StaticSlices(SMatrix{2,3})
+slicedA = splitup(A, smode)
+```
+
+`AT` may be a `UnionAll`, e.g. `SVector{3}` instead of `SVector{3, Float64}`,
+but must be specific enough to determine the number of inner dimensions.
+`StaticSlices` is about shape, not type: if `AT` specifies an element type
+it is ignored when the mode is applied, the element type of the result
+always follows from the element type of the flat array.
+"""
+struct StaticSlices{AT<:AbstractArray,M} <: AbstractSlicingMode{M} end
+export StaticSlices
+
+StaticSlices(::Type{AT}) where {AT<:AbstractArray} = StaticSlices{AT,ndims(AT)}()
+
+is_memordered_splitmode(::StaticSlices) = true
+
+getinnerdims(obj::Tuple, ::StaticSlices{AT,M}) where {AT,M} = _front_tuple(obj, Val(M))
+getouterdims(obj::NTuple{L,Any}, ::StaticSlices{AT,M}) where {L,AT,M} = _back_tuple(obj, Val(L - M))
+
+function splitup(::AbstractArray, ::StaticSlices{AT}) where AT
+    throw(ArgumentError("splitup with a StaticSlices mode requires a package extension that supports reinterpretation with element type $AT, like the StaticArrays extension for static arrays"))
+end
+
+# The element type fully determines a StaticSlices mode, so the argument
+# can be verified completely at dispatch time:
+(f::FuseArrays{<:StaticSlices{AT}})(A::AbstractArray{<:AT}) where {AT<:AbstractArray} = fused(A)
+
+function (f::FuseArrays{<:StaticSlices{AT}})(A::AbstractArray) where {AT<:AbstractArray}
+    throw(ArgumentError("Inverse of StaticSlices{$AT} requires an array with elements of type $AT"))
+end
+
+
+"""
     unstackmode(A::AbstractArray)
     unstackmode(A::AbstractArray{<:AbstractArray})
 
@@ -369,8 +417,9 @@ end
 Return a sliced view of `A`, using the columns or the first `M` dimensions as
 inner dimensions.
 
-With StaticArrays loaded, `sliced(A, SVector{S})` returns a reinterpreted
-array with `SVector{S}` elements instead of an array of views.
+With StaticArrays loaded, `sliced(A, SA)` with a static array type `SA` (e.g.
+`SVector{3}` or `SMatrix{2,3}`) returns a reinterpreted array with `SA`
+elements instead of an array of views (see [`StaticSlices`](@ref)).
 """
 function sliced end
 export sliced
