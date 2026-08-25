@@ -734,6 +734,10 @@ include("testdefs.jl")
         sm = getsplitmode(A3)
         @test @inferred(adapt(identity, sm)) == sm
         @test typeof(adapt(identity, sm)) == typeof(sm)
+
+        f = ArraysOfArrays.FuseArrays(sm)
+        @test @inferred(adapt(identity, f)) == f
+        @test typeof(adapt(identity, f)) == typeof(f)
     end
 
 

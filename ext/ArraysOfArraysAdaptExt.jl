@@ -5,7 +5,7 @@ module ArraysOfArraysAdaptExt
 import Adapt
 using Adapt: adapt
 
-using ArraysOfArrays: ArrayOfSimilarArrays, VectorOfArrays, SplitParts
+using ArraysOfArrays: ArrayOfSimilarArrays, VectorOfArrays, SplitParts, FuseArrays
 using ArraysOfArrays: no_consistency_checks
 
 
@@ -31,6 +31,9 @@ function Adapt.adapt_structure(to, smode::SplitParts)
         adapt(to, smode.kernel_size)
     )
 end
+
+
+Adapt.adapt_structure(to, f::FuseArrays) = FuseArrays(adapt(to, f.smode))
 
 
 end # module ArraysOfArraysAdaptExt

@@ -64,6 +64,16 @@ getouterdims(obj::Tuple, ::SplitSlices{M,N}) where {M,N} = _back_tuple(obj, Val(
 @inline splitup(A::AbstractArray{T}, ::SplitSlices{M,N}) where {T,M,N} = ArrayOfSimilarArrays{T,M,N}(A)
 
 
+# Stacking restores SplitSlices splits, and unlike fused it also accepts
+# generic nested arrays. Restricting the nesting dimensionalities catches
+# mode mismatches at dispatch time, stack rejects ragged elements:
+(f::FuseArrays{SplitSlices{M,N}})(A::AbstractArray{<:AbstractArray{<:Any,M},N}) where {M,N} = stacked(A)
+
+function (f::FuseArrays{SplitSlices{M,N}})(A::AbstractArray) where {M,N}
+    throw(ArgumentError("Inverse of SplitSlices{$M,$N} requires an $N-dimensional array of $M-dimensional arrays"))
+end
+
+
 # All split-mode operations derive from `fused`:
 
 function fused(A::AbstractArrayOfSimilarArrays)

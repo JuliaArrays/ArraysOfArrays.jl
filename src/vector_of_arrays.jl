@@ -398,11 +398,23 @@ getsplitmode(A::VectorOfArrays) = SplitParts(_shapeinfo_copy(A.elem_ptr), _shape
 
 @inline fused(A::VectorOfArrays) = A.data
 
+
 # Comparing the part boundaries is O(n), vectorized on GPUs. splitup
 # shares the shape vectors of the mode it was created from, so round
 # trips take the egal fast path:
 _shapeinfo_equal(a::AbstractVector, b::AbstractVector) =
     a === b || (axes(a) == axes(b) && a == b)
+
+function (f::FuseArrays{<:SplitParts{N}})(A::VectorOfArrays{T,N}) where {T,N}
+    _shapeinfo_equal(A.elem_ptr, f.smode.elem_ptr) &&
+        _shapeinfo_equal(A.kernel_size, f.smode.kernel_size) ||
+        throw(ArgumentError("Partitioning of array does not match the split mode of the inverse"))
+    return fused(A)
+end
+
+function (f::FuseArrays{<:SplitParts})(A::AbstractArray)
+    throw(ArgumentError("Inverse of a SplitParts mode requires a VectorOfArrays with matching element dimensionality"))
+end
 
 function splitup(A::AbstractVector, smode::SplitParts)
     VectorOfArrays(A, smode.elem_ptr, smode.kernel_size, full_consistency_checks)

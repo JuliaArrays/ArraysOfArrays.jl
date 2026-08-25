@@ -13,5 +13,6 @@ Test.@testset "Package ArraysOfArrays" begin
     include("fixed_size_arrays.jl")
     include("gpu_arrays.jl")
     include("mooncake.jl")
+    include("inverse_functions.jl")
     include("test_docs.jl")
 end # testset

@@ -109,6 +109,16 @@ JLArrays.allowscalar(false)
         @test V_dev.elem_ptr isa AbstractGPUArray
         @test adapt(Array, V_dev) == V_host
         @test adapt(Array, getsplitmode(V_dev)).elem_ptr == getsplitmode(V_host).elem_ptr
+
+        f_dev = adapt(JLArray, ArraysOfArrays.FuseArrays(getsplitmode(V_host)))
+        @test f_dev.smode.elem_ptr isa AbstractGPUArray
+        @test f_dev(V_dev) === fused(V_dev)
+        # Boundary comparison must not scalar-index, also in mixed layouts:
+        @test ArraysOfArrays.FuseArrays(getsplitmode(V_host))(V_dev) === fused(V_dev)
+        @test ArraysOfArrays.FuseArrays(adapt(JLArray, getsplitmode(V_host)))(V_host) === fused(V_host)
+        V2_dev = adapt(JLArray, VectorOfArrays([Float32[1, 2, 3], Float32[4, 5]]))
+        @test_throws ArgumentError f_dev(V2_dev)
+        @test_throws ArgumentError ArraysOfArrays.FuseArrays(getsplitmode(V_host))(V2_dev)
     end
 
     @testset "device-resident shape info operations" begin

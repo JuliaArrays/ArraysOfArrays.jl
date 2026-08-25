@@ -6,6 +6,7 @@ using Test
 using ArraysOfArrays: getinnerdims, getouterdims
 using OffsetArrays: OffsetArray
 
+struct _TestSplitMode <: AbstractSplitMode end
 struct _TestPartMode <: ArraysOfArrays.AbstractPartMode{1,1} end
 
 include("testdefs.jl")
@@ -171,8 +172,9 @@ include("testdefs.jl")
         @test unstackmode(eachcol(reshape(collect(1.0:12.0), 3, 4))) === SplitSlices{1,1}()
         @test ArraysOfArrays._fused_impl(fill(1.0, 2), NonSplitMode{1}()) == fill(1.0, 2)
 
-        # Third-party part modes must specialize _bcast_expand for
-        # outer-value bcastat arguments:
+        # Third-party split modes fall back to fused in FuseArrays and must
+        # specialize _bcast_expand for outer-value bcastat arguments:
+        @test ArraysOfArrays.FuseArrays(_TestSplitMode())([1, 2, 3]) == [1, 2, 3]
         @test_throws ArgumentError ArraysOfArrays._bcast_expand([1, 2], _TestPartMode(), [1, 2, 3])
     end
 end

@@ -9,6 +9,7 @@ import ArraysOfArrays
 # Two O(1) scalar reads during construction are acceptable:
 ArraysOfArrays._scalar_first_last(x::AbstractGPUArray) = @allowscalar (first(x), last(x))
 
+
 # Vectorized shape-info comparison, to avoid scalar indexing of GPU
 # arrays. The shape vectors may reside on the host and device in any
 # combination:

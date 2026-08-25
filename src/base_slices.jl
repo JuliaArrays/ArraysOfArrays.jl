@@ -101,3 +101,16 @@ function splitup(A::AbstractArray, smode::BaseSlicing)
 end
 
 @inline _fused_impl(A::Slices, ::BaseSlicing) = parent(A)
+
+
+# The slicemap fully determines a BaseSlicing, so the split mode of the
+# argument can be verified completely in O(1):
+function (f::FuseArrays{<:BaseSlicing})(A::AbstractSlices)
+    getsplitmode(A) == f.smode ||
+        throw(ArgumentError("Split mode of array does not match the split mode of the inverse"))
+    return fused(A)
+end
+
+function (f::FuseArrays{<:BaseSlicing})(A::AbstractArray)
+    throw(ArgumentError("Inverse of a BaseSlicing mode requires a Base.Slices array"))
+end

@@ -15,7 +15,11 @@ split an array:
 splitup(A, smode) === smode(A)
 ```
 
-See also [`fused`](@ref).
+See also [`fused`](@ref), which undoes splitting.
+
+Subtypes of `AbstractSplitMode` (except `UnknownSplitMode`) support
+`InverseFunctions.inverse(smode)` (typically returning an
+[`ArraysOfArrays.FuseArrays`](@ref) instance).
 
 # Implementation
 
@@ -160,6 +164,36 @@ export fused
 function _fused_impl(@nospecialize(obj), ::UnknownSplitMode)
     throw(ArgumentError("fused not implemented for objects of type $(nameof(typeof(obj))) with unknown split mode"))
 end
+
+
+"""
+    struct ArraysOfArrays.FuseArrays{S<:AbstractSplitMode} <: Function
+
+Represents the inverse of a split mode: `FuseArrays(smode)` maps arrays
+split with `smode` back to their unsplit form.
+
+`FuseArrays(smode)(A)` acts like `fused(A)` (resp. `stacked(A)` for
+`SplitSlices` modes), but `FuseArrays(smode)` has an
+`InverseFunctions.inverse(FuseArrays(smode)) == smode` while `fused` itself
+has no inverse. `FuseArrays(smode)(A)` also checks that the structure of `A`
+is compatible with `smode`.
+
+Users should not instantiate `FuseArrays` directly, but use
+`InverseFunctions.inverse(smode)`.
+"""
+struct FuseArrays{S<:AbstractSplitMode} <: Function
+    smode::S
+end
+
+(f::FuseArrays)(A::AbstractArray) = fused(A)
+
+# For NonSplitMode, splitup is the identity with an O(1) ndims check:
+(f::FuseArrays{<:NonSplitMode})(A::AbstractArray) = splitup(A, f.smode)
+
+Base.:(==)(a::FuseArrays, b::FuseArrays) = a.smode == b.smode
+
+Base.hash(f::FuseArrays, h::UInt) = hash(f.smode, hash(:FuseArrays, h))
+@compat public FuseArrays
 
 
 """
