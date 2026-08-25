@@ -344,23 +344,26 @@ end
 
         A_data = rand_flat_array(Val(4))
         A = ArrayOfSimilarArrays{Float64, 2}(A_data)
-        A_similar = similar(A, Array{Float64, 2}, size(A))
+
+        # The elements of an ArrayOfSimilarArrays are views, so similar can
+        # only preserve the structure for the element type of A itself.
+        # Other element types must return an Array with the requested
+        # element type, as required by the similar API:
+        A_similar = @inferred similar(A, eltype(A), size(A))
+        @test typeof(A_similar) == typeof(A)
         @test @inferred(size(A)) == @inferred(size(A_similar))
         @test @inferred(size(A.data)) == @inferred(size(A_similar.data))
         @test typeof(A_similar.data) == typeof(A_data)
 
-        # similar must respect the requested element type and outer dims:
-        A_similar32 = @inferred similar(A, Array{Float32, 2}, size(A))
-        @test eltype(eltype(A_similar32)) == Float32
-        @test eltype(A_similar32.data) == Float32
-        # Element types of a different dimensionality go to the generic
-        # implementation instead of silently keeping the inner rank:
+        @test @inferred(similar(A, Array{Float64, 2}, size(A))) isa Array{Array{Float64, 2}, 2}
+        @test size(similar(A, Array{Float64, 2}, size(A))) == size(A)
         A_similar_vecs = similar(A, Vector{Float64}, (3,))
         @test typeof(A_similar_vecs) == Array{Vector{Float64},1}
-        A_similar_1d = @inferred similar(A, Array{Float64, 2}, (3,))
-        @test size(A_similar_1d) == (3,)
-        @test innersize(A_similar_1d) == innersize(A)
-        @test typeof(A_similar) == typeof(A)
+
+        # Base.map with array-producing functions relies on this fallback:
+        B = sliced(rand(3, 5), 1)
+        @test @inferred(map(v -> 2 .* v, B)) == [2 .* v for v in B]
+        @test map(v -> 2 .* v, B) isa Vector{Vector{Float64}}
     end
 
 

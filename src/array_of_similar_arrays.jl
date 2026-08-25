@@ -251,9 +251,13 @@ end
 
 # Requests for element types of a different dimensionality than M fall
 # through to the generic similar implementations:
-function Base.similar(A::ArrayOfSimilarArrays{T,M,N}, ::Type{<:AbstractArray{U,M}}, dims::Dims) where {T,M,N,U}
+# The elements of an ArrayOfSimilarArrays are views, so similar can only
+# preserve the structure when the requested element type is the element
+# type of A itself, as reached via Base's similar(A) and similar(A, dims).
+# All other element types go to the generic implementation:
+function Base.similar(A::ArrayOfSimilarArrays{T,M,N,P,ET}, ::Type{ET}, dims::Dims) where {T,M,N,P,ET}
     # ToDo: Don't use similar if data is an ElasticArray?
-    ArrayOfSimilarArrays{U,M,length(dims)}(similar(A.data, U, innersize(A)..., dims...))
+    ArrayOfSimilarArrays{T,M,length(dims)}(similar(A.data, T, innersize(A)..., dims...))
 end
 
 
