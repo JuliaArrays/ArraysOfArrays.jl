@@ -266,8 +266,8 @@ end
         data = rand(3, 5)
         B = TestSimilarVectors(data)
 
-        @test @inferred(getsplitmode(B)) === SplitSlices{1,1}()
-        @test @inferred(unstackmode(B)) === SplitSlices{1,1}()
+        @test @inferred(getsplitmode(B)) === SplitSlices{1}()
+        @test @inferred(unstackmode(B)) === SplitSlices{1}()
         @test @inferred(fused(B)) === data
         @test @inferred(stacked(B)) === data
         @test @inferred(flatview(B)) === data

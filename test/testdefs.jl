@@ -63,8 +63,8 @@ if !isdefined(Main, :test_api)
             test_notangent_rrule(is_memordered_splitmode, smode)
 
             if A isa AbstractSlices
-                let M = ndims(eltype(A)), N = ndims(A)
-                    @test smode isa AbstractSlicingMode{M,N}
+                let M = ndims(eltype(A))
+                    @test smode isa AbstractSlicingMode{M}
                 end
             elseif eltype(A) <: Number
                 @test smode isa NonSplitMode{ndims(A)}
@@ -107,20 +107,18 @@ if !isdefined(Main, :test_api)
                 end
             end
 
-            _smode_M(::AbstractSlicingMode{M,N}) where {M,N} = M
-            _smode_N(::AbstractSlicingMode{M,N}) where {M,N} = N
+            _smode_M(::AbstractSlicingMode{M}) where {M} = M
 
             dimstpl = ntuple(identity, Val(ndims(A_unsplit_ref)))
 
             if smode isa AbstractSlicingMode
-                M, N = _smode_M(smode), _smode_N(smode)
+                M, N = _smode_M(smode), ndims(A)
                 A_array_stacked = stack(A_array)
                 @test M == ndims(eltype(A))
-                @test N == ndims(A)
 
                 @test Array(stack(A)) == A_array_stacked
 
-                @test @inferred(unstackmode(A)) isa AbstractSlicingMode{M,N}
+                @test @inferred(unstackmode(A)) isa AbstractSlicingMode{M}
                 umode = unstackmode(A)
                 @test @inferred(splitup(stacked(A), umode)) == A
 

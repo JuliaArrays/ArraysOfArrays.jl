@@ -169,7 +169,7 @@ include("testdefs.jl")
         Mo = OffsetArray(reshape(collect(1.0:12.0), 3, 4), 1:3, 0:3)
         @test unstackmode(eachcol(Mo)) isa UnknownSplitMode
         @test unstackmode(OffsetArray([[1, 2], [3, 4]], 0:1)) isa UnknownSplitMode
-        @test unstackmode(eachcol(reshape(collect(1.0:12.0), 3, 4))) === SplitSlices{1,1}()
+        @test unstackmode(eachcol(reshape(collect(1.0:12.0), 3, 4))) === SplitSlices{1}()
         @test ArraysOfArrays._fused_impl(fill(1.0, 2), NonSplitMode{1}()) == fill(1.0, 2)
 
         # Third-party split modes fall back to fused in FuseArrays and must

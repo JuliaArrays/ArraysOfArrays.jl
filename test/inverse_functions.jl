@@ -8,7 +8,7 @@ using InverseFunctions: inverse, NoInverse, test_inverse
 
 @testset "InverseFunctions extension" begin
     test_inverse(NonSplitMode{2}(), rand(2, 3), compare = ==)
-    test_inverse(SplitSlices{1,2}(), rand(2, 3, 4), compare = ==)
+    test_inverse(SplitSlices{1}(), rand(2, 3, 4), compare = ==)
     test_inverse(SplitParts([1, 4, 8, 11], fill((), 3)), collect(1:10), compare = ==)
     test_inverse(getsplitmode(eachslice(rand(2, 3, 4), dims = 2)), rand(2, 3, 4), compare = ==)
 
@@ -18,8 +18,8 @@ using InverseFunctions: inverse, NoInverse, test_inverse
     smode = SplitParts([3, 5, 8], fill((), 2))
     @test @inferred(inverse(smode)(smode(x))) === x
 
-    @test @inferred(inverse(SplitSlices{1,2}())) === FuseArrays(SplitSlices{1,2}())
-    @test @inferred(inverse(inverse(SplitSlices{1,2}()))) === SplitSlices{1,2}()
+    @test @inferred(inverse(SplitSlices{1}())) === FuseArrays(SplitSlices{1}())
+    @test @inferred(inverse(inverse(SplitSlices{1}()))) === SplitSlices{1}()
     @test @inferred(inverse(NonSplitMode{2}())) === NonSplitMode{2}()
     @test inverse(UnknownSplitMode{Vector{Vector{Int}}}()) isa NoInverse
 
@@ -32,8 +32,8 @@ using InverseFunctions: inverse, NoInverse, test_inverse
     @test hash(inverse(smode_A)) == hash(FuseArrays(getsplitmode(A)))
 
     # Mode mismatches are detected where possible in O(1):
-    @test_throws ArgumentError inverse(SplitSlices{1,2}())(rand(2, 3))
-    @test_throws ArgumentError inverse(SplitSlices{1,1}())(sliced(rand(2, 3, 4), 2))
+    @test_throws ArgumentError inverse(SplitSlices{1}())(rand(2, 3))
+    @test_throws ArgumentError inverse(SplitSlices{1}())(sliced(rand(2, 3, 4), 2))
     X = rand(2, 3, 4)
     bs = getsplitmode(eachslice(X, dims = 2))
     @test_throws ArgumentError inverse(bs)(eachslice(X, dims = 3))

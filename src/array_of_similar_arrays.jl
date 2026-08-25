@@ -40,37 +40,40 @@ export AbstractVectorOfSimilarVectors
 
 
 """
-    struct SplitSlices{M,N} <: AbstractSlicingMode{M,N}
+    struct SplitSlices{M} <: AbstractSlicingMode{M}
 
 The split mode of [`ArrayOfSimilarArrays`](@ref): memory-ordered slicing
-with `M` inner and `N` outer dimensions.
+with `M` inner dimensions.
 
 Constructor:
 
 ```
-SplitSlices{M,N}()
+SplitSlices{M}()
 ```
 
 See also [`AbstractSlicingMode`](@ref).
 """
-struct SplitSlices{M,N} <: AbstractSlicingMode{M,N} end
+struct SplitSlices{M} <: AbstractSlicingMode{M} end
 export SplitSlices
 
 is_memordered_splitmode(::SplitSlices) = true
 
-getinnerdims(obj::Tuple, ::SplitSlices{M,N}) where {M,N} = _front_tuple(obj, Val(M))
-getouterdims(obj::Tuple, ::SplitSlices{M,N}) where {M,N} = _back_tuple(obj, Val(N))
+getinnerdims(obj::Tuple, ::SplitSlices{M}) where {M} = _front_tuple(obj, Val(M))
+getouterdims(obj::NTuple{L,Any}, ::SplitSlices{M}) where {L,M} = _back_tuple(obj, Val(L - M))
 
-@inline splitup(A::AbstractArray{T}, ::SplitSlices{M,N}) where {T,M,N} = ArrayOfSimilarArrays{T,M,N}(A)
+@inline function splitup(A::AbstractArray{T,L}, ::SplitSlices{M}) where {T,L,M}
+    M isa Integer && 0 <= M <= L || throw(ArgumentError("Cannot split an array with $L dimensions using $M inner dimensions"))
+    return ArrayOfSimilarArrays{T,M,L-M}(A)
+end
 
 
 # Stacking restores SplitSlices splits, and unlike fused it also accepts
 # generic nested arrays. Restricting the nesting dimensionalities catches
 # mode mismatches at dispatch time, stack rejects ragged elements:
-(f::FuseArrays{SplitSlices{M,N}})(A::AbstractArray{<:AbstractArray{<:Any,M},N}) where {M,N} = stacked(A)
+(f::FuseArrays{SplitSlices{M}})(A::AbstractArray{<:AbstractArray{<:Any,M}}) where {M} = stacked(A)
 
-function (f::FuseArrays{SplitSlices{M,N}})(A::AbstractArray) where {M,N}
-    throw(ArgumentError("Inverse of SplitSlices{$M,$N} requires an $N-dimensional array of $M-dimensional arrays"))
+function (f::FuseArrays{SplitSlices{M}})(A::AbstractArray) where {M}
+    throw(ArgumentError("Inverse of SplitSlices{$M} requires an array of $M-dimensional arrays"))
 end
 
 
@@ -80,7 +83,7 @@ function fused(A::AbstractArrayOfSimilarArrays)
     throw(ArgumentError("Subtypes of AbstractArrayOfSimilarArrays like $(nameof(typeof(A))) must implement ArraysOfArrays.fused"))
 end
 
-@inline getsplitmode(::AbstractArrayOfSimilarArrays{T,M,N}) where {T,M,N} = SplitSlices{M,N}()
+@inline getsplitmode(::AbstractArrayOfSimilarArrays{T,M}) where {T,M} = SplitSlices{M}()
 @inline unstackmode(A::AbstractArrayOfSimilarArrays) = getsplitmode(A)
 
 @inline Base.parent(A::AbstractArrayOfSimilarArrays) = fused(A)

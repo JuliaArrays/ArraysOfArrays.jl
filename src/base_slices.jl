@@ -1,7 +1,7 @@
 # This file is a part of ArraysOfArrays.jl, licensed under the MIT License (MIT).
 
 """
-    struct BaseSlicing{M,N,TPL<:Tuple{Vararg{Union{Colon,Int}}}} <: AbstractSlicingMode{M,N}
+    struct BaseSlicing{M,TPL<:Tuple{Vararg{Union{Colon,Int}}}} <: AbstractSlicingMode{M}
 
 The split mode of `Base.Slices` (as returned by `eachslice`, `eachcol` and
 `eachrow`).
@@ -9,27 +9,27 @@ The split mode of `Base.Slices` (as returned by `eachslice`, `eachcol` and
 Constructor:
 
 ```
-BaseSlicing{M,N,TPL}(slicemap::TPL)
+BaseSlicing{M,TPL}(slicemap::TPL)
 ```
 
 `slicemap` equals the `slicemap` property of `Base.Slices` objects.
 
 See also [`AbstractSlicingMode`](@ref).
 """
-struct BaseSlicing{M,N,TPL<:Tuple{Vararg{Union{Colon,Int}}}} <: AbstractSlicingMode{M,N}
+struct BaseSlicing{M,TPL<:Tuple{Vararg{Union{Colon,Int}}}} <: AbstractSlicingMode{M}
     slicemap::TPL
 end
 export BaseSlicing
 
-is_memordered_splitmode(::BaseSlicing{1,1,Tuple{Colon,Int}}) = true
+is_memordered_splitmode(::BaseSlicing{1,Tuple{Colon,Int}}) = true
 
-function is_memordered_splitmode(smode::BaseSlicing{M,N}) where {M,N}
-    dims = _oneto_tpl(Val(M+N))
+function is_memordered_splitmode(smode::BaseSlicing)
+    dims = _oneto_tpl(Val(length(smode.slicemap)))
     issorted((getinnerdims(dims, smode)..., getouterdims(dims, smode)...))
 end
 
 
-@inline @generated function getinnerdims(obj::Tuple, ::BaseSlicing{M,N,SliceMapT}) where {M,N,SliceMapT}
+@inline @generated function getinnerdims(obj::Tuple, ::BaseSlicing{M,SliceMapT}) where {M,SliceMapT}
     expr = Expr(:tuple)
     slicepars = SliceMapT.parameters
     for i in 1:length(slicepars)
@@ -41,7 +41,7 @@ end
 end
 
 
-@inline @generated function getouterdims(obj::Tuple, smode::BaseSlicing{M,N,SliceMapT}) where {M,N,SliceMapT}
+@inline @generated function getouterdims(obj::Tuple, smode::BaseSlicing{M,SliceMapT}) where {M,SliceMapT}
     slicepars = SliceMapT.parameters
     outdimidxs = Int[]
     for i in 1:length(slicepars)
@@ -84,7 +84,7 @@ end
     N = ndims(A)
     slicemap = getslicemap(A)
     if length(slicemap) == M + N
-        BaseSlicing{M,N,typeof(slicemap)}(slicemap)
+        BaseSlicing{M,typeof(slicemap)}(slicemap)
     else
         # Singleton outer dimensions (eachslice with drop = false) do not
         # appear in the slicemap, so such slicings cannot be represented as

@@ -235,10 +235,11 @@ end
 
 
 """
-    abstract type AbstractSlicingMode{M,N} <: AbstractSplitMode
+    abstract type AbstractSlicingMode{M} <: AbstractSplitMode
 
-Abstract supertype for array slicing modes with `M` inner dimensions and `N`
-outer dimensions.
+Abstract supertype for array slicing modes with `M` inner dimensions. The
+number of outer dimensions follows from the context, e.g. the
+dimensionality of the array that is split.
 
 Use `getsplitmode` to get the split mode of a split array.
 
@@ -249,7 +250,7 @@ must specialize [`ArraysOfArrays.getinnerdims`](@ref) and
 [`ArraysOfArrays.getouterdims`](@ref), which the slicing-specific
 operations rely on.
 """
-abstract type AbstractSlicingMode{M,N} <: AbstractSplitMode end
+abstract type AbstractSlicingMode{M} <: AbstractSplitMode end
 export AbstractSlicingMode
 
 
@@ -322,11 +323,11 @@ export unstackmode
 
 @inline unstackmode(A::AbstractArray{<:AbstractArray}) = UnknownSplitMode{typeof(A)}()
 
-function unstackmode(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M,N}
+function unstackmode(A::AbstractArray{<:AbstractArray{T,M}}) where {T,M}
     innersize(A)  # Ensure element arrays have equal size
     # splitup of the stacked array cannot reproduce offset outer axes:
     all(r -> isone(first(r)), axes(A)) || return UnknownSplitMode{typeof(A)}()
-    return SplitSlices{M,N}()
+    return SplitSlices{M}()
 end
 
 
@@ -376,10 +377,7 @@ export sliced
 
 @inline sliced(A::AbstractArray, M::Integer) = sliced(A, Val(M))
 
-@inline function sliced(A::AbstractArray{T,L}, ::Val{M}) where {T,L,M}
-    M isa Integer && 0 <= M <= L || throw(ArgumentError("Cannot slice an array with $L dimensions using $M inner dimensions"))
-    return splitup(A, SplitSlices{M,L-M}())
-end
+@inline sliced(A::AbstractArray, ::Val{M}) where {M} = splitup(A, SplitSlices{M}())
 
 @inline sliced(A::AbstractArray{T,2}) where {T} = sliced(A, Val(1))
 
@@ -770,7 +768,7 @@ function _bcast_expand(@nospecialize(x::AbstractArray), smode::AbstractPartMode,
     throw(ArgumentError("bcastat requires ArraysOfArrays._bcast_expand to be specialized for split mode $(nameof(typeof(smode))) to support outer-value arguments"))
 end
 
-function _bcast_expand(x::AbstractArray, smode::AbstractSlicingMode{M,N}, ref_flat::AbstractArray) where {M,N}
+function _bcast_expand(x::AbstractArray, smode::AbstractSlicingMode{M}, ref_flat::AbstractArray) where {M}
     if axes(x) == getouterdims(axes(ref_flat), smode)
         is_memordered_splitmode(smode) || throw(ArgumentError("bcastat does not support outer-value broadcasting for slicings that are not in memory order"))
         return reshape(x, ntuple(_ -> 1, Val(M))..., size(x)...)

@@ -14,29 +14,29 @@ include("testdefs.jl")
     A_orig_mat = rand(5,6)
 
     Aes1 = eachslice(A_orig; dims = (4,5))
-    @test @inferred(getsplitmode(Aes1)) isa BaseSlicing{3,2,Tuple{Colon,Colon,Colon,Int,Int}}
+    @test @inferred(getsplitmode(Aes1)) isa BaseSlicing{3,Tuple{Colon,Colon,Colon,Int,Int}}
     @test @inferred(getinnerdims((1,2,3,4,5), getsplitmode(Aes1))) == (1,2,3)
     @test @inferred(getouterdims((1,2,3,4,5), getsplitmode(Aes1))) == (4,5)
 
     Aes2 = eachslice(A_orig; dims = (3,1,5))
-    @test @inferred(getsplitmode(Aes2)) isa BaseSlicing{2,3,Tuple{Int,Colon,Int,Colon,Int}}
+    @test @inferred(getsplitmode(Aes2)) isa BaseSlicing{2,Tuple{Int,Colon,Int,Colon,Int}}
     @test @inferred(getinnerdims((1,2,3,4,5), getsplitmode(Aes2))) == (2,4)
     @test @inferred(getouterdims((1,2,3,4,5), getsplitmode(Aes2))) == (3,1,5)
 
     # Non-involutive outer dimension order (a 3-cycle), regression test for
     # getouterdims applying the inverse of the slicemap permutation:
     Aes3 = eachslice(A_orig; dims = (2,3,1))
-    @test @inferred(getsplitmode(Aes3)) isa BaseSlicing{2,3,Tuple{Int,Int,Int,Colon,Colon}}
+    @test @inferred(getsplitmode(Aes3)) isa BaseSlicing{2,Tuple{Int,Int,Int,Colon,Colon}}
     @test @inferred(getinnerdims((1,2,3,4,5), getsplitmode(Aes3))) == (4,5)
     @test @inferred(getouterdims((1,2,3,4,5), getsplitmode(Aes3))) == (2,3,1)
 
     Aec = eachcol(A_orig_mat)
-    @test @inferred(getsplitmode(Aec)) isa BaseSlicing{1,1,Tuple{Colon,Int}}
+    @test @inferred(getsplitmode(Aec)) isa BaseSlicing{1,Tuple{Colon,Int}}
     @test @inferred(getinnerdims((1,2), getsplitmode(Aec))) == (1,)
     @test @inferred(getouterdims((1,2), getsplitmode(Aec))) == (2,)
 
     Aer = eachrow(A_orig_mat)
-    @test @inferred(getsplitmode(Aer)) isa BaseSlicing{1,1,Tuple{Int,Colon}}
+    @test @inferred(getsplitmode(Aer)) isa BaseSlicing{1,Tuple{Int,Colon}}
 
     # splitup validates the array rank against the slicemap:
     let smode = getsplitmode(eachcol(rand(3, 4)))
