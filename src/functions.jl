@@ -330,6 +330,11 @@ but must be specific enough to determine the number of inner dimensions.
 `StaticSlices` is about shape, not type: if `AT` specifies an element type
 it is ignored when the mode is applied, the element type of the result
 always follows from the element type of the flat array.
+
+Splitting works by `reinterpret` and so requires an isbits element type.
+In Reactant-traced code (with the Reactant package loaded), `splitup`
+returns a lazy view with static-array elements instead, since traced
+arrays cannot be reinterpreted.
 """
 struct StaticSlices{AT<:AbstractArray,M} <: AbstractSlicingMode{M} end
 export StaticSlices
@@ -344,6 +349,12 @@ getouterdims(obj::NTuple{L,Any}, ::StaticSlices{AT,M}) where {L,AT,M} = _back_tu
 function splitup(::AbstractArray, ::StaticSlices{AT}) where AT
     throw(ArgumentError("splitup with a StaticSlices mode requires a package extension that supports reinterpretation with element type $AT, like the StaticArrays extension for static arrays"))
 end
+
+# Extension points, implemented by the StaticArraysCore extension:
+# _sa_with_eltype(AT, T) completes/replaces the element type of static
+# array type AT with T, _sa_without_eltype(AT) strips it:
+function _sa_with_eltype end
+function _sa_without_eltype end
 
 # The element type fully determines a StaticSlices mode, so the argument
 # can be verified completely at dispatch time:
