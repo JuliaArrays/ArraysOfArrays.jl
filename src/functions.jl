@@ -398,7 +398,9 @@ Join the element arrays of a nested array into a single array along one or
 more new dimensions, return non-nested arrays unchanged.
 
 Similar to `Base.stack`, but can return the original underlying array of
-sliced arrays in more cases.
+sliced arrays in more cases. Empty arrays of arrays, which `Base.stack`
+rejects, yield an empty array with the [`innersize`](@ref) of `A` as inner
+dimensions.
 """
 function stacked end
 export stacked
@@ -406,7 +408,8 @@ export stacked
 @inline stacked(A::AbstractArray) = A
 @inline stacked(A::AbstractArray{<:AbstractArray}) = _stacked_impl(A, getsplitmode(A))
 
-_stacked_impl(A::AbstractArray{<:AbstractArray}, ::AbstractSplitMode) = stack(A)
+_stacked_impl(A::AbstractArray{<:AbstractArray}, ::AbstractSplitMode) =
+    isempty(A) ? Array{eltype(eltype(A))}(undef, innersize(A)..., size(A)...) : stack(A)
 
 function _stacked_impl(A::AbstractSlices{<:AbstractArray}, smode::AbstractSlicingMode)
     A_joined = fused(A)

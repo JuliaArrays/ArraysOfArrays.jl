@@ -160,6 +160,13 @@ include("testdefs.jl")
         test_api(A_3, A_3_flat)
     end
 
+    @testset "stacked" begin
+        @test @inferred(stacked(Vector{Vector{Float64}}())) == Matrix{Float64}(undef, 0, 0)
+        @test @inferred(stacked(Vector{Matrix{Int}}())) == Array{Int}(undef, 0, 0, 0)
+        @test @inferred(convert(VectorOfSimilarVectors, Vector{Vector{Float64}}())) == VectorOfSimilarVectors(Matrix{Float64}(undef, 0, 0))
+        @test isempty(@inferred(convert(ArrayOfSimilarArrays, Matrix{Vector{Float64}}(undef, 0, 2))))
+    end
+
     @testset "generic fallbacks" begin
         @test unstackmode(rand(2, 3)) === NonSplitMode{2}()
         @test unstackmode(AbstractArray[[1], [2, 3]]) isa UnknownSplitMode

@@ -143,6 +143,13 @@ if !isdefined(Main, :test_api)
                 @test permutedims(A_unsplit_ref, (innerdims..., outerdims...)) == A_array_stacked
             elseif smode isa NonSplitMode
                 @test @inferred(stacked(A)) === A
+            elseif isempty(A)
+                # stacked returns an empty array with the innersize of A as
+                # inner dimensions, where Base.stack would reject the empty
+                # collection:
+                s = stacked(A)
+                @test isempty(s)
+                @test ndims(s) == ndims(eltype(A)) + ndims(A)
             else
                 stacked_A = try stack(A); catch err; err; end
                 if stacked_A isa Exception
