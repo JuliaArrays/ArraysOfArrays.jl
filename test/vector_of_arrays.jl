@@ -119,6 +119,8 @@ include("testdefs.jl")
         @test @inferred(VectorOfArrays{Float64,1}(deepcopy(A1))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int,1},Array{Tuple{},1}}
         @test VectorOfArrays{Float64,1}(deepcopy(A1)) == A1
 
+        @test VectorOfVectors === PartsView
+        @test !Base.isdeprecated(ArraysOfArrays, :VectorOfVectors)
         @test @inferred(PartsView(deepcopy(A1))) isa VectorOfArrays{Float32,1,0,Array{Float32,1},Array{Int,1},Array{Tuple{},1}}
         @test PartsView(deepcopy(A1)) == A1
         @test @inferred(PartsView{Float64}(deepcopy(A1))) isa VectorOfArrays{Float64,1,0,Array{Float64,1},Array{Int,1},Array{Tuple{},1}}

@@ -970,6 +970,10 @@ function consgroupedview(source::AbstractVector, target::NamedTuple{syms,<:NTupl
 end
 
 
-# Deprecated:
+"""
+    VectorOfVectors{T,...} = PartsView{T,...}
 
-Base.@deprecate_binding VectorOfVectors PartsView
+Alias for [`PartsView`](@ref).
+"""
+const VectorOfVectors = PartsView
+export VectorOfVectors
