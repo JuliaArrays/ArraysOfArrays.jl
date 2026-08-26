@@ -13,6 +13,28 @@ This package also defines and exports the following new functions applicable to 
 * [`innermap`](@ref) and [`deepmap`](@ref) apply a function to the elements of the inner (resp. innermost) arrays.
 * [`consgroupedview`](@ref) computes a grouping of equal consecutive elements on a vector and applies it to another vector or (named or unnamed) tuple of vectors.
 
+## Nested array types
+
+ArraysOfArrays provides two nested-array representations. They are distinct concrete types (neither is a subtype of the other) that cover different storage needs:
+
+|                | [`ArrayOfSimilarArrays`](@ref section_ArrayOfSimilarArrays)          | [`VectorOfArrays`](@ref section_VectorOfArrays)      |
+|:---------------|:--------------------------------------------------------------------|:----------------------------------------------------|
+| Element sizes  | all equal                                                           | may differ                                          |
+| Outer container| any `N`-dimensional array                                           | a vector                                            |
+| Storage        | a single flat `(M+N)`-dimensional array, in memory order            | a flat vector partitioned into consecutive parts    |
+| Elements       | equal-size slices (views) of the flat array                         | consecutive views of the flat vector, sizes may vary|
+| Supertype      | `AbstractArrayOfSimilarArrays{T,M,N} <: Base.AbstractSlices`        | `AbstractVector`                                    |
+
+Here `M` is the dimensionality of the inner (element) arrays and `N` that of the outer container.
+
+Both keep their data in a single underlying array that is always available via [`flatview`](@ref) (and [`fused`](@ref)), so switching between the flat and the nested view is zero-copy.
+
+Convenience aliases name the common special cases (see the *Type aliases* sections below). In particular, `VectorOfSimilarVectors` is a vector of equal-length vectors, and [`PartsView`](@ref) (also exported as `VectorOfVectors`) is a vector of vectors that may differ in length.
+
+The abstract type [`AbstractArrayOfSimilarArrays`](@ref) is the supertype for custom equal-size nested-array implementations; `VectorOfArrays` has no package-specific abstract supertype.
+
+ArraysOfArrays also supports `Base.Slices`.
+
 ## Operations at a given nesting depth
 
 Similar to axis-targeted operations in Python's AwkwardArrays, but with array-of-arrays nesting semantics:
