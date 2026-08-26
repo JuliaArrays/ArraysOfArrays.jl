@@ -394,6 +394,31 @@ Base.convert(R::Type{VectorOfSimilarVectors}, A::AbstractVector{<:AbstractVector
 # does not dispatch on keyword arguments, so dispatch on the value of `dims`
 # instead and forward non-Colon dims to the generic implementations:
 
+# Reductions that combine per-element reductions with the same operation
+# run over the flat data in a single pass. Empty inputs and empty elements
+# go to the generic implementation, to preserve its errors:
+for (f, op) in ((:maximum, :max), (:minimum, :min))
+    @eval function Base.mapreduce(::typeof($f), ::typeof($op), A::AbstractArrayOfSimilarArrays; kwargs...)
+        if isempty(kwargs) && !isempty(A) && prod(innersize(A)) > 0
+            $f(fused(A))
+        else
+            invoke(mapreduce, Tuple{typeof($f),typeof($op),AbstractArray}, $f, $op, A; kwargs...)
+        end
+    end
+end
+
+# The flat sum is Base's (pairwise) sum over the flat data, so for
+# floating-point elements it may differ from the element-wise grouping by
+# the last bits, like any reassociated sum:
+function Base.mapreduce(::typeof(sum), ::typeof(+), A::AbstractArrayOfSimilarArrays; kwargs...)
+    if isempty(kwargs) && !isempty(A)
+        sum(fused(A))
+    else
+        invoke(mapreduce, Tuple{typeof(sum),typeof(+),AbstractArray}, sum, +, A; kwargs...)
+    end
+end
+
+
 _flatreduce(f, X::AbstractVectorOfSimilarArrays{T,M}, ::Colon; kwargs...) where {T,M} =
     f(flatview(X); dims = M + 1, kwargs...)[_ncolons(Val{M}())...]
 _flatreduce(f, X::AbstractVectorOfSimilarArrays, dims::Integer; kwargs...) =

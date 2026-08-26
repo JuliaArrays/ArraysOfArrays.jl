@@ -493,6 +493,30 @@ end
 Base.mapreduce(::typeof(vec), ::typeof(vcat), A::VectorOfArrays) = copy(vecflattened(A))
 Base.reduce(::typeof(vcat), A::VectorOfArrays{T,1}) where {T} = copy(vecflattened(A))
 
+# Reductions that combine per-element reductions with the same operation
+# run over the covered flat data in a single pass. Empty inputs and empty
+# elements go to the generic implementation, to preserve its errors:
+for (f, op) in ((:maximum, :max), (:minimum, :min))
+    @eval function Base.mapreduce(::typeof($f), ::typeof($op), A::VectorOfArrays; kwargs...)
+        if isempty(kwargs) && !isempty(A) && !any(iszero, innerlengths(A))
+            $f(vecflattened(A))
+        else
+            invoke(mapreduce, Tuple{typeof($f),typeof($op),AbstractArray}, $f, $op, A; kwargs...)
+        end
+    end
+end
+
+# The flat sum is Base's (pairwise) sum over the covered data, so for
+# floating-point elements it may differ from the element-wise grouping by
+# the last bits, like any reassociated sum:
+function Base.mapreduce(::typeof(sum), ::typeof(+), A::VectorOfArrays; kwargs...)
+    if isempty(kwargs) && !isempty(A)
+        sum(vecflattened(A))
+    else
+        invoke(mapreduce, Tuple{typeof(sum),typeof(+),AbstractArray}, sum, +, A; kwargs...)
+    end
+end
+
 
 Base.size(A::VectorOfArrays) = size(A.kernel_size)
 

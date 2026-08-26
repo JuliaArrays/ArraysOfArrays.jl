@@ -185,3 +185,9 @@ if !isdefined(Main, :test_api)
         end
     end
 end
+
+
+# Base throws different error types for empty reductions across Julia
+# versions (ArgumentError on >=1.11, MethodError on 1.10), so tests assert
+# parity with the generic implementation instead of a fixed type:
+_reduction_error_type(f, op, A) = try mapreduce(f, op, A); nothing catch e; typeof(e) end
