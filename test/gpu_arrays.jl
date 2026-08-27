@@ -164,4 +164,114 @@ JLArrays.allowscalar(false)
         V2 = VectorOfArrays(jl(collect(1f0:100000f0)), jl([1, 100001]), jl([()]))
         @test collect(innersum(V2)) ≈ [sum(1f0:100000f0)]
     end
+
+    @testset "map and broadcast with scalar results" begin
+        cpu = VectorOfArrays([Float32[3, 1, 4], Float32[9, 2], Float32[6, 5, 3, 1], Float32[7]])
+        # Both fully device-resident and host-shape-info layouts:
+        for V in (adapt(JLArray, cpu),
+                  VectorOfArrays(jl(cpu.data), cpu.elem_ptr, cpu.kernel_size))
+            for g in (sum, maximum, minimum, argmin, argmax)
+                @test Array(map(g, V)) == map(g, cpu)
+            end
+            # Broadcast form:
+            @test Array(sum.(V)) == sum.(cpu)
+            @test Array(argmin.(V)) == argmin.(cpu)
+            # A general scalar function via the segment-view kernel:
+            @test Array(map(v -> sum(abs2, v), V)) == map(v -> sum(abs2, v), cpu)
+            @test Array((v -> sum(abs2, v)).(V)) == (v -> sum(abs2, v)).(cpu)
+        end
+
+        # Empty vector of arrays:
+        @test isempty(map(sum, adapt(JLArray, VectorOfArrays(Vector{Float32}[]))))
+
+        # argmin/argmax of empty element arrays error like Base:
+        Ve = adapt(JLArray, VectorOfArrays([Float32[1, 2], Float32[]]))
+        @test_throws ArgumentError map(argmin, Ve)
+        @test_throws ArgumentError map(argmax, Ve)
+
+        # Array-result outer broadcast is not rerouted to the scalar path
+        # (host shape info, so no scalar indexing):
+        Vhs = VectorOfArrays(jl(cpu.data), cpu.elem_ptr, cpu.kernel_size)
+        r = (x -> x .+ 1f0).(Vhs)
+        @test length(r) == length(cpu)
+        @test Array(r[1]) == cpu[1] .+ 1f0
+
+        # identity keeps the outer-copy behavior (element arrays, not scalars):
+        Vid = map(identity, adapt(JLArray, cpu))
+        @test Vid isa VectorOfArrays && length(Vid) == length(cpu)
+    end
+
+    @testset "map: N>1 elements, fallback, and Base parity" begin
+        # Elements are matrices (N == 2). The generic segment-view kernel is
+        # restricted to vector elements, so map must not flatten these:
+        cpu2 = VectorOfArrays([reshape(Float32[1, 2, 3, 4], 2, 2),
+                               reshape(Float32[5, 6, 7, 8, 9, 10], 2, 3)])
+        Vhs2 = VectorOfArrays(jl(cpu2.data), cpu2.elem_ptr, cpu2.kernel_size)
+        Vdev2 = adapt(JLArray, cpu2)
+
+        # Host-resident shape info: map falls back to the generic path and
+        # stays correct (shape preserved, Cartesian indices from argmax):
+        @test map(ndims, Vhs2) == map(ndims, cpu2)
+        @test map(x -> size(x, 1), Vhs2) == map(x -> size(x, 1), cpu2)
+        @test map(argmax, Vhs2) == map(argmax, cpu2)
+        @test eltype(map(argmax, Vhs2)) <: CartesianIndex
+
+        # Device-resident shape info: no accelerated path exists for N > 1,
+        # so it must fail cleanly (scalar indexing) rather than return a
+        # silently flattened answer:
+        @test_throws ErrorException map(ndims, Vdev2)
+        @test_throws ErrorException map(argmax, Vdev2)
+
+        # Generic sum has no all-N specialization: it is correct for N > 1
+        # with host-resident shape info (generic fallback), but fully
+        # device-resident N > 1 has no generic map path and fails cleanly:
+        @test Array(map(sum, Vhs2)) == map(sum, cpu2)
+        @test_throws ErrorException map(sum, Vdev2)
+        # maximum/minimum are shape-insensitive and stay valid for N > 1 via
+        # the segmented reduction kernels, on both layouts:
+        for V2 in (Vhs2, Vdev2)
+            @test Array(map(maximum, V2)) == map(maximum, cpu2)
+            @test Array(map(minimum, V2)) == map(minimum, cpu2)
+        end
+
+        # Array-valued and non-concretely-inferred map over host-shape info
+        # keep their pre-specialization behavior (element views on the host):
+        cpu1 = VectorOfArrays([Float32[3, 1, 4], Float32[9, 2], Float32[7]])
+        Vhs1 = VectorOfArrays(jl(cpu1.data), cpu1.elem_ptr, cpu1.kernel_size)
+        r = map(x -> x .+ 1f0, Vhs1)
+        @test length(r) == length(cpu1)
+        @test all(Array(r[i]) == cpu1[i] .+ 1f0 for i in eachindex(cpu1))
+        g_ni = v -> sum(v) > 5 ? 1 : 1.5   # inferred as Union{Int,Float64}
+        @test !isconcretetype(Base.promote_op(g_ni, eltype(Vhs1)))
+        @test map(g_ni, Vhs1) == map(g_ni, cpu1)
+
+        # argmin/argmax match Base for NaN and signed zero (vector elements):
+        for vals in ([Float32[1, NaN], Float32[3, 2, NaN], Float32[NaN, NaN]],
+                     [Float32[-0.0, 0.0], Float32[0.0, -0.0], Float32[0.0, -0.0, 0.0]])
+            cpuN = VectorOfArrays(vals)
+            for V in (adapt(JLArray, cpuN),
+                      VectorOfArrays(jl(cpuN.data), cpuN.elem_ptr, cpuN.kernel_size))
+                @test Array(map(argmin, V)) == map(argmin, cpuN)
+                @test Array(map(argmax, V)) == map(argmax, cpuN)
+            end
+        end
+
+        # map(sum, ·) keeps Base's sum semantics: small integers widen via
+        # add_sum (sum(Int8[100,28]) == 128::Int), unlike innersum's plain +.
+        # maximum/minimum keep Base's (non-widening) element type:
+        cpu_i8 = VectorOfArrays([Int8[100, 28], Int8[], Int8[127, 1]])
+        dev_i8 = adapt(JLArray, cpu_i8)
+        @test Array(map(sum, dev_i8)) == map(sum, cpu_i8)
+        @test eltype(Array(map(sum, dev_i8))) == eltype(map(sum, cpu_i8))
+        cpu_mm = VectorOfArrays([Int8[100, 28], Int8[127, 1]])
+        dev_mm = adapt(JLArray, cpu_mm)
+        @test Array(map(maximum, dev_mm)) == map(maximum, cpu_mm)
+        @test eltype(Array(map(maximum, dev_mm))) == eltype(map(maximum, cpu_mm))
+    end
+
+    @testset "no method ambiguities in the GPU extension" begin
+        ext = Base.get_extension(ArraysOfArrays, :ArraysOfArraysGPUKernelsExt)
+        @test ext !== nothing
+        @test isempty(detect_ambiguities(ext))
+    end
 end

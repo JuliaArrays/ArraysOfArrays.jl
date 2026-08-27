@@ -7,7 +7,7 @@ using GPUArraysCore: AbstractGPUArray
 import KernelAbstractions as KA
 using KernelAbstractions: @kernel, @index, @Const
 
-using ArraysOfArrays: ArraysOfArrays, VectorOfArrays, innerlengths
+using ArraysOfArrays: ArraysOfArrays, VectorOfArrays, innerlengths, innerreduce, NestedArrayStyle
 
 
 @kernel function _segmented_mapreduce_kernel!(out, f, op, @Const(data), @Const(elem_ptr), init)
@@ -125,5 +125,126 @@ function ArraysOfArrays._innermapreduce_impl(f, op, init, A::VectorOfArrays{T,N,
 
     return _segmented_mapreduce(f, op, init, data, elem_ptr, T_out, backend)
 end
+
+
+# Vectors of arrays whose data lives on a device. The shape information may
+# be host- or device-resident:
+const _GPUVectorOfArrays{T,N,M} = VectorOfArrays{T,N,M,<:AbstractGPUArray}
+
+# The N == 1 (vector-element) case. Only here does the flat segment view
+# equal the logical element and does an element index reduce to a plain
+# linear Int, so only these use the segment-view kernels for the
+# shape-dependent operations (generic map, argmin/argmax):
+const _GPUVectorOfVectors{T,M} = VectorOfArrays{T,1,M,<:AbstractGPUArray}
+
+
+# Apply a whole-element function g to each element array. One work item per
+# element constructs a view and calls g on it, so g must be compilable for
+# the device (many Base reductions are, but those that throw on empty
+# collections, like maximum, are not - those are routed to the segmented
+# reduction kernels instead, see below):
+@kernel function _segmented_map_kernel!(out, g, @Const(data), @Const(elem_ptr))
+    i = @index(Global, Linear)
+    j0 = elem_ptr[i]
+    j1 = elem_ptr[i + 1] - 1
+    @inbounds out[i] = g(view(data, j0:j1))
+end
+
+# Defer to the generic map (correct for host-resident shape info; a clean
+# scalar-indexing error for device-resident shape info) instead of forcing a
+# result through the segment-view kernel:
+_segmented_map_fallback(g, A) = invoke(map, Tuple{Any, AbstractArray}, g, A)
+
+function _segmented_map(g, A::_GPUVectorOfArrays)
+    # The flat segment view only equals the logical element for vector
+    # elements; for N > 1 it would drop the element shape, so defer:
+    ndims(eltype(A)) == 1 || return _segmented_map_fallback(g, A)
+    T_out = Base.promote_op(g, eltype(A))
+    # Array results (or a type that did not infer to something concrete)
+    # cannot go through the scalar-result kernel; defer to the generic map,
+    # mirroring the scalar-result guard in the broadcast path below:
+    (isconcretetype(T_out) && !(T_out <: AbstractArray)) || return _segmented_map_fallback(g, A)
+    data = A.data
+    backend = KA.get_backend(data)
+    elem_ptr = _on_backend(backend, A.elem_ptr)
+    n = length(A)
+    out = KA.allocate(backend, T_out, n)
+    n > 0 && _segmented_map_kernel!(backend)(out, g, data, elem_ptr; ndrange = n)
+    return out
+end
+
+
+# Per-element argmin/argmax for vector elements. Base.argmin/argmax do not
+# compile for the device (their empty-collection handling throws), so the
+# index-tracking loop is written out. The update predicate mirrors Base's
+# findmax/findmin reducers (isless for argmax, Base.isgreater for argmin), so
+# ties keep the first extremum and NaN/-0.0 order exactly like Base:
+@kernel function _seg_argextreme_kernel!(out, better, @Const(data), @Const(elem_ptr))
+    i = @index(Global, Linear)
+    j0 = elem_ptr[i]
+    j1 = elem_ptr[i + 1] - 1
+    @inbounds best = data[j0]
+    bestidx = 1
+    for j in (j0 + 1):j1
+        @inbounds v = data[j]
+        if better(best, v)
+            best = v
+            bestidx = j - j0 + 1
+        end
+    end
+    @inbounds out[i] = bestidx
+end
+
+function _segmented_argextreme(better, A::_GPUVectorOfVectors)
+    any(iszero, innerlengths(A)) && throw(ArgumentError("Cannot take argmin/argmax of empty element arrays"))
+    data = A.data
+    backend = KA.get_backend(data)
+    elem_ptr = _on_backend(backend, A.elem_ptr)
+    n = length(A)
+    out = KA.allocate(backend, Int, n)
+    n > 0 && _seg_argextreme_kernel!(backend)(out, better, data, elem_ptr; ndrange = n)
+    return out
+end
+
+
+# map over the element arrays of a device-resident vector of arrays, without
+# host-side scalar indexing. The general path uses the segment-view kernel
+# only for vector elements with a scalar result and defers everything else to
+# the generic map (see _segmented_map); shape-insensitive reductions are
+# routed to the segmented reduction kernels and stay valid for any element
+# dimensionality:
+Base.map(g, A::_GPUVectorOfArrays) = _segmented_map(g, A)
+# identity returns the element arrays, not scalars, so it keeps the generic
+# outer-copy behavior (disambiguation against map(::typeof(identity), ...)):
+Base.map(f::typeof(identity), A::_GPUVectorOfArrays) = invoke(map, Tuple{typeof(identity), VectorOfArrays}, f, A)
+# maximum/minimum are shape-insensitive and keep Base's element type, so they
+# use the chunked segmented reduction for any element dimensionality. sum is
+# deliberately not routed here: Base's sum widens small integers via add_sum
+# (e.g. sum(Int8[100, 28]) == 128::Int), which innersum's plain + does not, so
+# sum is left to the general segment-view kernel (N == 1, which reproduces
+# Base's sum) and the generic map fallback (N > 1):
+Base.map(::typeof(maximum), A::_GPUVectorOfArrays) = innerreduce(max, A)
+Base.map(::typeof(minimum), A::_GPUVectorOfArrays) = innerreduce(min, A)
+# argmin/argmax return an index into the element, which is a plain linear Int
+# only for vector elements; higher-dimensional elements would need Cartesian
+# indices, so these are restricted to N == 1 and larger element
+# dimensionalities fall back to the generic map (see _segmented_map):
+Base.map(::typeof(argmin), A::_GPUVectorOfVectors) = _segmented_argextreme(Base.isgreater, A)
+Base.map(::typeof(argmax), A::_GPUVectorOfVectors) = _segmented_argextreme(isless, A)
+
+
+# Single-argument outer broadcast g.(A) with a scalar result over a
+# device-resident vector of arrays routes to the same kernel; array
+# results and fused/multi-argument broadcasts keep the generic behavior:
+function Base.copy(bc::Base.Broadcast.Broadcasted{NestedArrayStyle{1}, <:Any, F, <:Tuple{<:_GPUVectorOfArrays}}) where {F}
+    A = bc.args[1]
+    ElType = Base.Broadcast.combine_eltypes(bc.f, (A,))
+    if isconcretetype(ElType) && !(ElType <: AbstractArray)
+        return map(bc.f, A)
+    else
+        return Base.copy(Base.Broadcast.Broadcasted{Base.Broadcast.DefaultArrayStyle{1}}(bc.f, bc.args, bc.axes))
+    end
+end
+
 
 end # module ArraysOfArraysGPUKernelsExt

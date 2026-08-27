@@ -59,6 +59,8 @@ All four are zero-copy where possible and so may return arrays that share memory
 
 Both array types work with GPU-resident data. An `ArrayOfSimilarArrays` backed by a GPU array requires no special handling. For a `VectorOfArrays`, the shape information (`elem_ptr` and `kernel_size`) can either stay on the host, so that element access returns device views, or live on the device as well (e.g. via `Adapt.adapt`), which is the layout to use inside GPU kernels. Host-side element access (`V[i]`, iteration) requires the shape information on the host, as it would otherwise scalar-index device arrays. `KernelAbstractions.get_backend` returns the backend of the underlying data.
 
+Reductions over the flat data (`innersum`, `innerreduce`, `innermapreduce`) run as segmented device kernels. Generic `map(f, V)` and outer broadcasts `f.(V)` with scalar results also run on the device for a device-resident `VectorOfArrays` with **vector elements** (`VectorOfArrays{T,1}`), provided `f` is device-compatible (this includes `map(sum, V)`, which retains Base's `sum` semantics); the shape-insensitive reductions `maximum` and `minimum` (via `map(maximum, V)`/`map(minimum, V)`) additionally use the segmented reduction kernels for any element dimensionality, and `map(argmin, V)`/`map(argmax, V)` match Base (including `NaN` and signed-zero ordering) for vector elements. For `VectorOfArrays{T,N}` with `N > 1`, `map` keeps its generic behavior: it is correct when the shape information is host-resident and fails cleanly (rather than dropping the element shape) when it is device-resident.
+
 
 ## [ArrayOfSimilarArrays](@id section_ArrayOfSimilarArrays)
 
