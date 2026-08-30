@@ -276,6 +276,21 @@ JLArrays.allowscalar(false)
         @test eltype(Array(map(maximum, dev_mm))) == eltype(map(maximum, cpu_mm))
     end
 
+    @testset "stacking on device data" begin
+        # Stacking element arrays of equal size is zero-copy and stays on
+        # the device, and so does the conversion to an ArrayOfSimilarArrays:
+        cpu = VectorOfArrays([Float32[1, 2, 3], Float32[4, 5, 6]])
+        Vhs = VectorOfArrays(jl(cpu.data), cpu.elem_ptr, cpu.kernel_size)
+        S = stacked(Vhs)
+        @test S isa AbstractGPUArray
+        @test Array(S) == stack(collect(cpu))
+        C = convert(VectorOfSimilarVectors, Vhs)
+        @test C isa VectorOfSimilarVectors
+        @test fused(C) isa AbstractGPUArray
+        @test Array(fused(C)) == stack(collect(cpu))
+        @test_throws DimensionMismatch stacked(VectorOfArrays(jl(Float32[1, 2, 3]), [1, 2, 4], [(), ()]))
+    end
+
     @testset "no method ambiguities in the GPU extension" begin
         ext = Base.get_extension(ArraysOfArrays, :ArraysOfArraysGPUKernelsExt)
         @test ext !== nothing

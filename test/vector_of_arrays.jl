@@ -322,9 +322,20 @@ include("testdefs.jl")
         @test getsplitmode(B3) == getsplitmode(copy(B3))
         @test hash(getsplitmode(B3)) == hash(getsplitmode(copy(B3)))
 
-        # Uniform element size, so stackable:
+        # Uniform element size, so stackable, without copying the data:
         @test @inferred(stacked(Bu)) == stack(Array(Bu))
+        @test Base.mightalias(stacked(Bu), Bu.data)
         @test @inferred(splitup(stacked(Bu), unstackmode(Bu))) == Bu
+        Bc = copy(Bu)
+        stacked(Bc)[1] = 42
+        @test Bc[1][1] == 42
+        C = @inferred convert(VectorOfSimilarArrays, Bu)
+        @test C isa VectorOfSimilarArrays{Float32,2}
+        @test C == Bu
+        @test Base.mightalias(fused(C), Bu.data)
+        # Empty and ragged vectors of arrays:
+        @test size(stacked(B1e)) == (0, 0)
+        @test_throws DimensionMismatch stacked(B_grow)
 
         # flatview returns the internal storage if the elements cover it
         # completely, and a view of the covered data range otherwise:

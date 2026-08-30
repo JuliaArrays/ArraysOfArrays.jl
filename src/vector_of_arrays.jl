@@ -399,6 +399,21 @@ getsplitmode(A::VectorOfArrays) = SplitParts(_shapeinfo_copy(A.elem_ptr), _shape
 @inline fused(A::VectorOfArrays) = A.data
 
 
+# Element arrays of equal size already lie in stacked memory order, so
+# stacking is a reshape of the covered data. A view is reshaped even if the
+# elements cover the data completely, so that the result type does not
+# depend on the values of the element pointers (unlike for flatview):
+function _stacked_voa(A::VectorOfArrays)
+    sz_inner = innersize(A)  # Fails for element arrays of unequal size
+    ep_first, ep_last = _scalar_first_last(A.elem_ptr)
+    covered = view(A.data, Int(ep_first):Int(ep_last - 1))
+    return reshape(covered, sz_inner..., length(A))
+end
+
+stacked(A::VectorOfArrays) = _stacked_voa(A)
+_stacked_impl(A::VectorOfArrays, ::SplitParts) = _stacked_voa(A)
+
+
 # Comparing the part boundaries is O(n), vectorized on GPUs. splitup
 # shares the shape vectors of the mode it was created from, so round
 # trips take the egal fast path:
