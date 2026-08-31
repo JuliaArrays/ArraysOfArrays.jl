@@ -131,6 +131,14 @@ Represents a view of an array of dimension `M + N` as an `N`-dimensional
 array with elements that are `M`-dimensional arrays. All element arrays
 implicitly have equal size/axes.
 
+Scalar indexing returns (mutable) views into `data`. Non-scalar indexing
+(`A[2:3]`, masks, index vectors) copies the selected elements into a new
+`ArrayOfSimilarArrays`; for flat data with expensive element access, like
+disk-backed arrays (with DiskArrays.jl loaded) or GPU arrays, the selection
+is read from the flat data in a single operation. Use `view(A, idxs)` (or
+`@views`) to select without copying instead - the result is then an
+`ArrayOfSimilarArrays` that shares the flat data.
+
 User code should typically not instantiate `ArrayOfSimilarArrays` directly,
 but use [`splitup`](@ref) with a [`SplitSlices`](@ref) mode.
 
@@ -217,6 +225,38 @@ Base.size(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = _back_tuple(size(A.dat
 
 Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Integer,N}) where {T,M,N} =
     view(A.data, _ncolons(Val{M}())..., idxs...)
+
+# Non-scalar indexing copies the selected elements into a new
+# ArrayOfSimilarArrays. Most data types use the generic per-element path,
+# which copies whole columns at a time and is fast for in-memory arrays.
+# Storage types with expensive element access (e.g. disk-backed or
+# device-resident data) opt in via _prefers_flat_getindex to indexing the
+# flat data in a single operation instead, which turns e.g. indexing of
+# disk-backed data into a single block read:
+Base.@propagate_inbounds function Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Union{Real,AbstractArray,Colon},N}) where {T,M,N}
+    if _prefers_flat_getindex(typeof(A.data))
+        @boundscheck checkbounds(A, idxs...)
+        @inbounds ArrayOfSimilarArrays{T,M}(A.data[_ncolons(Val{M}())..., map(_normalized_idx, idxs)...])
+    else
+        invoke(getindex, Tuple{AbstractArray,Vararg{Any}}, A, idxs...)
+    end
+end
+
+# Storage types where every element access is a separate expensive
+# operation (a disk read, a device copy) should return true, so that
+# non-scalar getindex indexes their flat data in a single operation.
+# Enabled by package extensions (DiskArrays, GPUArraysCore):
+_prefers_flat_getindex(::Type{<:AbstractArray}) = false
+
+# Logical masks must not reach the flat data as-is: Base's LogicalIndex
+# does not work for all storage types (e.g. GPU arrays). The bounds,
+# including the mask axes, have been checked against A at this point:
+_normalized_idx(idx) = idx
+_normalized_idx(idx::AbstractArray{Bool}) = findall(idx)
+
+# Disambiguation for the index-less access to zero-dimensional arrays:
+Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarArrays{T,M,0}) where {T,M} =
+    view(A.data, _ncolons(Val{M}())...)
 
 
 Base.@propagate_inbounds Base.setindex!(A::ArrayOfSimilarArrays{T,M,N}, x::AbstractArray{U,M}, idxs::Vararg{Integer,N}) where {T,M,N,U} =

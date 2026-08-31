@@ -83,12 +83,14 @@ A_nested isa AbstractArray{<:AbstractArray{T,2},3} where T
 flatview(A_nested) === A_flat
 ```
 
-Calling `getindex` on `A_nested` returns a view into `A_flat`:
+Scalar `getindex` calls on `A_nested` return views into `A_flat`:
 
 ```julia
 fill!(A_nested[2, 4, 3], 4.2)
 all(x -> x == 4.2, A_flat[:, :, 2, 4, 3])
 ```
+
+Non-scalar indexing like `A_nested[2:3]` copies the selected elements into a new array of arrays. For flat data with expensive element access — disk-backed arrays (with DiskArrays.jl loaded) or GPU arrays — the selection is read from the flat data in a single operation instead of element by element. Use `view(A_nested, 2:3)` or `@views` to select without copying — the result is again an array of arrays, sharing the flat data.
 
 ### Type aliases
 

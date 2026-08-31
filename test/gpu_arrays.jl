@@ -29,6 +29,13 @@ JLArrays.allowscalar(false)
         A[1, 1] = jl(rand(Float32, 3))
 
         V = VectorOfSimilarVectors(jl(rand(Float32, 3, 5)))
+        # Device arrays use the flat indexing path (inference barrier so the
+        # constant-foldable trait method runs and counts as covered):
+        @test ArraysOfArrays._prefers_flat_getindex(Base.inferencebarrier(typeof(fused(V))))
+        @test fused(@inferred(V[2:4])) isa AbstractGPUArray
+        @test collect(fused(V[2:4])) == collect(fused(V))[:, 2:4]
+        @test collect(fused(V[[3, 1]])) == collect(fused(V))[:, [3, 1]]
+        @test collect(fused(V[[true, false, true, true, false]])) == collect(fused(V))[:, [1, 3, 4]]
         @test sum(V) isa AbstractGPUArray
         @test ArraysOfArrays.Statistics.mean(V) isa AbstractGPUArray
         @test vcat(V, V) isa VectorOfSimilarVectors

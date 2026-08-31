@@ -176,6 +176,39 @@ end
         end
     end
 
+    @testset "non-scalar getindex" begin
+        A = ArrayOfSimilarArrays{Float64,2,2}(rand(2, 3, 4, 5))
+        ref = Array(A)
+        @test @inferred(A[2:3, 1:2]) isa ArrayOfSimilarArrays{Float64,2,2,Array{Float64,4}}
+        @test A[2:3, 1:2] == ref[2:3, 1:2]
+        @test flatview(A[2:3, 1:2]) == flatview(A)[:, :, 2:3, 1:2]
+        @test @inferred(A[:, 2]) isa ArrayOfSimilarArrays{Float64,2,1,Array{Float64,3}}
+        @test A[:, 2] == ref[:, 2]
+        @test A[[3, 1], [true, false, true, true, false]] == ref[[3, 1], [true, false, true, true, false]]
+        @test A[4:3, :] isa ArrayOfSimilarArrays{Float64,2,2}
+        @test isempty(A[4:3, :])
+        # Element access stays a view:
+        @test A[2, 3] isa SubArray
+        @test A[2, 3] == ref[2, 3]
+
+        Z = ArrayOfSimilarArrays{Float64,0,1}(rand(5))
+        @test Z[2:4] isa ArrayOfSimilarArrays{Float64,0,1}
+        @test Z[2:4] == Array(Z)[2:4]
+
+        A0 = ArrayOfSimilarArrays{Float64,2,0}(rand(2, 3))
+        @test A0[] == A0.data
+
+        # Bounds violations are caught, including mask axes:
+        @test_throws BoundsError A[1:5, 1:2]
+        @test_throws BoundsError A[2:3, [true, false]]
+
+        # The generic path rebases offset inner axes of the data, as before:
+        data = OffsetArray(reshape(collect(1.0:12.0), 3, 4), 0:2, 1:4)
+        Ao = sliced(data, Val(1))
+        @test axes(Ao[2:3][1]) == (Base.OneTo(3),)
+        @test collect(flatview(Ao[2:3])) == collect(parent(data)[:, 2:3])
+    end
+
     @testset "offset axes" begin
         m = rand(4, 4)
         # Offset outer axes of the data are not supported:

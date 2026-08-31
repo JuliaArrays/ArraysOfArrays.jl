@@ -9,6 +9,10 @@ import ArraysOfArrays
 # Two O(1) scalar reads during construction are acceptable:
 ArraysOfArrays._scalar_first_last(x::AbstractGPUArray) = @allowscalar (first(x), last(x))
 
+# Per-element access on device-resident data costs one device operation
+# each, so non-scalar getindex indexes the flat data in a single operation:
+ArraysOfArrays._prefers_flat_getindex(::Type{<:AbstractGPUArray}) = true
+
 
 # Vectorized shape-info comparison, to avoid scalar indexing of GPU
 # arrays. The shape vectors may reside on the host and device in any

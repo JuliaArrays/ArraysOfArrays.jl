@@ -12,6 +12,7 @@ Test.@testset "Package ArraysOfArrays" begin
     include("static_arrays.jl")
     include("fixed_size_arrays.jl")
     include("gpu_arrays.jl")
+    include("disk_arrays.jl")
     include("mooncake.jl")
     # Reactant only supports 64-bit Linux and macOS, and some of its
     # dependencies break already during precompilation on other platforms,
