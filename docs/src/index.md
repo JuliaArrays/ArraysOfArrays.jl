@@ -44,7 +44,7 @@ Similar to axis-targeted operations in Python's AwkwardArrays, but with array-of
 * [`innermapreduce`](@ref), [`innerreduce`](@ref) and [`innersum`](@ref) reduce over the contents of each element array.
 * [`innersizes`](@ref) and [`innerlengths`](@ref) return per-element sizes/lengths (elements need not be of equal size).
 
-For split arrays these operate on the underlying flat data, without per-element iteration, and so work on GPU arrays. Outer-level broadcasts like `(x -> 2 .* x).(A)` keep their usual Julia semantics (`f` receives whole element arrays), but return a `VectorOfArrays` when the results are arrays.
+For split arrays these operate on the underlying flat data, without per-element iteration, and so work on GPU arrays. Outer-level broadcasts like `(x -> 2 .* x).(A)` keep their usual Julia semantics (`f` receives whole element arrays). Results that are dense host arrays, including views of the element arrays, are copied into a nested array (currently a `VectorOfArrays`; the specific nested array type is not part of the API and may change between minor versions), other results into a plain `Vector`. If the result arrays are known to be of equal size, `convert(VectorOfSimilarArrays, result)` (or `VectorOfSimilarVectors`) turns the result into an [`ArrayOfSimilarArrays`](@ref section_ArrayOfSimilarArrays) without copying the data, and throws a `DimensionMismatch` if the sizes differ after all.
 
 ## Which flattening function do I want?
 

@@ -867,11 +867,14 @@ include("testdefs.jl")
             @test r.elem_ptr !== A.elem_ptr
         end
 
-        # Only concretely-inferred Array-valued outer broadcasts preserve
-        # structure, others use the default broadcast machinery:
+        # Strided host-array results, including views of the elements, are
+        # packed into a nested array, others use the default machinery:
         rv = (x -> view(x, :, 1)).(A)
-        @test rv isa Vector{<:SubArray}
+        @test rv isa VectorOfArrays{Float32,1}
         @test rv == [view(x, :, 1) for x in A]
+        rb = (x -> x .> 0.5f0).(A)
+        @test rb isa Vector{<:BitMatrix}
+        @test rb == [x .> 0.5f0 for x in A]
     end
 
     @testset "resize" begin

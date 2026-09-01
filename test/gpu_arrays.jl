@@ -4,7 +4,7 @@ using ArraysOfArrays
 using Test
 
 using Adapt
-using GPUArraysCore: AbstractGPUArray
+using GPUArraysCore: AbstractGPUArray, AnyGPUArray
 using JLArrays
 import KernelAbstractions as KA
 
@@ -274,6 +274,27 @@ JLArrays.allowscalar(false)
         dev_mm = adapt(JLArray, cpu_mm)
         @test Array(map(maximum, dev_mm)) == map(maximum, cpu_mm)
         @test eltype(Array(map(maximum, dev_mm))) == eltype(map(maximum, cpu_mm))
+    end
+
+    @testset "outer broadcasts on device data" begin
+        # Device arrays are strided, but the results of outer broadcasts
+        # must stay on the device instead of being packed into a
+        # host-resident VectorOfArrays, for views of the elements as well:
+        x = rand(Float32, 3, 4)
+        A = ArrayOfSimilarArrays{Float32,1,1}(jl(x))
+        A_ref = collect(sliced(x))
+        for f in (x -> 2 .* x, x -> x)
+            r = f.(A)
+            @test r isa Vector{<:AnyGPUArray}
+            @test Array.(r) == f.(A_ref)
+        end
+        cpu = VectorOfArrays([Float32[1, 2, 3], Float32[4, 5, 6]])
+        Vhs = VectorOfArrays(jl(cpu.data), cpu.elem_ptr, cpu.kernel_size)
+        for f in (x -> 2 .* x, x -> x)
+            r = f.(Vhs)
+            @test r isa Vector{<:AnyGPUArray}
+            @test Array.(r) == f.(collect(cpu))
+        end
     end
 
     @testset "stacking on device data" begin
