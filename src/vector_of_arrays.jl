@@ -275,6 +275,23 @@ end
 
 innersizes(A::VectorOfArrays) = _elem_size.(A.kernel_size, innerlengths(A))
 
+# innersize needs only O(1) scalar reads and vectorized reductions on the
+# structural vectors, unlike the generic per-element iteration, so it also
+# works when the shape information is device-resident:
+function innersize(A::VectorOfArrays{T,N,M}) where {T,N,M}
+    n = length(A)
+    n == 0 && return ntuple(_ -> 0, Val(N))
+    ep_first, ep_last = _scalar_first_last(A.elem_ptr)
+    len, remainder = divrem(Int(ep_last) - Int(ep_first), n)
+    uniform_lengths = remainder == 0 && all(innerlengths(A) .== len)
+    k1 = M == 0 ? () : first(_scalar_first_last(A.kernel_size))
+    uniform_kernels = M == 0 || all(==(k1), A.kernel_size)
+    if !(uniform_lengths && uniform_kernels)
+        throw(DimensionMismatch("Shape of element arrays of A is not equal, can't determine common shape"))
+    end
+    return _elem_size(k1, len)
+end
+
 
 # Equality must be equivalent to elementwise comparison, but can be checked
 # much more efficiently via the flat data. The underlying data of A and B may

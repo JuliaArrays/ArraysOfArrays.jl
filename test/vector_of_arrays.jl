@@ -72,6 +72,11 @@ include("testdefs.jl")
         @test VectorOfArrays(collect(1:250), UInt8[1, 101, 251], fill((), 2)) ==
             [collect(1:100), collect(101:250)]
 
+        # innersize promotes the pointers before subtracting, so narrow
+        # pointer types near their limit do not wrap:
+        @test @inferred(innersize(VectorOfArrays(collect(1:250), UInt8[1, 126, 251], fill((), 2)))) == (125,)
+        @test_throws DimensionMismatch innersize(VectorOfArrays(collect(1:250), UInt8[1, 101, 251], fill((), 2)))
+
         # Element pointers must increase, comparing their difference against
         # zero would accept pointers that wrap:
         @test_throws ArgumentError VectorOfArrays(collect(1:250), UInt8[1, 250, 10, 100], fill((), 3))
@@ -336,6 +341,14 @@ include("testdefs.jl")
         # Empty and ragged vectors of arrays:
         @test size(stacked(B1e)) == (0, 0)
         @test_throws DimensionMismatch stacked(B_grow)
+
+        # innersize uses the structural vectors, without per-element access:
+        @test @inferred(innersize(Bu)) == (2, 3)
+        @test innersize(B1e) == (0,)
+        @test_throws DimensionMismatch innersize(B_grow)
+        # Elements with an empty kernel dimension read back with a zero
+        # last dimension, innersize matches that:
+        @test innersize(VectorOfArrays([zeros(Int, 0, 3), zeros(Int, 0, 5)])) == (0, 0)
 
         # flatview returns the internal storage if the elements cover it
         # completely, and a view of the covered data range otherwise:

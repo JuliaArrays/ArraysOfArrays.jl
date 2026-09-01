@@ -289,6 +289,25 @@ JLArrays.allowscalar(false)
         @test fused(C) isa AbstractGPUArray
         @test Array(fused(C)) == stack(collect(cpu))
         @test_throws DimensionMismatch stacked(VectorOfArrays(jl(Float32[1, 2, 3]), [1, 2, 4], [(), ()]))
+
+        # Stacking also works when the shape information is fully
+        # device-resident (the layout produced by Adapt), since innersize
+        # operates on the structural vectors without per-element access:
+        dev = adapt(JLArray, cpu)
+        @test dev.elem_ptr isa AbstractGPUArray && dev.kernel_size isa AbstractGPUArray
+        @test @inferred(innersize(dev)) == (3,)
+        Sd = stacked(dev)
+        @test Sd isa AbstractGPUArray
+        @test Array(Sd) == stack(collect(cpu))
+        Cd = convert(VectorOfSimilarVectors, dev)
+        @test fused(Cd) isa AbstractGPUArray
+        @test Array(fused(Cd)) == stack(collect(cpu))
+        ragged_dev = adapt(JLArray, VectorOfArrays([Float32[1, 2], Float32[3, 4, 5]]))
+        @test_throws DimensionMismatch stacked(ragged_dev)
+        # An empty fully-adapted input takes the structural n == 0 bypass:
+        empty_dev = adapt(JLArray, VectorOfArrays(Vector{Float32}[]))
+        @test innersize(empty_dev) == (0,)
+        @test isempty(stacked(empty_dev))
     end
 
     @testset "no method ambiguities in the GPU extension" begin
