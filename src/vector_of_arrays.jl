@@ -275,6 +275,23 @@ end
 
 innersizes(A::VectorOfArrays) = _elem_size.(A.kernel_size, innerlengths(A))
 
+# innersize needs only O(1) scalar reads and vectorized reductions on the
+# structural vectors, unlike the generic per-element iteration, so it also
+# works when the shape information is device-resident:
+function innersize(A::VectorOfArrays{T,N,M}) where {T,N,M}
+    n = length(A)
+    n == 0 && return ntuple(_ -> 0, Val(N))
+    ep_first, ep_last = _scalar_first_last(A.elem_ptr)
+    len, remainder = divrem(Int(ep_last) - Int(ep_first), n)
+    uniform_lengths = remainder == 0 && all(innerlengths(A) .== len)
+    k1 = M == 0 ? () : first(_scalar_first_last(A.kernel_size))
+    uniform_kernels = M == 0 || all(==(k1), A.kernel_size)
+    if !(uniform_lengths && uniform_kernels)
+        throw(DimensionMismatch("Shape of element arrays of A is not equal, can't determine common shape"))
+    end
+    return _elem_size(k1, len)
+end
+
 
 # Equality must be equivalent to elementwise comparison, but can be checked
 # much more efficiently via the flat data. The underlying data of A and B may
@@ -397,6 +414,21 @@ _shapeinfo_copy(x::AbstractVector) = copy(x)
 getsplitmode(A::VectorOfArrays) = SplitParts(_shapeinfo_copy(A.elem_ptr), _shapeinfo_copy(A.kernel_size))
 
 @inline fused(A::VectorOfArrays) = A.data
+
+
+# Element arrays of equal size already lie in stacked memory order, so
+# stacking is a reshape of the covered data. A view is reshaped even if the
+# elements cover the data completely, so that the result type does not
+# depend on the values of the element pointers (unlike for flatview):
+function _stacked_voa(A::VectorOfArrays)
+    sz_inner = innersize(A)  # Fails for element arrays of unequal size
+    ep_first, ep_last = _scalar_first_last(A.elem_ptr)
+    covered = view(A.data, Int(ep_first):Int(ep_last - 1))
+    return reshape(covered, sz_inner..., length(A))
+end
+
+stacked(A::VectorOfArrays) = _stacked_voa(A)
+_stacked_impl(A::VectorOfArrays, ::SplitParts) = _stacked_voa(A)
 
 
 # Comparing the part boundaries is O(n), vectorized on GPUs. splitup

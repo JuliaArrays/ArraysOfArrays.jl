@@ -26,13 +26,25 @@ Broadcast style of nested array types like [`VectorOfArrays`](@ref) and
 [`ArrayOfSimilarArrays`](@ref).
 
 Broadcasts at this level apply `f` to whole element arrays, as in
-`(x -> 2 .* x).(A)`. Such a broadcast returns a [`VectorOfArrays`](@ref)
-instead of a `Vector` of arrays if it runs over a single outer dimension
-with `Base.OneTo` axes and its result type is inferred as a concrete `Array`
-type with at least one dimension. The elements may be ragged, even if `A` is
-an [`ArrayOfSimilarArrays`](@ref). All other broadcasts behave like the
-default broadcast machinery. Use [`bcastat`](@ref) to broadcast over the
-*contents* of the element arrays instead.
+`(x -> 2 .* x).(A)`. Such a broadcast returns a nested array instead of a
+`Vector` of arrays if it runs over a single outer dimension with
+`Base.OneTo` axes and its result type is inferred as a concrete strided
+array type in host memory with at least one dimension: an `Array`, or a
+view, reshape or reinterpretation of one. This includes views of the
+element arrays themselves, so `(x -> x).(A)` copies the elements into a
+new nested array. Results of other array types (e.g. structured, static,
+bit and GPU arrays, which would have to be densified or transferred to the
+host) and all other broadcasts behave like the default broadcast machinery.
+
+Only that the result of such a broadcast is an `AbstractVector` of the
+values of `f` is guaranteed. Which nested array type is used (currently a
+[`VectorOfArrays`](@ref), whose elements may be ragged even if `A` is an
+[`ArrayOfSimilarArrays`](@ref)) is an implementation detail that may change
+between minor versions. If the result arrays are of equal size,
+`convert(VectorOfSimilarArrays, result)` turns the result into an
+[`ArrayOfSimilarArrays`](@ref) without copying (see [`stacked`](@ref)). Use
+[`bcastat`](@ref) to broadcast over the *contents* of the element arrays
+instead.
 
 See [`ArraysOfArrays.AbstractNestedArrayStyle`](@ref) for resolving
 broadcast style combination with foreign array styles.
@@ -47,7 +59,7 @@ Base.Broadcast.BroadcastStyle(::Type{<:VectorOfArrays}) = NestedArrayStyle{1}()
 
 function Base.copy(bc::Broadcast.Broadcasted{NestedArrayStyle{N}}) where {N}
     ElType = Broadcast.combine_eltypes(bc.f, bc.args)
-    if N == 1 && ElType <: Array && isconcretetype(ElType) && ndims(ElType) >= 1 && axes(bc, 1) isa Base.OneTo
+    if N == 1 && _packable_result(ElType) && axes(bc, 1) isa Base.OneTo
         return _collect_nested(bc, ElType)
     else
         # Everything else behaves like the default broadcast machinery:
@@ -55,7 +67,23 @@ function Base.copy(bc::Broadcast.Broadcasted{NestedArrayStyle{N}}) where {N}
     end
 end
 
-function _collect_nested(bc::Broadcast.Broadcasted, ::Type{Array{T,M}}) where {T,M}
+# Results that are packed into a nested array: concrete strided arrays in
+# host memory, i.e. dense arrays and views, reshapes and reinterpretations
+# of them. Structured, lazy, static and bit arrays would have to be
+# densified and device arrays (excluded via the GPUArraysCore extension)
+# transferred to the host, so those stay in a plain Vector:
+function _packable_result(::Type{ET}) where {ET}
+    ET <: StridedArray && isconcretetype(ET) && ndims(ET) >= 1 && _host_storage(ET)
+end
+
+# Strided wrappers keep their data in their parent:
+_host_storage(::Type) = false
+_host_storage(::Type{<:DenseArray}) = true
+_host_storage(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = _host_storage(P)
+_host_storage(::Type{<:Base.ReshapedArray{<:Any,<:Any,P}}) where {P} = _host_storage(P)
+_host_storage(::Type{<:Base.ReinterpretArray{<:Any,<:Any,<:Any,P}}) where {P} = _host_storage(P)
+
+function _collect_nested(bc::Broadcast.Broadcasted, ::Type{<:AbstractArray{T,M}}) where {T,M}
     dest = VectorOfArrays{T,M}()
     sizehint!(dest.elem_ptr, length(axes(bc, 1)) + 1)
     sizehint!(dest.kernel_size, length(axes(bc, 1)))

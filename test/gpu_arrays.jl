@@ -4,7 +4,7 @@ using ArraysOfArrays
 using Test
 
 using Adapt
-using GPUArraysCore: AbstractGPUArray
+using GPUArraysCore: AbstractGPUArray, AnyGPUArray
 using JLArrays
 import KernelAbstractions as KA
 
@@ -274,6 +274,61 @@ JLArrays.allowscalar(false)
         dev_mm = adapt(JLArray, cpu_mm)
         @test Array(map(maximum, dev_mm)) == map(maximum, cpu_mm)
         @test eltype(Array(map(maximum, dev_mm))) == eltype(map(maximum, cpu_mm))
+    end
+
+    @testset "outer broadcasts on device data" begin
+        # Device arrays are strided, but the results of outer broadcasts
+        # must stay on the device instead of being packed into a
+        # host-resident VectorOfArrays, for views of the elements as well:
+        x = rand(Float32, 3, 4)
+        A = ArrayOfSimilarArrays{Float32,1,1}(jl(x))
+        A_ref = collect(sliced(x))
+        for f in (x -> 2 .* x, x -> x)
+            r = f.(A)
+            @test r isa Vector{<:AnyGPUArray}
+            @test Array.(r) == f.(A_ref)
+        end
+        cpu = VectorOfArrays([Float32[1, 2, 3], Float32[4, 5, 6]])
+        Vhs = VectorOfArrays(jl(cpu.data), cpu.elem_ptr, cpu.kernel_size)
+        for f in (x -> 2 .* x, x -> x)
+            r = f.(Vhs)
+            @test r isa Vector{<:AnyGPUArray}
+            @test Array.(r) == f.(collect(cpu))
+        end
+    end
+
+    @testset "stacking on device data" begin
+        # Stacking element arrays of equal size is zero-copy and stays on
+        # the device, and so does the conversion to an ArrayOfSimilarArrays:
+        cpu = VectorOfArrays([Float32[1, 2, 3], Float32[4, 5, 6]])
+        Vhs = VectorOfArrays(jl(cpu.data), cpu.elem_ptr, cpu.kernel_size)
+        S = stacked(Vhs)
+        @test S isa AbstractGPUArray
+        @test Array(S) == stack(collect(cpu))
+        C = convert(VectorOfSimilarVectors, Vhs)
+        @test C isa VectorOfSimilarVectors
+        @test fused(C) isa AbstractGPUArray
+        @test Array(fused(C)) == stack(collect(cpu))
+        @test_throws DimensionMismatch stacked(VectorOfArrays(jl(Float32[1, 2, 3]), [1, 2, 4], [(), ()]))
+
+        # Stacking also works when the shape information is fully
+        # device-resident (the layout produced by Adapt), since innersize
+        # operates on the structural vectors without per-element access:
+        dev = adapt(JLArray, cpu)
+        @test dev.elem_ptr isa AbstractGPUArray && dev.kernel_size isa AbstractGPUArray
+        @test @inferred(innersize(dev)) == (3,)
+        Sd = stacked(dev)
+        @test Sd isa AbstractGPUArray
+        @test Array(Sd) == stack(collect(cpu))
+        Cd = convert(VectorOfSimilarVectors, dev)
+        @test fused(Cd) isa AbstractGPUArray
+        @test Array(fused(Cd)) == stack(collect(cpu))
+        ragged_dev = adapt(JLArray, VectorOfArrays([Float32[1, 2], Float32[3, 4, 5]]))
+        @test_throws DimensionMismatch stacked(ragged_dev)
+        # An empty fully-adapted input takes the structural n == 0 bypass:
+        empty_dev = adapt(JLArray, VectorOfArrays(Vector{Float32}[]))
+        @test innersize(empty_dev) == (0,)
+        @test isempty(stacked(empty_dev))
     end
 
     @testset "no method ambiguities in the GPU extension" begin

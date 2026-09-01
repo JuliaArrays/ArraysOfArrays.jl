@@ -13,6 +13,10 @@ ArraysOfArrays._scalar_first_last(x::AbstractGPUArray) = @allowscalar (first(x),
 # each, so non-scalar getindex indexes the flat data in a single operation:
 ArraysOfArrays._prefers_flat_getindex(::Type{<:AbstractGPUArray}) = true
 
+# Device arrays are strided, but outer broadcasts must not pack them into a
+# host-resident VectorOfArrays (see NestedArrayStyle):
+ArraysOfArrays._host_storage(::Type{<:AbstractGPUArray}) = false
+
 
 # Vectorized shape-info comparison, to avoid scalar indexing of GPU
 # arrays. The shape vectors may reside on the host and device in any
