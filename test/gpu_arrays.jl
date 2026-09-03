@@ -128,6 +128,18 @@ JLArrays.allowscalar(false)
         @test_throws ArgumentError ArraysOfArrays.FuseArrays(getsplitmode(V_host))(V2_dev)
     end
 
+    @testset "flat reductions on device" begin
+        V_host = VectorOfArrays([Float32[3, 1], Float32[7, -2, 5], Float32[4]])
+        for V in (VectorOfArrays(jl(V_host.data), V_host.elem_ptr, V_host.kernel_size), adapt(JLArray, V_host))
+            @test mapreduce(maximum, max, V) == 7
+            @test mapreduce(minimum, min, V) == -2
+            @test mapreduce(sum, +, V) == 18
+        end
+        A = sliced(jl(Float32[1 4; 2 5; 3 6]), 1)
+        @test mapreduce(maximum, max, A) == 6
+        @test mapreduce(sum, +, A) == 21
+    end
+
     @testset "device-resident shape info operations" begin
         V_host = VectorOfArrays([Float32[1, 2], Float32[3, 4, 5]])
         W_host = VectorOfArrays([Float32[1, 2], Float32[3, 4, 6]])

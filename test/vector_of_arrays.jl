@@ -54,6 +54,27 @@ include("testdefs.jl")
     end
 
 
+    @testset "flat reductions" begin
+        V = VectorOfArrays([[3.0, 1.0], [7.0, -2.0, 5.0], [4.0]])
+        R = collect(V)
+        for (f, op) in ((maximum, max), (minimum, min), (sum, +))
+            @test @inferred(mapreduce(f, op, V)) == mapreduce(f, op, R)
+            @test mapreduce(f, op, V; init = 0.5) == mapreduce(f, op, R; init = 0.5)
+        end
+        # Views only cover part of the data:
+        @test mapreduce(maximum, max, V[2:3]) == 7.0
+        @test mapreduce(sum, +, V[1:2]) == 14.0
+
+        # Empty inputs and empty elements behave like the generic implementation:
+        E = VectorOfArrays(Vector{Vector{Float64}}())
+        @test_throws _reduction_error_type(maximum, max, collect(E)) mapreduce(maximum, max, E)
+        @test_throws _reduction_error_type(sum, +, collect(E)) mapreduce(sum, +, E)
+        Z = VectorOfArrays([[1.0, 2.0], Float64[], [3.0]])
+        @test_throws _reduction_error_type(maximum, max, collect(Z)) mapreduce(maximum, max, Z)
+        @test_throws _reduction_error_type(minimum, min, collect(Z)) mapreduce(minimum, min, Z)
+        @test mapreduce(sum, +, Z) == 6.0
+    end
+
     @testset "element shape enforcement" begin
         # The element shape check must also fire under @inbounds, as in
         # broadcast assignment:

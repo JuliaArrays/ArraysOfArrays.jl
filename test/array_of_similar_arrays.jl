@@ -400,6 +400,23 @@ end
     end
 
 
+    @testset "flat reductions" begin
+        A = sliced(reshape(collect(1.0:12.0), 3, 4), 1)
+        R = collect(A)
+        for (f, op) in ((maximum, max), (minimum, min), (sum, +))
+            @test @inferred(mapreduce(f, op, A)) == mapreduce(f, op, R)
+            @test mapreduce(f, op, A; init = 100.0) == mapreduce(f, op, R; init = 100.0)
+        end
+
+        # Empty inputs and empty elements behave like the generic implementation:
+        E = sliced(zeros(3, 0), 1)
+        @test_throws _reduction_error_type(maximum, max, collect(E)) mapreduce(maximum, max, E)
+        @test_throws _reduction_error_type(sum, +, collect(E)) mapreduce(sum, +, E)
+        Z = sliced(zeros(0, 3), 1)
+        @test_throws _reduction_error_type(maximum, max, collect(Z)) mapreduce(maximum, max, Z)
+        @test mapreduce(sum, +, Z) == 0.0
+    end
+
     @testset "zero-dimensional elements" begin
         A = sliced(collect(1:5), Val(0))
         A[1] = fill(9)
