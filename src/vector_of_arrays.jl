@@ -217,9 +217,10 @@ function simple_consistency_checks(A::VectorOfArrays{T,N,M}) where {T,N,M}
 end
 @compat public simple_consistency_checks
 
-# Package extensions specialize this for GPU arrays, to allow the two scalar
-# reads explicitly:
+# Package extensions specialize these for GPU arrays, to allow the O(1)
+# scalar reads explicitly:
 _scalar_first_last(x::AbstractVector) = (first(x), last(x))
+_scalar_first(x::AbstractVector) = first(x)
 
 
 # Element pointers are indices into the data, so operations that create new
@@ -278,6 +279,39 @@ function innerlengths(A::VectorOfArrays)
 end
 
 innersizes(A::VectorOfArrays) = _elem_size.(A.kernel_size, innerlengths(A))
+
+# innersize needs only O(1) scalar reads and single passes over the
+# structural vectors, unlike the generic per-element iteration, so it also
+# works when the shape information is device-resident:
+function innersize(A::VectorOfArrays{T,N}) where {T,N}
+    isempty(A) && return ntuple(_ -> 0, Val(N))
+    ep_first, ep_last = _scalar_first_last(A.elem_ptr)
+    return _uniform_innersize(A, Int(ep_first), Int(ep_last))
+end
+
+# Requires a non-empty A. If all element lengths equal the total length
+# divided by the number of elements, the division is exact, so no separate
+# remainder check is needed:
+function _uniform_innersize(A::VectorOfArrays{T,N,M}, ep_first::Int, ep_last::Int) where {T,N,M}
+    len = div(ep_last - ep_first, length(A))
+    _elem_lengths_uniform(A.elem_ptr, len) || _throw_innersize_mismatch()
+    k1 = M == 0 ? () : _scalar_first(A.kernel_size)
+    M == 0 || all(==(k1), A.kernel_size) || _throw_innersize_mismatch()
+    return _elem_size(k1, len)
+end
+
+_throw_innersize_mismatch() =
+    throw(DimensionMismatch("Shape of element arrays of A is not equal, can't determine common shape"))
+
+# Allocation-free on the host, the GPUArraysCore extension provides a
+# vectorized version. Computed in Int, see innerlengths:
+function _elem_lengths_uniform(elem_ptr::AbstractVector{<:Integer}, len::Integer)
+    i0 = firstindex(elem_ptr)
+    @inbounds for k in 0:(length(elem_ptr) - 2)
+        Int(elem_ptr[i0 + k + 1]) - Int(elem_ptr[i0 + k]) == len || return false
+    end
+    return true
+end
 
 
 # Equality must be equivalent to elementwise comparison, but can be checked

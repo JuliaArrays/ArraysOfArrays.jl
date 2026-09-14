@@ -564,9 +564,7 @@ function _generic_innersize(A::AbstractArray{<:AbstractArray{T,M},N}) where {T,M
     end
 
     let s = s
-        if any(X -> size(X) != s, A)
-            throw(DimensionMismatch("Shape of element arrays of A is not equal, can't determine common shape"))
-        end
+        any(X -> size(X) != s, A) && _throw_innersize_mismatch()
     end
 
     return s

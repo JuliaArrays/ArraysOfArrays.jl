@@ -345,6 +345,14 @@ include("testdefs.jl")
         @test @inferred(stacked(Bu)) == stack(Array(Bu))
         @test @inferred(splitup(stacked(Bu), unstackmode(Bu))) == Bu
 
+        # innersize uses the structural vectors, without per-element access:
+        @test @inferred(innersize(Bu)) == (2, 3)
+        @test innersize(B1e) == (0,)
+        @test_throws DimensionMismatch innersize(B_grow)
+        # Elements with an empty kernel dimension read back with a zero
+        # last dimension, innersize matches that:
+        @test innersize(VectorOfArrays([zeros(Int, 0, 3), zeros(Int, 0, 5)])) == (0, 0)
+
         # flatview returns the internal storage if the elements cover it
         # completely, and a view of the covered data range otherwise:
         B3_view = view(B3, 2:3)

@@ -6,8 +6,9 @@ using GPUArraysCore: AbstractGPUArray, AnyGPUArray, @allowscalar
 
 import ArraysOfArrays
 
-# Two O(1) scalar reads during construction are acceptable:
+# O(1) scalar reads of the structural vectors are acceptable:
 ArraysOfArrays._scalar_first_last(x::AbstractGPUArray) = @allowscalar (first(x), last(x))
+ArraysOfArrays._scalar_first(x::AbstractGPUArray) = @allowscalar first(x)
 
 # Per-element access on device-resident data costs one device operation
 # each, so non-scalar getindex indexes the flat data in a single operation:
@@ -37,6 +38,15 @@ function ArraysOfArrays._elem_lengths_equal(a::AbstractGPUArray{<:Integer}, b::A
     length(a) == length(b) || return false
     length(a) < 2 && return true
     @views all((a[(begin + 1):end] .- a[begin:(end - 1)]) .== (b[(begin + 1):end] .- b[begin:(end - 1)]))
+end
+
+# Vectorized uniformity check of the element lengths, computed in Int like
+# the host version:
+function ArraysOfArrays._elem_lengths_uniform(elem_ptr::AbstractGPUArray{<:Integer}, len::Integer)
+    length(elem_ptr) < 2 && return true
+    lo = view(elem_ptr, firstindex(elem_ptr):(lastindex(elem_ptr) - 1))
+    hi = view(elem_ptr, (firstindex(elem_ptr) + 1):lastindex(elem_ptr))
+    mapreduce((a, b) -> Int(b) - Int(a) == len, &, lo, hi, init = true)
 end
 
 function ArraysOfArrays._elem_lengths_equal(a::AbstractGPUArray{<:Integer}, b::AbstractVector{<:Integer})
