@@ -848,14 +848,12 @@ end
 deepmap(f, A::VectorOfArrays) = _generic_deepmap_impl(f, A)
 
 
-# Like Base's map/broadcast of identity over vectors of views, the result
-# shares the element data, but the outer container (here: the structural
-# vectors) is independent:
-_outer_copy(A::VectorOfArrays) =
+# Like Base's map of identity over vectors of views, the result shares the
+# element data, but the outer container (here: the structural vectors) is
+# independent. Outer broadcasts, including identity.(A), copy the element
+# data instead (see NestedArrayStyle):
+Base.map(::typeof(identity), A::VectorOfArrays) =
     VectorOfArrays(A.data, _shapeinfo_copy(A.elem_ptr), _shapeinfo_copy(A.kernel_size), no_consistency_checks)
-
-Base.map(::typeof(identity), A::VectorOfArrays) = _outer_copy(A)
-Base.Broadcast.broadcasted(::typeof(identity), A::VectorOfArrays) = _outer_copy(A)
 
 
 

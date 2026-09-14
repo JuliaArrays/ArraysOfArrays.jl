@@ -44,7 +44,7 @@ Similar to axis-targeted operations in Python's AwkwardArrays, but with array-of
 * [`innermapreduce`](@ref), [`innerreduce`](@ref) and [`innersum`](@ref) reduce over the contents of each element array.
 * [`innersizes`](@ref) and [`innerlengths`](@ref) return per-element sizes/lengths (elements need not be of equal size).
 
-For split arrays these operate on the underlying flat data, without per-element iteration, and so work on GPU arrays. Outer-level broadcasts like `(x -> 2 .* x).(A)` keep their usual Julia semantics (`f` receives whole element arrays), but return a `VectorOfArrays` when the results are arrays.
+For split arrays these operate on the flat data, without per-element iteration (for device arrays see [GPU support](@ref section_GPU)). Outer-level broadcasts like `(x -> 2 .* x).(A)` keep their usual Julia semantics, `f` receives whole element arrays. Results stored in `Array`s, including views of the elements, are copied into a nested array (currently a `VectorOfArrays`, not part of the API) that shares no data with `A`; other results go into a plain `Vector`. Use `foreach` or `map` for in-place operations on the elements, a broadcast like `fill!.(A, 0)` would copy all data into a discarded result. `convert(VectorOfSimilarArrays, result)` turns results of equal size into an [`ArrayOfSimilarArrays`](@ref section_ArrayOfSimilarArrays) without copying. See [`ArraysOfArrays.NestedArrayStyle`](@ref) for details.
 
 ## Which flattening function do I want?
 
@@ -55,7 +55,7 @@ For split arrays these operate on the underlying flat data, without per-element 
 
 All four are zero-copy where possible and so may return arrays that share memory with `A`. In contrast, `Base.stack(A)` and `reduce(vcat, A)` always return independent arrays.
 
-## GPU support
+## [GPU support](@id section_GPU)
 
 Both array types work with GPU-resident data. An `ArrayOfSimilarArrays` backed by a GPU array requires no special handling. For a `VectorOfArrays`, the shape information (`elem_ptr` and `kernel_size`) can either stay on the host, so that element access returns device views, or live on the device as well (e.g. via `Adapt.adapt`), which is the layout to use inside GPU kernels. Host-side element access (`V[i]`, iteration) requires the shape information on the host, as it would otherwise scalar-index device arrays. `KernelAbstractions.get_backend` returns the backend of the underlying data. `innersize`, `stacked` and conversions to `ArrayOfSimilarArrays` use only vectorized operations on the shape information, so they work with device-resident shape information as well.
 

@@ -3,9 +3,13 @@
 using ArraysOfArrays
 using Test
 
-using FixedSizeArrays: FixedSizeVector
+using FixedSizeArrays: FixedSizeArray, FixedSizeVector
 
 include("testdefs.jl")
+
+# Stands in for a device vector as the underlying memory of a fixed-size
+# array:
+struct _MockDenseVector{T} <: DenseVector{T} end
 
 @testset "FixedSizeArrays extension" begin
     A = VectorOfArrays([[1, 2], [3, 4, 5]])
@@ -40,4 +44,17 @@ include("testdefs.jl")
     @test_throws ArgumentError resize!(B, 1)
     @test_throws ArgumentError empty!(B)
     @test B.data == data0 && B == A
+end
+
+@testset "FixedSizeArrays outer broadcasts" begin
+    # Fixed-size arrays over host memory are packed into a nested array by
+    # outer broadcasts like Arrays, those over other (e.g. device) memory
+    # are not. Behind inference barriers, so that the constant-foldable
+    # trait methods actually run:
+    C = sliced(rand(3, 4))
+    r = (x -> FixedSizeVector(x)).(C)
+    @test r isa VectorOfArrays{Float64,1}
+    @test r == [FixedSizeVector(x) for x in collect(C)]
+    @test ArraysOfArrays._host_storage(Base.inferencebarrier(typeof(FixedSizeVector(rand(2)))))
+    @test !ArraysOfArrays._host_storage(Base.inferencebarrier(FixedSizeArray{Float64,1,_MockDenseVector{Float64}}))
 end

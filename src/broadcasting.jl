@@ -26,16 +26,40 @@ Broadcast style of nested array types like [`VectorOfArrays`](@ref) and
 [`ArrayOfSimilarArrays`](@ref).
 
 Broadcasts at this level apply `f` to whole element arrays, as in
-`(x -> 2 .* x).(A)`. Such a broadcast returns a [`VectorOfArrays`](@ref)
-instead of a `Vector` of arrays if it runs over a single outer dimension
-with `Base.OneTo` axes and its result type is inferred as a concrete `Array`
-type with at least one dimension. The elements may be ragged, even if `A` is
-an [`ArrayOfSimilarArrays`](@ref). All other broadcasts behave like the
-default broadcast machinery. Use [`bcastat`](@ref) to broadcast over the
-*contents* of the element arrays instead.
+`(x -> 2 .* x).(A)`. Results whose data is stored in an `Array` are
+collected into a nested array that shares no data with `A`; this includes
+views of the element arrays, so `(x -> x).(A)` and `identity.(A)` copy
+them. Other results go into a plain `Array`, as in Base. Only that the
+result is an `AbstractArray` of the values of `f` is guaranteed: the
+nested array type (currently a [`VectorOfArrays`](@ref), whose elements
+may be ragged even if `A` is an [`ArrayOfSimilarArrays`](@ref)) is an
+implementation detail that may change between minor versions.
+`convert(VectorOfSimilarArrays, result)` turns results of equal size into
+an [`ArrayOfSimilarArrays`](@ref) without copying. Use [`bcastat`](@ref)
+to broadcast over the *contents* of the element arrays instead.
 
-See [`ArraysOfArrays.AbstractNestedArrayStyle`](@ref) for resolving
-broadcast style combination with foreign array styles.
+# Extended help
+
+A broadcast is packed into a nested array if it runs over a single outer
+dimension with `Base.OneTo` axes and its result type is inferred as a
+concrete array type with at least one dimension whose data is stored in an
+`Array` (or `Memory`): such an array itself, or a view, reshape or
+reinterpretation of one. Structured, static, bit, offset and GPU arrays
+would have to be densified or transferred to the host, so they, like all
+other results, keep the default broadcast behavior. So do the element
+views of nested arrays backed by other storage types (e.g. `ElasticArray`
+or disk arrays), which are therefore not copied.
+
+Since packed results are copies, in-place operations on the elements like
+`fill!.(A, 0)` copy all data into a discarded result; use `foreach` or
+`map` for those. Results that a nested array cannot represent (offset
+axes, or an empty leading but non-empty trailing dimension) throw an
+`ArgumentError`; use `map` for those as well.
+
+# Implementation
+
+Packages that define array types with their own broadcast style resolve
+style combination via [`ArraysOfArrays.AbstractNestedArrayStyle`](@ref).
 """
 struct NestedArrayStyle{N} <: AbstractNestedArrayStyle{N} end
 @compat public NestedArrayStyle
@@ -47,7 +71,7 @@ Base.Broadcast.BroadcastStyle(::Type{<:VectorOfArrays}) = NestedArrayStyle{1}()
 
 function Base.copy(bc::Broadcast.Broadcasted{NestedArrayStyle{N}}) where {N}
     ElType = Broadcast.combine_eltypes(bc.f, bc.args)
-    if N == 1 && ElType <: Array && isconcretetype(ElType) && ndims(ElType) >= 1 && axes(bc, 1) isa Base.OneTo
+    if N == 1 && _packable_result(ElType) && axes(bc, 1) isa Base.OneTo
         return _collect_nested(bc, ElType)
     else
         # Everything else behaves like the default broadcast machinery:
@@ -55,14 +79,59 @@ function Base.copy(bc::Broadcast.Broadcasted{NestedArrayStyle{N}}) where {N}
     end
 end
 
-function _collect_nested(bc::Broadcast.Broadcasted, ::Type{Array{T,M}}) where {T,M}
+# Results that are packed into a nested array: concrete arrays whose data
+# is stored in an Array (or Memory), i.e. Arrays and views, reshapes and
+# reinterpretations of them. Unknown array types are not packed
+# (fail-closed): structured, lazy, static, bit and offset arrays would have
+# to be densified, and device arrays, which include DenseArray subtypes
+# outside of GPUArraysCore (e.g. Reactant), must not be copied to the host
+# element by element. Extensions may opt in dense host array types, but
+# must recurse into the type of the underlying memory if that is a
+# parameter (see the FixedSizeArrays extension):
+function _packable_result(::Type{ET}) where {ET}
+    ET <: AbstractArray && isconcretetype(ET) && ndims(ET) >= 1 && _host_storage(ET)
+end
+
+_host_storage(::Type) = false
+_host_storage(::Type{<:Array}) = true
+# Memory is host memory by its address-space parameter (device memory
+# would be a different GenericMemory):
+@static if isdefined(Base, :Memory)
+    _host_storage(::Type{<:Memory}) = true
+end
+# Wrappers keep their data in their parent:
+_host_storage(::Type{<:SubArray{<:Any,<:Any,P}}) where {P} = _host_storage(P)
+_host_storage(::Type{<:Base.ReshapedArray{<:Any,<:Any,P}}) where {P} = _host_storage(P)
+_host_storage(::Type{<:Base.ReinterpretArray{<:Any,<:Any,<:Any,P}}) where {P} = _host_storage(P)
+# Resolves the method ambiguity at the bottom type:
+_host_storage(::Type{Union{}}) = false
+
+function _collect_nested(bc::Broadcast.Broadcasted, ::Type{<:AbstractArray{T,M}}) where {T,M}
+    n = length(axes(bc, 1))
     dest = VectorOfArrays{T,M}()
-    sizehint!(dest.elem_ptr, length(axes(bc, 1)) + 1)
-    sizehint!(dest.kernel_size, length(axes(bc, 1)))
+    sizehint!(dest.elem_ptr, n + 1)
+    sizehint!(dest.kernel_size, n)
     for i in eachindex(bc)
-        push!(dest, bc[i])
+        x = bc[i]
+        _require_packable(x)
+        # The size of the first result is a good guess for the others:
+        isempty(dest) && sizehint!(dest.data, n * length(x))
+        push!(dest, x)
     end
     return dest
+end
+
+# A VectorOfArrays stores only the leading dimensions of its elements and
+# reads them back with one-based axes, so it cannot represent these:
+function _require_packable(x::AbstractArray)
+    Base.has_offset_axes(x) && throw(ArgumentError(
+        "Cannot pack arrays with offset axes into a nested array, use map instead of broadcast"
+    ))
+    sz = size(x)
+    prod(Base.front(sz)) == 0 && last(sz) != 0 && throw(ArgumentError(
+        "Cannot pack arrays with an empty leading and a non-empty trailing dimension into a nested array, use map instead of broadcast"
+    ))
+    return nothing
 end
 
 
@@ -204,6 +273,7 @@ function Base.Broadcast.broadcasted(
     new_kernel_size = map(_ -> (), new_lengths)
 
     newA = _new_vector_of_arrays_with_lengths(A, Int, new_kernel_size, new_lengths)
-    _findall!.(newA, A)
+    # foreach, not broadcast: the results would be packed into a discarded copy
+    foreach(_findall!, newA, A)
     return newA
 end

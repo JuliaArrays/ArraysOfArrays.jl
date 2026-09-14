@@ -327,12 +327,12 @@ end
 Base.prepend!(dest::ArrayOfSimilarArrays{T,M,N}, src::AbstractArray{<:AbstractArray{U,M},N}) where {T,M,N,U} =
     prepend!(dest, convert(ArrayOfSimilarArrays, src))
 
-# Like Base's map/broadcast of identity over vectors of views, the result
-# shares the element data. ArrayOfSimilarArrays is an immutable wrapper
-# with no outer state of its own, so a fresh wrapper of the same data
-# would be egal to A anyway:
+# Like Base's map of identity over vectors of views, the result shares the
+# element data. ArrayOfSimilarArrays is an immutable wrapper with no outer
+# state of its own, so a fresh wrapper of the same data would be egal to A
+# anyway. Outer broadcasts, including identity.(A), copy the element data
+# instead (see NestedArrayStyle):
 Base.map(::typeof(identity), A::ArrayOfSimilarArrays) = A
-Base.Broadcast.broadcasted(::typeof(identity), A::ArrayOfSimilarArrays) = A
 
 
 const VectorOfSimilarArrays{

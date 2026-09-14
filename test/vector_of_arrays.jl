@@ -871,21 +871,27 @@ include("testdefs.jl")
     @testset "map and broadcast" begin
         A = VectorOfArrays(ref_AoA2(Float32, 4))
 
-        # identity map/broadcast return an independent outer container that
-        # shares the element data, like Base's identity.(eachcol(...)):
-        for do_map in (map, broadcast)
-            r = @inferred(do_map(identity, A))
-            @test r == A
-            @test r !== A
-            @test fused(r) === fused(A)
-            @test r.elem_ptr !== A.elem_ptr
-        end
+        # map of identity returns an independent outer container that shares
+        # the element data, like Base's map(identity, eachcol(...)):
+        r = @inferred(map(identity, A))
+        @test r == A
+        @test r !== A
+        @test fused(r) === fused(A)
+        @test r.elem_ptr !== A.elem_ptr
+        # identity.(A) copies the element data like any other outer broadcast:
+        r_bc = @inferred(broadcast(identity, A))
+        @test r_bc == A
+        @test r_bc isa VectorOfArrays{Float32,2}
+        @test !Base.mightalias(fused(r_bc), fused(A))
 
-        # Only concretely-inferred Array-valued outer broadcasts preserve
-        # structure, others use the default broadcast machinery:
+        # Results stored in Arrays, including views of the elements, are
+        # packed into a nested array, others use the default machinery:
         rv = (x -> view(x, :, 1)).(A)
-        @test rv isa Vector{<:SubArray}
+        @test rv isa VectorOfArrays{Float32,1}
         @test rv == [view(x, :, 1) for x in A]
+        rb = (x -> x .> 0.5f0).(A)
+        @test rb isa Vector{<:BitMatrix}
+        @test rb == [x .> 0.5f0 for x in A]
     end
 
     @testset "resize" begin

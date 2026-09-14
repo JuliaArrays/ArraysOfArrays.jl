@@ -641,12 +641,14 @@ end
         A_flat = rand(2,3,4,5,6)
         A = sliced(A_flat, 2)
 
-        # identity map/broadcast share the element data; since the wrapper
-        # is immutable and has no outer state of its own, an outer copy
-        # would be egal to A anyway:
-        for do_map in (map, broadcast)
-            r = @inferred(do_map(identity, A))
-            @test r === A
-        end
+        # map of identity shares the element data; since the wrapper is
+        # immutable and has no outer state of its own, an outer copy would be
+        # egal to A anyway. identity.(A) has no such shortcut, it behaves like
+        # any other outer broadcast (here, over three outer dimensions, the
+        # default machinery):
+        @test @inferred(map(identity, A)) === A
+        r = @inferred(broadcast(identity, A))
+        @test r == A
+        @test r !== A
     end
 end

@@ -117,4 +117,12 @@ using InverseFunctions: inverse
         @test_throws ArgumentError f(x)
         @test_throws ArgumentError f([SVector{2}(rand(2)) for _ in 1:5])
     end
+
+    @testset "outer broadcasts with static array results" begin
+        # Static array results are not packed into a VectorOfArrays:
+        A = sliced(rand(3, 4))
+        r = (x -> SVector{3}(x)).(A)
+        @test r isa Vector{<:SVector{3}}
+        @test r == [SVector{3}(x) for x in collect(A)]
+    end
 end
