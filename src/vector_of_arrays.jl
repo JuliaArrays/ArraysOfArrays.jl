@@ -212,7 +212,7 @@ function simple_consistency_checks(A::VectorOfArrays{T,N,M}) where {T,N,M}
     size(A.elem_ptr, 1) == size(A.kernel_size, 1) + 1 || throw(ArgumentError("VectorOfArrays inconsistent: elem_ptr and kernel_size have incompatible size"))
     ep_first, ep_last = _scalar_first_last(A.elem_ptr)
     ep_first >= firstindex(A.data) || throw(ArgumentError("VectorOfArrays inconsistent: First elem_ptr inconsistent with data indices"))
-    ep_last - 1 <= lastindex(A.data) || throw(ArgumentError("VectorOfArrays inconsistent: Last elem_ptr inconsistent with data indices"))
+    Int(ep_last) - 1 <= lastindex(A.data) || throw(ArgumentError("VectorOfArrays inconsistent: Last elem_ptr inconsistent with data indices"))
     nothing
 end
 @compat public simple_consistency_checks
@@ -268,9 +268,13 @@ Base.@propagate_inbounds function _elem_range_size(A::VectorOfArrays, i::Integer
 end
 
 
+# Computed in Int, differences of narrow pointer types could wrap for data
+# with offset axes:
 function innerlengths(A::VectorOfArrays)
     ep = A.elem_ptr
-    return view(ep, firstindex(ep)+1:lastindex(ep)) .- view(ep, firstindex(ep):lastindex(ep)-1)
+    hi = view(ep, (firstindex(ep) + 1):lastindex(ep))
+    lo = view(ep, firstindex(ep):(lastindex(ep) - 1))
+    return Int.(hi) .- Int.(lo)
 end
 
 innersizes(A::VectorOfArrays) = _elem_size.(A.kernel_size, innerlengths(A))
@@ -324,7 +328,7 @@ function flatview(A::VectorOfArrays)
     if ep_first == firstindex(A.data) && ep_last == lastindex(A.data) + 1
         A.data
     else
-        view(A.data, ep_first:(ep_last - 1))
+        view(A.data, Int(ep_first):(Int(ep_last) - 1))
     end
 end
 
@@ -475,7 +479,7 @@ end
 
 function vecflattened(A::VectorOfArrays)
     ep_first, ep_last = _scalar_first_last(A.elem_ptr)
-    view(A.data, ep_first:(ep_last - 1))
+    view(A.data, Int(ep_first):(Int(ep_last) - 1))
 end
 
 _flatdata(A::VectorOfArrays) = vecflattened(A)

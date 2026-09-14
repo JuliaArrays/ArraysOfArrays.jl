@@ -72,6 +72,25 @@ include("testdefs.jl")
         @test VectorOfArrays(collect(1:250), UInt8[1, 101, 251], fill((), 2)) ==
             [collect(1:100), collect(101:250)]
 
+        # innersize and innerlengths work with narrow pointer types near
+        # their limit, innerlengths returns Int:
+        @test @inferred(innersize(VectorOfArrays(collect(1:250), UInt8[1, 126, 251], fill((), 2)))) == (125,)
+        @test_throws DimensionMismatch innersize(VectorOfArrays(collect(1:250), UInt8[1, 101, 251], fill((), 2)))
+        @test @inferred(innerlengths(VectorOfArrays(collect(1:250), UInt8[1, 101, 251], fill((), 2)))) isa Vector{Int}
+        @test innerlengths(VectorOfArrays(collect(1:250), UInt8[1, 101, 251], fill((), 2))) == [100, 150]
+
+        # Differences of narrow signed pointers over data with offset axes
+        # would wrap if not computed in Int:
+        V_off = VectorOfArrays(OffsetVector(collect(1.0:200.0), -100:99), Int8[-100, 100], fill((), 1))
+        @test innerlengths(V_off) == [200]
+        @test @inferred(innersize(V_off)) == (200,)
+        @test stacked(V_off) == reshape(1.0:200.0, 200, 1)
+        # Unsigned pointers at zero over zero-based data must not wrap either:
+        V_zero = VectorOfArrays(OffsetVector(Float64[], 0:-1), UInt[0], Tuple{}[])
+        @test innersize(V_zero) == (0,)
+        @test size(stacked(V_zero)) == (0, 0)
+        @test isempty(flatview(V_zero)) && isempty(vecflattened(V_zero))
+
         # Element pointers must increase, comparing their difference against
         # zero would accept pointers that wrap:
         @test_throws ArgumentError VectorOfArrays(collect(1:250), UInt8[1, 250, 10, 100], fill((), 3))
