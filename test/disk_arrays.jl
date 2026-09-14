@@ -70,3 +70,38 @@ end
     @test size(A[2, 3]) == (2, 3)
     @test disk4.reads == 0
 end
+
+@testset "stacking disk-backed vectors of arrays" begin
+    # Stacking and conversion of a disk-backed VectorOfArrays read the
+    # covered data in a single block read and return in-memory arrays:
+    vdata = rand(UInt16, 12)
+    vdisk = CountingDiskArray(vdata)
+    Vd = VectorOfArrays(vdisk, [1, 4, 7, 10, 13], fill((), 4))
+    Vd_ref = VectorOfArrays(vdata, [1, 4, 7, 10, 13], fill((), 4))
+
+    # The shape information alone determines the inner size, no reads:
+    vdisk.reads = 0
+    @test innersize(Vd) == (3,)
+    @test vdisk.reads == 0
+
+    S = stacked(Vd)
+    @test S isa Matrix{UInt16}
+    @test vdisk.reads == 1
+    @test S == stacked(Vd_ref)
+
+    vdisk.reads = 0
+    C = convert(VectorOfSimilarVectors, Vd)
+    @test fused(C) isa Matrix{UInt16}
+    @test vdisk.reads == 1
+    @test C == Vd_ref
+
+    # Only the covered range of a partially covered data vector is read:
+    Vp = VectorOfArrays(vdisk, [4, 7, 10], fill((), 2))
+    vdisk.reads = 0
+    @test stacked(Vp) == stacked(VectorOfArrays(vdata, [4, 7, 10], fill((), 2)))
+    @test vdisk.reads == 1
+
+    vdisk.reads = 0
+    @test_throws DimensionMismatch stacked(VectorOfArrays(vdisk, [1, 3, 7, 13], fill((), 3)))
+    @test vdisk.reads == 0
+end

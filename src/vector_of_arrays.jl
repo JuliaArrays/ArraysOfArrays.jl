@@ -437,6 +437,20 @@ getsplitmode(A::VectorOfArrays) = SplitParts(_shapeinfo_copy(A.elem_ptr), _shape
 @inline fused(A::VectorOfArrays) = A.data
 
 
+function stacked(A::VectorOfArrays{T,N}) where {T,N}
+    ep_first, ep_last = Int.(_scalar_first_last(A.elem_ptr))
+    # Fails for element arrays of unequal size:
+    sz_inner = isempty(A) ? ntuple(_ -> 0, Val(N)) : _uniform_innersize(A, ep_first, ep_last)
+    covered = _covered_data(A.data, ep_first:(ep_last - 1))
+    return reshape(covered, sz_inner..., length(A))
+end
+
+# Storage with expensive element access that does not support arbitrary
+# reshapes (disk arrays) reads the covered range in a single ranged
+# getindex instead, via the DiskArrays extension:
+_covered_data(data::AbstractVector, r::AbstractUnitRange{Int}) = view(data, r)
+
+
 # Comparing the part boundaries is O(n), vectorized on GPUs. splitup
 # shares the shape vectors of the mode it was created from, so round
 # trips take the egal fast path:

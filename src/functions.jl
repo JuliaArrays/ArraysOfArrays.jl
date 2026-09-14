@@ -398,9 +398,13 @@ Join the element arrays of a nested array into a single array along one or
 more new dimensions, return non-nested arrays unchanged.
 
 Similar to `Base.stack`, but can return the original underlying array of
-sliced arrays in more cases. Empty arrays of arrays, which `Base.stack`
-rejects, yield an empty array with the [`innersize`](@ref) of `A` as inner
-dimensions.
+sliced arrays in more cases, and a reshaped view of the data of a
+[`VectorOfArrays`](@ref) whose element arrays are of equal size (for
+disk-backed data, the covered data is read in a single operation instead).
+The result may therefore share memory with `A`, like [`flatview`](@ref);
+use `Base.stack` or `copy` for an independent array. Empty arrays of
+arrays, which `Base.stack` rejects, yield an empty array with the
+[`innersize`](@ref) of `A` as inner dimensions.
 """
 function stacked end
 export stacked

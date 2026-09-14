@@ -11,4 +11,9 @@ import ArraysOfArrays
 # selection from the flat data in a single block read instead:
 ArraysOfArrays._prefers_flat_getindex(::Type{<:AbstractDiskArray}) = true
 
+# Likewise, stacking a disk-backed VectorOfArrays reads the covered data in
+# a single ranged getindex (disk arrays also do not support the reshape of
+# a lazy view that the in-memory implementation uses):
+ArraysOfArrays._covered_data(data::AbstractDiskArray{<:Any,1}, r::AbstractUnitRange{Int}) = data[r]
+
 end # module ArraysOfArraysDiskArraysExt

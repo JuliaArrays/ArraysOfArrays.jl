@@ -276,6 +276,48 @@ JLArrays.allowscalar(false)
         @test eltype(Array(map(maximum, dev_mm))) == eltype(map(maximum, cpu_mm))
     end
 
+    @testset "stacking on device data" begin
+        # Stacking element arrays of equal size is zero-copy and stays on
+        # the device, and so does the conversion to an ArrayOfSimilarArrays:
+        cpu = VectorOfArrays([Float32[1, 2, 3], Float32[4, 5, 6]])
+        Vhs = VectorOfArrays(jl(cpu.data), cpu.elem_ptr, cpu.kernel_size)
+        S = stacked(Vhs)
+        @test S isa AbstractGPUArray
+        @test Array(S) == stack(collect(cpu))
+        C = convert(VectorOfSimilarVectors, Vhs)
+        @test C isa VectorOfSimilarVectors
+        @test fused(C) isa AbstractGPUArray
+        @test Array(fused(C)) == stack(collect(cpu))
+        @test_throws DimensionMismatch stacked(VectorOfArrays(jl(Float32[1, 2, 3]), [1, 2, 4], [(), ()]))
+
+        # Stacking also works when the shape information is fully
+        # device-resident (the layout produced by Adapt), since innersize
+        # operates on the structural vectors without per-element access:
+        dev = adapt(JLArray, cpu)
+        @test dev.elem_ptr isa AbstractGPUArray && dev.kernel_size isa AbstractGPUArray
+        @test @inferred(innersize(dev)) == (3,)
+        Sd = stacked(dev)
+        @test Sd isa AbstractGPUArray
+        @test Array(Sd) == stack(collect(cpu))
+        Cd = convert(VectorOfSimilarVectors, dev)
+        @test fused(Cd) isa AbstractGPUArray
+        @test Array(fused(Cd)) == stack(collect(cpu))
+        ragged_dev = adapt(JLArray, VectorOfArrays([Float32[1, 2], Float32[3, 4, 5]]))
+        @test_throws DimensionMismatch stacked(ragged_dev)
+        # An empty fully-adapted input takes the structural n == 0 bypass:
+        empty_dev = adapt(JLArray, VectorOfArrays(Vector{Float32}[]))
+        @test innersize(empty_dev) == (0,)
+        @test isempty(stacked(empty_dev))
+        # Matrix elements with device-resident kernel sizes exercise the
+        # vectorized kernel-size check:
+        cpu_m2 = VectorOfArrays([Float32[1 2 3; 4 5 6], Float32[7 8 9; 10 11 12]])
+        dev_m2 = adapt(JLArray, cpu_m2)
+        @test @inferred(innersize(dev_m2)) == (2, 3)
+        @test Array(stacked(dev_m2)) == stack(collect(cpu_m2))
+        ragged_m2 = adapt(JLArray, VectorOfArrays([Float32[1 2 3; 4 5 6], Float32[1 2; 3 4; 5 6]]))
+        @test_throws DimensionMismatch innersize(ragged_m2)
+    end
+
     @testset "no method ambiguities in the GPU extension" begin
         ext = Base.get_extension(ArraysOfArrays, :ArraysOfArraysGPUKernelsExt)
         @test ext !== nothing
