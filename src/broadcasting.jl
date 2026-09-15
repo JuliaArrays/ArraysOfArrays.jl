@@ -56,6 +56,11 @@ Since packed results are copies, in-place operations on the elements like
 axes, or an empty leading but non-empty trailing dimension) throw an
 `ArgumentError`; use `map` for those as well.
 
+With StructArrays loaded, broadcasts over a `StructArray` with nested-array
+columns return a `StructArray` for struct-valued results and follow the
+rules above otherwise. The original `StructArray` is indexed, so
+specialized `getindex` methods of it are used.
+
 # Implementation
 
 Packages that define array types with their own broadcast style resolve
@@ -78,6 +83,11 @@ function Base.copy(bc::Broadcast.Broadcasted{NestedArrayStyle{N}}) where {N}
         return copy(convert(Broadcast.Broadcasted{Broadcast.DefaultArrayStyle{N}}, bc))
     end
 end
+
+# The nested styles specialize only copy; StructArrays allocates the columns
+# of struct-valued results via similar (see the StructArrays extension):
+Base.similar(bc::Broadcast.Broadcasted{<:AbstractNestedArrayStyle{N}}, ::Type{T}, dims) where {N,T} =
+    similar(convert(Broadcast.Broadcasted{Broadcast.DefaultArrayStyle{N}}, bc), T, dims)
 
 # Results that are packed into a nested array: concrete arrays whose data
 # is stored in an Array (or Memory), i.e. Arrays and views, reshapes and
