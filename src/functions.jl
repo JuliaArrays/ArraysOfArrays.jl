@@ -744,12 +744,16 @@ innerreduce(op, A::AbstractArray{<:AbstractArray}; init = _NoInit()) = _innermap
 
 Per-element sum over the contents of the element arrays of `A`. For
 numerical element types, empty element arrays sum to zero.
+
+Like `sum`, this accumulates small integers in a wider type, so that e.g.
+summing `UInt16` contents does not wrap around.
 """
 function innersum end
 export innersum
 
-innersum(A::AbstractArray{<:AbstractArray}) = innermapreduce(identity, +, A)
-innersum(A::AbstractArray{<:AbstractArray{T}}) where {T<:Number} = innermapreduce(identity, +, A, init = zero(T))
+innersum(A::AbstractArray{<:AbstractArray}) = innermapreduce(identity, Base.add_sum, A)
+innersum(A::AbstractArray{<:AbstractArray{T}}) where {T<:Number} =
+    innermapreduce(identity, Base.add_sum, A, init = Base.reduce_empty(Base.add_sum, T))
 
 
 """

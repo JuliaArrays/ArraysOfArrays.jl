@@ -265,6 +265,11 @@ end
 
         # Per-element reductions over the inner dimensions of the flat data:
         @test @inferred(innersum(A)) == [sum(x) for x in A]
+        # like sum, innersum accumulates small integers in a wider type:
+        let Ai = ArrayOfSimilarArrays{UInt16,1,1}(fill(UInt16(60000), 3, 4))
+            @test @inferred(innersum(Ai)) == [sum(x) for x in Ai] == fill(180000, 4)
+            @test eltype(innersum(Ai)) == eltype(sum(first(Ai)))
+        end
         @test @inferred(innermapreduce(abs2, +, A)) ≈ [sum(abs2, x) for x in A]
         @test @inferred(innerreduce(max, A)) == [maximum(x) for x in A]
 
