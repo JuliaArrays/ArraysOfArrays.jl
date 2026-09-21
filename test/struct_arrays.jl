@@ -8,14 +8,7 @@ using StructArrays
 using ArraysOfArrays: NestedArrayStyle
 using Base: Broadcast
 
-# Like ArrayOfRDWaveforms of RadiationDetectorSignals: a StructArray whose
-# element type may be less specific than its columns, with a specialized
-# getindex that returns the actual column elements without conversion:
-struct Waveform{TV<:AbstractVector,SV<:AbstractVector}
-    time::TV
-    signal::SV
-end
-Base.@propagate_inbounds Base.getindex(A::StructArray{<:Waveform}, i::Int) = Waveform(A.time[i], A.signal[i])
+include("testdefs.jl")
 
 @testset "StructArrays extension" begin
     n = 5
@@ -108,6 +101,6 @@ Base.@propagate_inbounds Base.getindex(A::StructArray{<:Waveform}, i::Int) = Wav
         ext = Base.get_extension(ArraysOfArrays, :ArraysOfArraysStructArraysExt)
         @test ext !== nothing
         @test isempty(detect_ambiguities(ext))
-        Aqua.test_piracies(ext, treat_as_own = [ArraysOfArrays.AbstractNestedArrayStyle])
+        Aqua.test_piracies(ext, treat_as_own = [ArraysOfArrays.AbstractNestedArrayStyle, ArraysOfArrays._block_length, ArraysOfArrays._block_arg])
     end
 end
