@@ -218,11 +218,11 @@ Base.map(g, A::_GPUVectorOfArrays) = _segmented_map(g, A)
 # outer-copy behavior (disambiguation against map(::typeof(identity), ...)):
 Base.map(f::typeof(identity), A::_GPUVectorOfArrays) = invoke(map, Tuple{typeof(identity), VectorOfArrays}, f, A)
 # maximum/minimum are shape-insensitive and keep Base's element type, so they
-# use the chunked segmented reduction for any element dimensionality. sum is
-# deliberately not routed here: Base's sum widens small integers via add_sum
-# (e.g. sum(Int8[100, 28]) == 128::Int), which innersum's plain + does not, so
-# sum is left to the general segment-view kernel (N == 1, which reproduces
-# Base's sum) and the generic map fallback (N > 1):
+# use the chunked segmented reduction for any element dimensionality. sum
+# stays with the general segment-view kernel (N == 1, which reproduces Base's
+# sum) and the generic map fallback (N > 1); innersum now widens small
+# integers the same way Base's sum does, so routing sum here would be
+# possible, but that is a separate change:
 Base.map(::typeof(maximum), A::_GPUVectorOfArrays) = innerreduce(max, A)
 Base.map(::typeof(minimum), A::_GPUVectorOfArrays) = innerreduce(min, A)
 # argmin/argmax return an index into the element, which is a plain linear Int

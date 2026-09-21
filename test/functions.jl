@@ -141,6 +141,13 @@ include("testdefs.jl")
         @test innersum(A_2) == [sum(x) for x in A_2]
         # Element arrays that don't contain numbers are summed elementwise:
         @test innersum([[[1, 2], [3, 4]], [[5, 6]]]) == [[4, 6], [5, 6]]
+        # like sum, innersum accumulates small integers in a wider type, for
+        # ragged element arrays and for the empty element that init covers:
+        let u16 = [UInt16[60000, 60000, 60000], UInt16[65535], UInt16[]]
+            V = VectorOfArrays(u16)
+            @test innersum(V) == [sum(x) for x in u16] == [180000, 65535, 0]
+            @test eltype(innersum(V)) == eltype(sum(first(u16)))
+        end
     end
 
     @testset "innersizes and innerlengths" begin
