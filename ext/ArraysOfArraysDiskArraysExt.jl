@@ -36,6 +36,10 @@ end
 ArraysOfArrays._block_length(a::AbstractDiskArray{<:Any,1}) =
     _flat_block_length(a, DiskArrays.element_size(a))
 
+# Zero-dimensional disk arrays broadcast along the outer axis, and are read
+# once per block:
+ArraysOfArrays._block_length(::AbstractDiskArray{<:Any,0}) = 1
+
 ArraysOfArrays._block_length(A::ArrayOfSimilarArrays{<:Any,<:Any,1,<:AbstractDiskArray}) =
     _flat_block_length(A.data, prod(innersize(A)) * DiskArrays.element_size(A.data))
 

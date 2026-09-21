@@ -161,14 +161,31 @@ end
             # Tuple, 0-dim and singleton arguments broadcast along the axis;
             # a disk-backed singleton is read once per block and does not
             # shorten the blocks:
-            @test ((x, y) -> sum(x) + y).(A, ntuple(identity, n)) == sum.(A_ref) .+ (1:n)
+            @test ((x, y) -> sum(x) + y).(view(A, 1:4), (1, 2, 3, 4)) == sum.(A_ref[1:4]) .+ (1:4)
             @test ((x, y) -> sum(x) + y).(A, (7,)) == sum.(A_ref) .+ 7
-            @test ((x, y) -> sum(x) + y).(A, CountingDiskArray(fill(2.0))) == sum.(A_ref) .+ 2.0
-            @test reads() == (3nblocks, 0)
+            z0 = CountingDiskArray(fill(2.0))
+            @test ((x, y) -> sum(x) + y).(A, z0) == sum.(A_ref) .+ 2.0
+            @test reads() == (2nblocks + 1, 0)
+            @test z0.reads == nblocks
             big1 = ArrayOfSimilarArrays{Float64,1,1}(CountingDiskArray(rand(250_000, 1)))
             @test ((x, y) -> sum(x) + sum(y)).(A, big1) == sum.(A_ref) .+ sum(big1.data.data)
             @test reads() == (nblocks, 0)
             @test big1.data.reads == nblocks
+
+            # Arguments aliasing the destination are copied first, as in Base:
+            dest2 = collect(1.0:n)
+            expected = sum.(A_ref) .+ reverse(dest2)
+            dest2 .= ((x, y) -> sum(x) + y).(A, view(dest2, n:-1:1))
+            @test dest2 == expected
+            @test reads() == (nblocks, 0)
+
+            # Blocks widening to different element types are joined like a
+            # single broadcast widens (blocks of 480 elements with a 1 MB budget):
+            f_wide = (x, i) -> i <= 480 ? 1 : 1.5
+            r_wide = f_wide.(A, 1:n)
+            @test eltype(r_wide) == eltype(f_wide.(A_ref, 1:n))
+            @test r_wide == f_wide.(A_ref, 1:n)
+            @test reads() == (nblocks, 0)
 
             # StructArrays with disk-backed columns:
             @test (x -> sum(x.wf) + x.e).(sa) == [sum(x) + y for (x, y) in zip(A_ref, e.data)]

@@ -129,16 +129,28 @@ function _copy_in_blocks(bc::Broadcast.Broadcasted)
     fbc, blocks = blocked
     results = map(r -> Broadcast.materialize(_block_bcast(fbc, r)), blocks)
     # A single block is not copied again:
-    return length(results) == 1 ? only(results) : reduce(vcat, results)
+    return length(results) == 1 ? only(results) : _vcat_blocks(results)
+end
+
+# Blocks may widen to different element types, the result is widened like
+# a single broadcast would be:
+function _vcat_blocks(results)
+    T = mapreduce(eltype, Base.promote_typejoin, results)
+    return all(r -> eltype(r) === T, results) ? reduce(vcat, results) : collect(T, Iterators.flatten(results))
 end
 
 function _copyto_in_blocks!(dest::AbstractArray, bc::Broadcast.Broadcasted)
     blocked = _bcast_blocks(bc)
     blocked === nothing && return nothing
     fbc, blocks = blocked
+    fbc = _unalias(dest, fbc)
     foreach(r -> copyto!(view(dest, r), _block_bcast(fbc, r)), blocks)
     return dest
 end
+
+# Arguments that alias the destination are copied first, like in Base:
+_unalias(dest, fbc::Broadcast.Broadcasted{Style}) where {Style} =
+    Broadcast.Broadcasted{Style}(fbc.f, map(a -> Base.unalias(dest, a), fbc.args), fbc.axes)
 
 function _block_bcast(fbc::Broadcast.Broadcasted{Style}, r::AbstractUnitRange) where {Style}
     ax = only(axes(fbc))
@@ -149,6 +161,7 @@ end
 
 _spans(x, ax) = false
 _spans(a::AbstractArray, ax) = axes(a, 1) == ax
+_spans(::AbstractArray{<:Any,0}, ax) = false
 _spans(t::Tuple, ax) = length(t) == length(ax)
 
 # Arguments that request blocks are read in any case, so that they no
@@ -159,7 +172,7 @@ function _block_arg(a::AbstractArray, r, ax)
     if _block_length(a) === nothing
         return _spans(a, ax) ? view(a, r) : a
     else
-        return a[_spans(a, ax) ? UnitRange(r) : UnitRange(axes(a, 1))]
+        return _spans(a, ax) ? a[UnitRange(r)] : a[axes(a)...]
     end
 end
 
