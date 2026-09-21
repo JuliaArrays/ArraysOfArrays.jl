@@ -2,6 +2,7 @@
 
 using ArraysOfArrays
 using Test
+using Base: Broadcast
 
 # A DenseArray subtype that is not an Array, like device array types outside
 # of GPUArraysCore:
@@ -150,6 +151,10 @@ struct _MockDenseArray{T,N} <: DenseArray{T,N} end
         @test_throws ArgumentError f_empty.(B)
         @test size.(map(f_empty, B)) == [(0, 3), (0, 2)]
 
+        # Beyond 32 arguments Base's tuple functions fall back to loops:
+        f40 = (x, ys...) -> sum(x) + sum(ys)
+        bc40 = Broadcast.instantiate(Broadcast.broadcasted(f40, A, ntuple(_ -> 1.0, 39)...))
+        @test @inferred(copy(bc40)) == sum.(A) .+ 39
         # Results of equal size can be turned into an ArrayOfSimilarArrays
         # without copying:
         rA = (x -> 2 .* x).(A)

@@ -2,7 +2,7 @@
 
 module ArraysOfArraysStructArraysExt
 
-using StructArrays: StructArrayStyle
+using StructArrays: StructArray, StructArrayStyle, components
 using Base.Broadcast: Broadcast, Broadcasted
 
 import ArraysOfArrays
@@ -24,7 +24,24 @@ using ArraysOfArrays: AbstractNestedArrayStyle
 _struct_result(::Type{T}) where {T} =
     isconcretetype(T) && isstructtype(T) && fieldcount(T) != 0 && !(T <: AbstractArray) && !(T <: Type)
 
+# A StructArray with columns that request block-wise evaluation (see
+# NestedArrayStyle) does so as well. A sliced StructArray keeps its declared
+# element type, which may not fit the sliced (in-memory instead of
+# disk-backed) columns, so block slices are rebuilt from the sliced columns.
+# The element type of the block is that of its elements if the declared one
+# is concrete, so that results infer the same way as for in-memory data:
+ArraysOfArrays._block_length(A::StructArray) = ArraysOfArrays._bcast_blocklength(values(components(A)))
+
+function ArraysOfArrays._block_arg(A::StructArray{T}, r, ax) where {T}
+    cols = map(c -> ArraysOfArrays._block_arg(c, r, ax), components(A))
+    T <: Union{Tuple,NamedTuple} && return StructArray(cols)
+    B = StructArray{Base.typename(T).wrapper}(values(cols))
+    return isconcretetype(T) ? StructArray{typeof(first(B))}(values(cols)) : B
+end
+
 function Base.copy(bc::Broadcasted{StructArrayStyle{S,N}}) where {S<:AbstractNestedArrayStyle,N}
+    blocked = ArraysOfArrays._copy_in_blocks(bc)
+    blocked === nothing || return blocked
     ElType = Broadcast.combine_eltypes(bc.f, bc.args)
     if _struct_result(ElType)
         return invoke(copy, Tuple{Broadcasted}, bc)
