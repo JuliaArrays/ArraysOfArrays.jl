@@ -4,6 +4,16 @@ using ArraysOfArrays
 using Test
 using Base: Broadcast
 
+# An array type with its own copyto! for (nested-array) broadcasts, like
+# some packages define:
+struct _CopytoArray <: AbstractVector{Float64}
+    a::Vector{Float64}
+end
+Base.size(x::_CopytoArray) = size(x.a)
+Base.getindex(x::_CopytoArray, i::Int) = x.a[i]
+Base.copyto!(dest::_CopytoArray, bc::Base.Broadcast.Broadcasted{<:ArraysOfArrays.AbstractNestedArrayStyle}) =
+    (copyto!(dest.a, bc); dest)
+
 # A DenseArray subtype that is not an Array, like device array types outside
 # of GPUArraysCore:
 struct _MockDenseArray{T,N} <: DenseArray{T,N} end
@@ -150,6 +160,18 @@ struct _MockDenseArray{T,N} <: DenseArray{T,N} end
         f_empty = x -> view(x, 1:0, :)
         @test_throws ArgumentError f_empty.(B)
         @test size.(map(f_empty, B)) == [(0, 3), (0, 2)]
+
+        # In place into destinations of other dimensionality, and into
+        # array types with their own copyto! for broadcasts:
+        M = zeros(length(A), 1)
+        M .= sum.(A)
+        @test vec(M) == sum.(A)
+        z = fill(0.0)
+        z .= sum.(A[1:1])
+        @test z[] == sum(A[1])
+        dest = _CopytoArray(zeros(length(A)))
+        dest .= sum.(A)
+        @test dest.a == sum.(A)
 
         # Beyond 32 arguments Base's tuple functions fall back to loops:
         f40 = (x, ys...) -> sum(x) + sum(ys)

@@ -8,7 +8,7 @@ using StructArrays
 using ArraysOfArrays: NestedArrayStyle
 using Base: Broadcast
 
-include("testdefs.jl")
+include("waveform_defs.jl")
 
 @testset "StructArrays extension" begin
     n = 5
@@ -101,6 +101,6 @@ include("testdefs.jl")
         ext = Base.get_extension(ArraysOfArrays, :ArraysOfArraysStructArraysExt)
         @test ext !== nothing
         @test isempty(detect_ambiguities(ext))
-        Aqua.test_piracies(ext, treat_as_own = [ArraysOfArrays.AbstractNestedArrayStyle, ArraysOfArrays._block_length, ArraysOfArrays._block_arg])
+        Aqua.test_piracies(ext, treat_as_own = [ArraysOfArrays.AbstractNestedArrayStyle, ArraysOfArrays._block_length, ArraysOfArrays._read_block])
     end
 end

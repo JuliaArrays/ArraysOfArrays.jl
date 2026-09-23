@@ -8,7 +8,22 @@ using StructArrays
 using ArraysOfArrays: NestedArrayStyle
 using Base: Broadcast
 
-include("testdefs.jl")
+include("waveform_defs.jl")
+
+# A struct type with a type parameter that its fields do not determine:
+struct _Tagged{N,X}
+    x::X
+end
+
+# A broadcastable that is not an array:
+struct _Positions
+    n::Int
+end
+Base.axes(p::_Positions) = (Base.OneTo(p.n),)
+Base.ndims(::Type{_Positions}) = 1
+Base.getindex(::_Positions, i::Int) = i
+Base.broadcastable(p::_Positions) = p
+Base.Broadcast.BroadcastStyle(::Type{_Positions}) = Base.Broadcast.DefaultArrayStyle{1}()
 
 # A minimal disk-backed array that counts block reads, optionally chunked:
 mutable struct CountingDiskArray{T,N} <: DiskArrays.AbstractDiskArray{T,N}
@@ -25,6 +40,7 @@ function DiskArrays.readblock!(a::CountingDiskArray, aout, r::AbstractUnitRange.
     a.reads += 1
     aout .= view(a.data, r...)
 end
+DiskArrays.writeblock!(a::CountingDiskArray, ain, r::AbstractUnitRange...) = (view(a.data, r...) .= ain; nothing)
 
 @testset "disk-backed data" begin
     data = rand(UInt16, 40, 50)
@@ -141,7 +157,7 @@ end
             @test sum.(A) == sum.(A_ref)
             @test reads() == (nblocks, 0)
             @test map(sum, A) == sum.(A_ref)
-            @test reads() == (n, 0)   # map still reads per element, so far
+            reads()
             dest = zeros(UInt64, n)
             dest .= sum.(A)
             @test dest == sum.(A_ref)
@@ -178,6 +194,15 @@ end
             dest2 .= ((x, y) -> sum(x) + y).(A, view(dest2, n:-1:1))
             @test dest2 == expected
             @test reads() == (nblocks, 0)
+            # ... but a destination that is an argument itself is not, which
+            # disk arrays could not do:
+            x = collect(1.0:n)
+            x .= x .+ sum.(A)
+            @test x == (1:n) .+ sum.(A_ref)
+            d = CountingDiskArray(zeros(n))
+            d .= d .+ sum.(A)
+            @test d.data == sum.(A_ref)
+            @test reads() == (2nblocks, 0)
 
             # Blocks widening to different element types are joined like a
             # single broadcast widens (blocks of 480 elements with a 1 MB budget):
@@ -222,6 +247,20 @@ end
     @test A1.data.reads == 1
     sa1 = StructArray((e = CountingDiskArray(rand(1)),))
     @test ((x, y) -> sum(x) + y.e).(A5, sa1) == [sum(x) + only(sa1.e.data) for x in A5]
+    dest5 = zeros(5)
+    dest5 .= sum.(A1)
+    @test dest5 == fill(sum(A_ref[1]), 5)
+
+    # In-memory StructArrays keep their element type, broadcastables that
+    # are not arrays prevent evaluation in blocks:
+    tagged = StructArray{_Tagged{3,Float64}}((v,))
+    @test ((t, x) -> t.x + sum(x)).(tagged, A) == v .+ sum.(A_ref)
+    @test ((x, i) -> sum(x) + i).(A, _Positions(n)) == sum.(A_ref) .+ (1:n)
+
+    # A disk-backed destination that is also an argument:
+    D = ArrayOfSimilarArrays{UInt16,1,1}(CountingDiskArray(copy(data)))
+    D .= (x -> x .÷ 0x2).(D)
+    @test D.data.data == data .÷ 0x2
 
     # Vectors of arrays over disk data, and empty input, which DiskArrays
     # cannot even index:

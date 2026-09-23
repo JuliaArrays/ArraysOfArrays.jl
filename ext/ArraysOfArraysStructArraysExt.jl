@@ -26,14 +26,14 @@ _struct_result(::Type{T}) where {T} =
 
 # A StructArray with columns that request block-wise evaluation (see
 # NestedArrayStyle) does so as well. A sliced StructArray keeps its declared
-# element type, which may not fit the sliced (in-memory instead of
-# disk-backed) columns, so block slices are rebuilt from the sliced columns.
-# The element type of the block is that of its elements if the declared one
-# is concrete, so that results infer the same way as for in-memory data:
+# element type, which may not fit the in-memory blocks of disk-backed
+# columns, so blocks are rebuilt from the column blocks. The element type
+# of a block is that of its elements if the declared one is concrete, so
+# that results infer the same way as for in-memory data:
 ArraysOfArrays._block_length(A::StructArray) = ArraysOfArrays._bcast_blocklength(values(components(A)))
 
-function ArraysOfArrays._block_arg(A::StructArray{T}, r, ax) where {T}
-    cols = map(c -> ArraysOfArrays._block_arg(c, r, ax), components(A))
+function ArraysOfArrays._read_block(A::StructArray{T}, idxs...) where {T}
+    cols = map(c -> ArraysOfArrays._slice_block(c, idxs...), components(A))
     T <: Union{Tuple,NamedTuple} && return StructArray(cols)
     B = StructArray{Base.typename(T).wrapper}(values(cols))
     return isconcretetype(T) ? StructArray{typeof(first(B))}(values(cols)) : B

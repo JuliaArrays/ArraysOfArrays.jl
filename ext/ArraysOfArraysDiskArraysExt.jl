@@ -24,10 +24,9 @@ ArraysOfArrays._covered_data(data::AbstractDiskArray{<:Any,1}, r::AbstractUnitRa
 Base.Broadcast.BroadcastStyle(s::AbstractNestedArrayStyle{N}, ::ChunkStyle{M}) where {N,M} =
     typeof(s)(Val(max(N, M)))
 
-# DiskArrays cannot chunk empty arrays, nested arrays over them are not
-# evaluated in blocks:
+# DiskArrays cannot chunk empty arrays, those are read in a single block:
 function _flat_block_length(data::AbstractDiskArray, bytes_per_elem::Integer)
-    isempty(data) && return nothing
+    isempty(data) && return typemax(Int)
     chunk_len = last(DiskArrays.approx_chunksize(DiskArrays.eachchunk(data)))
     budget = max(1, (DiskArrays.default_chunk_size[] * 10^6) ÷ max(1, bytes_per_elem))
     return chunk_len * max(1, budget ÷ chunk_len)
@@ -46,7 +45,6 @@ ArraysOfArrays._block_length(A::ArrayOfSimilarArrays{<:Any,<:Any,1,<:AbstractDis
 # The flat block length is divided by the mean element length:
 function ArraysOfArrays._block_length(A::VectorOfArrays{<:Any,<:Any,<:Any,<:AbstractDiskArray})
     flat_len = _flat_block_length(A.data, DiskArrays.element_size(A.data))
-    flat_len === nothing && return nothing
     ep_first, ep_last = ArraysOfArrays._scalar_first_last(A.elem_ptr)
     mean_len = max(1, (Int(ep_last) - Int(ep_first)) ÷ max(1, length(A)))
     return max(1, flat_len ÷ mean_len)
