@@ -15,8 +15,10 @@ using ArraysOfArrays: ArraysOfArrays, VectorOfArrays, innerlengths, innerreduce,
     j0 = elem_ptr[i]
     j1 = elem_ptr[i + 1] - 1
     if init isa ArraysOfArrays._NoInit
-        # Empty element arrays have been excluded beforehand:
-        acc = f(data[j0])
+        # Empty element arrays have been excluded beforehand. The result type
+        # may be wider than that of f (e.g. for chunks reduced without the
+        # init value that sets it), so accumulation starts in it:
+        acc = convert(eltype(out), f(data[j0]))
         for j in (j0 + 1):j1
             acc = op(acc, f(data[j]))
         end

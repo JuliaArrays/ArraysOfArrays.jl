@@ -180,6 +180,10 @@ JLArrays.allowscalar(false)
         # More than one level of chunking:
         V2 = VectorOfArrays(jl(collect(1f0:100000f0)), jl([1, 100001]), jl([()]))
         @test collect(innersum(V2)) ≈ [sum(1f0:100000f0)]
+
+        # Chunks accumulate in the type of init, like a single pass does:
+        V3 = VectorOfArrays(jl(fill(UInt16(60000), 2000)), jl([1, 2001]), jl([()]))
+        @test collect(innermapreduce(identity, +, V3; init = UInt64(0))) == [UInt64(2000) * 60000]
     end
 
     @testset "map and broadcast with scalar results" begin
