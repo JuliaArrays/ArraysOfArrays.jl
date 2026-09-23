@@ -271,6 +271,12 @@ end
             @test @inferred(innersum(Ai)) == [sum(x) for x in Ai]
             @test eltype(innersum(Ai)) == typeof(sum(first(Ai)))
         end
+        # Base's sum(M; dims = 1) throws for small integers mixed with missing
+        # (JuliaLang/julia#32366), and innersum on an ArrayOfSimilarArrays
+        # delegates to that dimensional reduction:
+        let Am = ArrayOfSimilarArrays{Union{Missing,Int8},1,1}(Union{Missing,Int8}[100 missing; 28 1])
+            @test_broken isequal(innersum(Am), [128, missing]) && eltype(innersum(Am)) == Union{Missing,Int64}
+        end
         @test @inferred(innermapreduce(abs2, +, A)) ≈ [sum(abs2, x) for x in A]
         @test @inferred(innerreduce(max, A)) == [maximum(x) for x in A]
 
