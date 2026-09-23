@@ -220,9 +220,7 @@ Base.map(f::typeof(identity), A::_GPUVectorOfArrays) = invoke(map, Tuple{typeof(
 # maximum/minimum are shape-insensitive and keep Base's element type, so they
 # use the chunked segmented reduction for any element dimensionality. sum
 # stays with the general segment-view kernel (N == 1, which reproduces Base's
-# sum) and the generic map fallback (N > 1); innersum now widens small
-# integers the same way Base's sum does, so routing sum here would be
-# possible, but that is a separate change:
+# sum) and the generic map fallback (N > 1):
 Base.map(::typeof(maximum), A::_GPUVectorOfArrays) = innerreduce(max, A)
 Base.map(::typeof(minimum), A::_GPUVectorOfArrays) = innerreduce(min, A)
 # argmin/argmax return an index into the element, which is a plain linear Int
