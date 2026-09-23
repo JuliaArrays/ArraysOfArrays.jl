@@ -61,6 +61,14 @@ columns return a `StructArray` for struct-valued results and follow the
 rules above otherwise. The original `StructArray` is indexed, so
 specialized `getindex` methods of it are used.
 
+With DiskArrays loaded, broadcasts over vectors of arrays with disk-backed
+data, in place or not and also combined with other disk arrays, are
+evaluated in blocks along the outer axis, each block read from disk at
+once. `f` then receives in-memory copies of the element arrays, so changes
+it makes to them are not written back, and the results are in memory.
+`map` and iteration access the elements one by one, so broadcast over
+such data.
+
 # Implementation
 
 Packages that define array types with their own broadcast style resolve
@@ -75,6 +83,8 @@ Base.Broadcast.BroadcastStyle(::Type{<:AbstractArrayOfSimilarArrays{<:Any,<:Any,
 Base.Broadcast.BroadcastStyle(::Type{<:VectorOfArrays}) = NestedArrayStyle{1}()
 
 function Base.copy(bc::Broadcast.Broadcasted{NestedArrayStyle{N}}) where {N}
+    blocked = _copy_in_blocks(bc)
+    blocked === nothing || return blocked
     ElType = Broadcast.combine_eltypes(bc.f, bc.args)
     if N == 1 && _packable_result(ElType) && axes(bc, 1) isa Base.OneTo
         return _collect_nested(bc, ElType)
@@ -83,6 +93,98 @@ function Base.copy(bc::Broadcast.Broadcasted{NestedArrayStyle{N}}) where {N}
         return copy(convert(Broadcast.Broadcasted{Broadcast.DefaultArrayStyle{N}}, bc))
     end
 end
+
+# Evaluation in blocks along the outer axis, for arguments with expensive
+# element access but cheap bulk access, like nested arrays over disk-backed
+# data (see the DiskArrays extension). Such arguments request a block length
+# and are read block by block via getindex, other arrays are sliced as
+# views. Each block is evaluated with the original style, so the packing
+# rules apply per block.
+
+_block_length(x) = nothing
+_block_length(bc::Broadcast.Broadcasted) = _bcast_blocklength(bc.args)
+
+_bcast_blocklength(args::Tuple) = mapfoldl(_block_length, _min_blocklength, args; init = nothing)
+
+_min_blocklength(::Nothing, ::Nothing) = nothing
+_min_blocklength(::Nothing, b::Integer) = b
+_min_blocklength(a::Integer, ::Nothing) = a
+_min_blocklength(a::Integer, b::Integer) = min(a, b)
+
+# The flattened broadcast and its blocks, nothing if it is not to be
+# evaluated in blocks. Fused expressions are flattened, so that all
+# arguments are leaves. The block length is the smallest one requested by
+# the arguments that span the outer axis, arguments that broadcast along
+# it are read once per block:
+function _bcast_blocks(bc::Broadcast.Broadcasted)
+    axs = axes(bc)
+    (axs isa Tuple{Base.OneTo} && !isempty(only(axs)) && _bcast_blocklength(bc.args) !== nothing) || return nothing
+    fbc = Broadcast.flatten(bc)
+    all(_sliceable, fbc.args) || return nothing
+    ax = only(axs)
+    blen = _bcast_blocklength(map(a -> _spans(a, ax) ? a : nothing, fbc.args))
+    return fbc, Iterators.partition(ax, something(blen, length(ax)))
+end
+
+function _copy_in_blocks(bc::Broadcast.Broadcasted)
+    blocked = _bcast_blocks(bc)
+    blocked === nothing && return nothing
+    fbc, blocks = blocked
+    results = map(r -> Broadcast.materialize(_block_bcast(fbc, r)), blocks)
+    # A single block is not copied again:
+    return length(results) == 1 ? only(results) : _vcat_blocks(results)
+end
+
+# Blocks with different element types are joined the way a single
+# broadcast widens:
+_vcat_blocks(results::AbstractVector{<:AbstractVector{T}}) where {T} = reduce(vcat, results)
+_vcat_blocks(results) = [x for x in Iterators.flatten(results)]
+
+function Broadcast.materialize!(::NestedArrayStyle{1}, dest, bc::Broadcast.Broadcasted)
+    ibc = Broadcast.instantiate(Broadcast.Broadcasted(bc.style, bc.f, bc.args, axes(dest)))
+    blocked = _copyto_in_blocks!(dest, ibc)
+    return blocked === nothing ? copyto!(dest, ibc) : blocked
+end
+
+function _copyto_in_blocks!(dest, bc::Broadcast.Broadcasted)
+    blocked = _bcast_blocks(bc)
+    blocked === nothing && return nothing
+    fbc, blocks = blocked
+    fbc = _unalias(dest, fbc)
+    foreach(r -> copyto!(view(dest, r), Broadcast.instantiate(_block_bcast(fbc, r))), blocks)
+    return dest
+end
+
+# Arguments that alias the destination are copied first, like in Base:
+_unalias(dest, fbc::Broadcast.Broadcasted{Style}) where {Style} =
+    Broadcast.Broadcasted{Style}(fbc.f, map(a -> a === dest ? a : Base.unalias(dest, a), fbc.args), fbc.axes)
+
+function _block_bcast(fbc::Broadcast.Broadcasted{Style}, r::AbstractUnitRange) where {Style}
+    ax = only(axes(fbc))
+    args = map(a -> _block_arg(a, r, ax), fbc.args)
+    _bcast_blocklength(args) === nothing || throw(ArgumentError("Block arguments must not request blocks themselves"))
+    return Broadcast.Broadcasted{Style}(fbc.f, args, (Base.OneTo(length(r)),))
+end
+
+# Arrays and tuples are sliced into blocks, other arguments must not have
+# axes of their own:
+_sliceable(::Union{AbstractArray,Tuple}) = true
+_sliceable(x) = axes(x) == ()
+
+_spans(x, ax) = false
+_spans(a::AbstractArray, ax) = axes(a, 1) == ax
+_spans(::AbstractArray{<:Any,0}, ax) = false
+_spans(t::Tuple, ax) = length(t) == length(ax)
+
+# Arguments that broadcast along the outer axis are passed in full. Those
+# that request blocks are read in any case, so that no block argument does:
+_block_arg(x, r, ax) = x
+_block_arg(t::Tuple, r, ax) = _spans(t, ax) ? t[r] : t
+_block_arg(a::AbstractArray, r, ax) = _slice_block(a, (_spans(a, ax) ? (UnitRange(r),) : map(UnitRange, axes(a)))...)
+
+_slice_block(a::AbstractArray, idxs...) = _block_length(a) === nothing ? view(a, idxs...) : _read_block(a, idxs...)
+
+_read_block(a::AbstractArray, idxs...) = a[idxs...]
 
 # The nested styles specialize only copy; StructArrays allocates the columns
 # of struct-valued results via similar (see the StructArrays extension):
