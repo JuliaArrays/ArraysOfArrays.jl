@@ -100,12 +100,15 @@ JLArrays.allowscalar(false)
         parts_h = [xv_h[1:2], xv_h[3:5], xv_h[6:10]]
         @test innersum(V) isa AbstractGPUArray
         @test collect(innersum(V)) ≈ sum.(parts_h)
-        # The segmented reduction widens small integers like Base's sum, for
-        # ragged elements and for the empty element that init covers:
-        let u16 = [UInt16[60000, 60000, 60000], UInt16[65535], UInt16[]]
-            V_u16 = adapt(JLArray, VectorOfArrays(u16))
-            @test collect(innersum(V_u16)) == [sum(x) for x in u16]
-            @test eltype(collect(innersum(V_u16))) == eltype(sum(first(u16)))
+        # The segmented reduction returns the same element type as Base's sum,
+        # for ragged and empty elements, and for elements long enough to be
+        # reduced in chunks:
+        for parts in ([UInt16[60000, 60000, 60000], UInt16[65535], UInt16[]],
+                      [Bool[1, 1, 0], Bool[], Bool[1]],
+                      [fill(UInt16(60000), 5000), fill(UInt16(60000), 3000), UInt16[]])
+            V_red = adapt(JLArray, VectorOfArrays(parts))
+            @test collect(innersum(V_red)) == [sum(x) for x in parts]
+            @test eltype(innersum(V_red)) == typeof(sum(first(parts)))
         end
         @test collect(innermapreduce(abs2, +, V)) ≈ [sum(abs2, p) for p in parts_h]
         @test collect(innerreduce(max, V; init = -Inf32)) ≈ maximum.(parts_h)
