@@ -100,6 +100,16 @@ JLArrays.allowscalar(false)
         parts_h = [xv_h[1:2], xv_h[3:5], xv_h[6:10]]
         @test innersum(V) isa AbstractGPUArray
         @test collect(innersum(V)) ≈ sum.(parts_h)
+        # The segmented reduction returns the same element type as Base's sum,
+        # for ragged and empty elements, and for elements long enough to be
+        # reduced in chunks:
+        for parts in ([UInt16[60000, 60000, 60000], UInt16[65535], UInt16[]],
+                      [Bool[1, 1, 0], Bool[], Bool[1]],
+                      [fill(UInt16(60000), 5000), fill(UInt16(60000), 3000), UInt16[]])
+            V_red = adapt(JLArray, VectorOfArrays(parts))
+            @test collect(innersum(V_red)) == [sum(x) for x in parts]
+            @test eltype(innersum(V_red)) == typeof(sum(first(parts)))
+        end
         @test collect(innermapreduce(abs2, +, V)) ≈ [sum(abs2, p) for p in parts_h]
         @test collect(innerreduce(max, V; init = -Inf32)) ≈ maximum.(parts_h)
         @test_throws ArgumentError innerreduce(max, VectorOfArrays(xv, jl([1, 3, 3, 11]), jl([(), (), ()])))
@@ -264,8 +274,8 @@ JLArrays.allowscalar(false)
         end
 
         # map(sum, ·) keeps Base's sum semantics: small integers widen via
-        # add_sum (sum(Int8[100,28]) == 128::Int), unlike innersum's plain +.
-        # maximum/minimum keep Base's (non-widening) element type:
+        # add_sum (sum(Int8[100,28]) == 128::Int). maximum/minimum keep
+        # Base's (non-widening) element type:
         cpu_i8 = VectorOfArrays([Int8[100, 28], Int8[], Int8[127, 1]])
         dev_i8 = adapt(JLArray, cpu_i8)
         @test Array(map(sum, dev_i8)) == map(sum, cpu_i8)
