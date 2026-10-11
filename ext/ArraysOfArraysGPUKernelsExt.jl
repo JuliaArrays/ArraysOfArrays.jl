@@ -157,15 +157,28 @@ end
 # result through the segment-view kernel:
 _segmented_map_fallback(g, A) = invoke(map, Tuple{Any, AbstractArray}, g, A)
 
+# The result type of g for the segment-view kernel, or nothing for array
+# results, which the kernel cannot store. Inference of g on the host array
+# type is not reliable for every array type and version. Where elements
+# cannot be visited one by one, the result type is determined from the
+# first element instead, as in Base's map. All elements must then give
+# results of that type:
+function _scalar_result_type(g, A::_GPUVectorOfArrays)
+    T_out = Base.promote_op(g, eltype(A))
+    if !isconcretetype(T_out)
+        (A.elem_ptr isa AbstractGPUArray && !isempty(A)) || return nothing
+        j0, j1 = Array(view(A.elem_ptr, 1:2))
+        T_out = typeof(g(view(A.data, j0:(j1 - 1))))
+    end
+    return T_out <: AbstractArray ? nothing : T_out
+end
+
 function _segmented_map(g, A::_GPUVectorOfArrays)
     # The flat segment view only equals the logical element for vector
     # elements; for N > 1 it would drop the element shape, so defer:
     ndims(eltype(A)) == 1 || return _segmented_map_fallback(g, A)
-    T_out = Base.promote_op(g, eltype(A))
-    # Array results (or a type that did not infer to something concrete)
-    # cannot go through the scalar-result kernel; defer to the generic map,
-    # mirroring the scalar-result guard in the broadcast path below:
-    (isconcretetype(T_out) && !(T_out <: AbstractArray)) || return _segmented_map_fallback(g, A)
+    T_out = _scalar_result_type(g, A)
+    T_out === nothing && return _segmented_map_fallback(g, A)
     data = A.data
     backend = KA.get_backend(data)
     elem_ptr = _on_backend(backend, A.elem_ptr)
@@ -238,8 +251,7 @@ Base.map(::typeof(argmax), A::_GPUVectorOfVectors) = _segmented_argextreme(isles
 # results and fused/multi-argument broadcasts keep the generic behavior:
 function Base.copy(bc::Base.Broadcast.Broadcasted{NestedArrayStyle{1}, <:Any, F, <:Tuple{<:_GPUVectorOfArrays}}) where {F}
     A = bc.args[1]
-    ElType = Base.Broadcast.combine_eltypes(bc.f, (A,))
-    if isconcretetype(ElType) && !(ElType <: AbstractArray)
+    if _scalar_result_type(bc.f, A) !== nothing
         return map(bc.f, A)
     else
         return Base.copy(Base.Broadcast.Broadcasted{Base.Broadcast.DefaultArrayStyle{1}}(bc.f, bc.args, bc.axes))

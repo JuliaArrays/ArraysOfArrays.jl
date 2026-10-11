@@ -200,6 +200,10 @@ JLArrays.allowscalar(false)
             # A general scalar function via the segment-view kernel:
             @test Array(map(v -> sum(abs2, v), V)) == map(v -> sum(abs2, v), cpu)
             @test Array((v -> sum(abs2, v)).(V)) == (v -> sum(abs2, v)).(cpu)
+            # A function whose result type cannot be inferred:
+            g_ib = v -> Base.inferencebarrier(sum(v))
+            @test Array(map(g_ib, V)) == map(sum, cpu)
+            @test Array(g_ib.(V)) == sum.(cpu)
         end
 
         # Empty vector of arrays:
