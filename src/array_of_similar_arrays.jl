@@ -282,6 +282,12 @@ Base.@propagate_inbounds function Base.unsafe_view(A::ArrayOfSimilarArrays{T,M,N
     ArrayOfSimilarArrays{T,M,N_view}(dataview)
 end
 
+# Base's aliasing detection must account for the flat data shared by nested
+# arrays and their views (see Base.unalias). The preventive copy preserves
+# the type:
+Base.dataids(A::ArrayOfSimilarArrays) = Base.dataids(A.data)
+Base.unaliascopy(A::ArrayOfSimilarArrays{T,M,N}) where {T,M,N} = ArrayOfSimilarArrays{T,M,N}(Base.unaliascopy(A.data))
+
 
 @inline function Base.resize!(A::ArrayOfSimilarArrays{T,M,N}, dims::Vararg{Integer,N}) where {T,M,N}
     resize!(A.data, innersize(A)..., dims...)

@@ -899,4 +899,18 @@ include("testdefs.jl")
         sizehint!(A1, 5, (10000,))
         @test ccall(:jl_array_size, Int, (Any, UInt), A1.data, 1) == 5*10000
     end
+
+    # Base copies arguments that overlap the destination first, so it must
+    # detect shared data through nested arrays and their views:
+    @testset "aliasing" begin
+        A = VectorOfArrays([[Float64(i), Float64(i)] for i in 1:6])
+        @test Base.mightalias(A, view(A, 2:6))
+        @test !Base.mightalias(A, copy(A))
+        expected = [2 .* x for x in collect(view(A, 1:5))]
+        view(A, 2:6) .= (x -> 2 .* x).(view(A, 1:5))
+        @test collect(view(A, 2:6)) == expected
+        expected = [copy(x) for x in view(A, 1:5)]
+        A[2:6] = view(A, 1:5)
+        @test A[2:6] == expected
+    end
 end

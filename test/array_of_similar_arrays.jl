@@ -663,4 +663,18 @@ end
         @test r == A
         @test r !== A
     end
+
+    # Base copies arguments that overlap the destination first, so it must
+    # detect shared data through nested arrays and their views:
+    @testset "aliasing" begin
+        A = ArrayOfSimilarArrays{Float64,1,1}(reshape(collect(1.0:12.0), 2, 6))
+        @test Base.mightalias(A, view(A, 6:-1:1))
+        @test !Base.mightalias(A, copy(A))
+        expected = [2 .* x for x in collect(view(A, 6:-1:1))]
+        A .= (x -> 2 .* x).(view(A, 6:-1:1))
+        @test A == expected
+        expected = [copy(x) for x in view(A, 1:5)]
+        A[2:6] = view(A, 1:5)
+        @test A[2:6] == expected
+    end
 end

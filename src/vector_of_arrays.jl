@@ -806,6 +806,12 @@ Base.@propagate_inbounds function Base.unsafe_view(A::VectorOfArrays, idxs::Abst
     )
 end
 
+# As for ArrayOfSimilarArrays, Base's aliasing detection must account for the
+# shared data behind nested arrays and their views:
+Base.dataids(A::VectorOfArrays) = (Base.dataids(A.data)..., Base.dataids(A.elem_ptr)..., Base.dataids(A.kernel_size)...)
+Base.unaliascopy(A::VectorOfArrays) =
+    VectorOfArrays(Base.unaliascopy(A.data), Base.unaliascopy(A.elem_ptr), Base.unaliascopy(A.kernel_size), no_consistency_checks)
+
 
 function Base.sizehint!(A::VectorOfArrays{T,N}, n, s::Dims{N}) where {T,N}
     sizehint!(A.data, n * prod(s))
