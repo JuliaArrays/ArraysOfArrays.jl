@@ -572,7 +572,7 @@ Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArray
     elem_ptr = A.elem_ptr[from:(to+1)]
     kernel_size = A.kernel_size[from:to]
     ep_first, ep_last = _scalar_first_last(elem_ptr)
-    data = A.data[ep_first:(ep_last - 1)]
+    data = _flat_getindex(A.data, ep_first:(ep_last - 1))
     broadcast!(+, elem_ptr, elem_ptr, firstindex(data) - ep_first)
     VectorOfArrays(data, elem_ptr, kernel_size, no_consistency_checks)
 end

@@ -180,10 +180,11 @@ struct ArrayOfSimilarArrays{
         _require_ndims(Val(L), _add_vals(Val(M), Val(N)))
         _require_one_based_outer(data, Val(N))
         P = typeof(data)
-        ET = Base.promote_op(view, P, _nColons(Val(M))..., _nInts(Val(N))...)
-        new{T,M,N,P,ET}(data)
+        new{T,M,N,P,_aosa_eltype(P, Val(M), Val(N))}(data)
     end
 end
+
+_aosa_eltype(::Type{P}, ::Val{M}, ::Val{N}) where {P,M,N} = Base.promote_op(view, P, _nColons(Val(M))..., _nInts(Val(N))...)
 
 # The outer dimensions of A are indexed directly into the outer dimensions
 # of the underlying data, so their axes must agree:
@@ -236,7 +237,7 @@ Base.@propagate_inbounds Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Var
 Base.@propagate_inbounds function Base.getindex(A::ArrayOfSimilarArrays{T,M,N}, idxs::Vararg{Union{Real,AbstractArray,Colon},N}) where {T,M,N}
     if _prefers_flat_getindex(typeof(A.data))
         @boundscheck checkbounds(A, idxs...)
-        @inbounds ArrayOfSimilarArrays{T,M}(A.data[_ncolons(Val{M}())..., map(_normalized_idx, idxs)...])
+        @inbounds ArrayOfSimilarArrays{T,M}(_flat_getindex(A.data, _ncolons(Val{M}())..., map(_normalized_idx, idxs)...))
     else
         invoke(getindex, Tuple{AbstractArray,Vararg{Any}}, A, idxs...)
     end
@@ -247,6 +248,10 @@ end
 # non-scalar getindex indexes their flat data in a single operation.
 # Enabled by package extensions (DiskArrays, GPUArraysCore):
 _prefers_flat_getindex(::Type{<:AbstractArray}) = false
+
+# Storage types with indexing restrictions specialize how selections of
+# flat data are read (see the DiskArrays extension):
+_flat_getindex(data::AbstractArray, idxs...) = data[idxs...]
 
 # Logical masks must not reach the flat data as-is: Base's LogicalIndex
 # does not work for all storage types (e.g. GPU arrays). The bounds,

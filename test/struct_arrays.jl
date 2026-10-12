@@ -101,6 +101,6 @@ include("waveform_defs.jl")
         ext = Base.get_extension(ArraysOfArrays, :ArraysOfArraysStructArraysExt)
         @test ext !== nothing
         @test isempty(detect_ambiguities(ext))
-        Aqua.test_piracies(ext, treat_as_own = [ArraysOfArrays.AbstractNestedArrayStyle, ArraysOfArrays._block_length, ArraysOfArrays._read_block])
+        Aqua.test_piracies(ext, treat_as_own = [ArraysOfArrays.AbstractNestedArrayStyle, ArraysOfArrays._block_length, ArraysOfArrays._block_eltype, ArraysOfArrays._read_block])
     end
 end
