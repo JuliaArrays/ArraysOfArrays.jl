@@ -41,6 +41,22 @@ JLArrays.allowscalar(false)
         @test vcat(V, V) isa VectorOfSimilarVectors
         @test fused(vcat(V, V)) isa AbstractGPUArray
 
+        # Non-scalar getindex of a vector of arrays gathers the flat data in
+        # one operation, with shape information and indices on the device or
+        # the host in any combination, and for wrapped device data:
+        W_cpu = VectorOfArrays([Float32[3, 1, 4], Float32[], Float32[9, 2], Float32[7]])
+        W_data = jl(W_cpu.data)
+        for W in (adapt(JLArray, W_cpu), VectorOfArrays(W_data, W_cpu.elem_ptr, W_cpu.kernel_size),
+                  VectorOfArrays(view(W_data, 1:length(W_data)), W_cpu.elem_ptr, W_cpu.kernel_size))
+            for idxs in ([3, 1, 1, 2], [true, false, true, true], Int[], jl([3, 1]), jl([true, false, true, true]))
+                r = W[idxs]
+                ref = W_cpu[Array(idxs)]
+                @test fused(r) isa AbstractGPUArray
+                @test collect(fused(r)) == fused(ref)
+                @test Array(innerlengths(r)) == innerlengths(ref)
+            end
+        end
+
         @test KA.get_backend(A) == KA.get_backend(x)
     end
 

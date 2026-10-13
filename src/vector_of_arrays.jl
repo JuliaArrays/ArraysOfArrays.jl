@@ -579,12 +579,51 @@ end
 
 
 @inline _explicit_idxs(::AbstractVector, idxs::AbstractVector{<:Integer}) = idxs
-@inline _explicit_idxs(eachidx::AbstractVector, idxs::Base.LogicalIndex) = eachidx[idxs]
+# findall instead of iterating the mask, which may live on a device:
+@inline _explicit_idxs(::AbstractVector, idxs::Base.LogicalIndex) = findall(idxs.mask)
+
+# Storage with expensive element access (see _prefers_flat_getindex) is read
+# with a single gather of the flat indices of the selected elements. The
+# structural vectors may live on a device, so everything is computed with
+# array operations, without scalar indexing, and pointer arithmetic is done
+# in Int, which narrow pointer types may not be able to hold:
+function _gather_elements(A::VectorOfArrays, idxs::AbstractVector{<:Integer})
+    A_ep = A.elem_ptr
+    idxs_ep = _indices_like(A_ep, idxs)
+    starts = Int.(A_ep[idxs_ep])
+    lens = Int.(A_ep[idxs_ep .+ 1]) .- starts
+    n_flat = sum(lens)
+    # The gathered data is one-based, so the new element pointers are too:
+    _require_elem_ptr_range(A_ep, n_flat + 1)
+    elem_ptr = similar(A_ep, length(idxs) + 1)
+    view(elem_ptr, 1:1) .= 1
+    view(elem_ptr, 2:length(elem_ptr)) .= 1 .+ cumsum(lens)
+    # The flat index of a position of the gathered data is the position plus
+    # the offset of its element, which is constant within an element. The
+    # offsets change at the first position of each element of nonzero
+    # length, so their changes are scattered there and summed up:
+    nonempty = lens .> 0
+    seg_starts = view(elem_ptr, 1:length(idxs))[nonempty]
+    offsets = starts[nonempty] .- Int.(seg_starts)
+    lagged = fill!(similar(offsets), 0)
+    view(lagged, 2:length(lagged)) .= view(offsets, 1:(length(offsets) - 1))
+    changes = fill!(similar(offsets, n_flat), 0)
+    changes[seg_starts] .= offsets .- lagged
+    flat_idxs = cumsum(changes) .+ (1:n_flat)
+    data = _flat_getindex(A.data, flat_idxs)
+    return VectorOfArrays(data, elem_ptr, A.kernel_size[_indices_like(A.kernel_size, idxs)], no_consistency_checks)
+end
+
+# Indices as an Int vector where the indexed array lives, host or device:
+_indices_like(x::AbstractVector, idxs::AbstractVector{<:Integer}) = copyto!(similar(x, Int, length(idxs)), idxs)
 
 Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArrays, raw_idxs::AbstractVector{<:Integer})
     @boundscheck checkbounds(A, raw_idxs)
+    Base.require_one_based_indexing(raw_idxs)
 
     idxs = _explicit_idxs(eachindex(A), raw_idxs)
+
+    _prefers_flat_getindex(typeof(A.data)) && return _gather_elements(A, idxs)
 
     A_ep = A.elem_ptr
     A_data = A.data

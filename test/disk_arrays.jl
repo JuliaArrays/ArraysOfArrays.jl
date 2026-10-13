@@ -103,6 +103,32 @@ StructArrays.createinstance(::Type{T}, b, a) where {T<:_Swapped} = T(a, b)
         @test r == V_ref[idxs]
     end
 
+    # Likewise, the selected elements of a vector of arrays, which may be
+    # empty, unsorted or repeated, are gathered from the flat data at once:
+    vdisk = CountingDiskArray(rand(40))
+    Vd = VectorOfArrays(vdisk, [1, 3, 3, 10, 21, 41], fill((), 5))
+    Vd_ref = VectorOfArrays(vdisk.data, Vd.elem_ptr, Vd.kernel_size)
+    for idxs in ([2, 5, 1, 1, 4], [true, false, true, true, false], Int[])
+        vdisk.reads = 0
+        r = Vd[idxs]
+        @test vdisk.reads <= length(idxs)
+        @test fused(r) isa Vector{Float64}
+        @test r == Vd_ref[idxs]
+    end
+    # Elements far apart in the flat data, selected out of order (which
+    # DiskArrays before 0.4.25 gathered wrongly), and matrix elements:
+    Vf = VectorOfArrays(CountingDiskArray(Float32.(1:200)), [1, 6, 150, 155, 201], fill((), 4))
+    @test Vf[[3, 1]] == VectorOfArrays(Vf.data.data, Vf.elem_ptr, Vf.kernel_size)[[3, 1]]
+    Vm = VectorOfArrays(CountingDiskArray(rand(12)), [1, 5, 5, 13], [(2,), (0,), (4,)])
+    @test Vm[[3, 1, 2]] == VectorOfArrays(Vm.data.data, Vm.elem_ptr, Vm.kernel_size)[[3, 1, 2]]
+    # Narrow element pointer types are kept, and checked against the size of
+    # the selection before anything is read:
+    Vn = VectorOfArrays(CountingDiskArray(rand(200)), UInt8[1, 101, 201], fill((), 2))
+    @test Vn[[2, 1]].elem_ptr isa Vector{UInt8}
+    Vn.data.reads = 0
+    @test_throws ArgumentError Vn[[2, 2, 2]]
+    @test Vn.data.reads == 0
+
     # Bounds violations, including mask axes, are caught before any read:
     disk.reads = 0
     @test_throws BoundsError V[0:3]
