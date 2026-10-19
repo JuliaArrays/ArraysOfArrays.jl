@@ -13,16 +13,25 @@ using ArraysOfArrays: AbstractNestedArrayStyle
 # that rebuild the declared element type from the columns and hands the
 # result to the parent style, which loses the struct-of-arrays result and
 # bypasses specialized getindex methods of the StructArray. Instead,
-# struct-valued results take StructArrays' native path and all others the
-# nested-array path, both with the original arguments (so the in-place
-# methods of the nested styles must accept StructArray arguments, which
-# the Base fallbacks do).
+# results inferred as a concrete non-struct type take the nested-array
+# path, and all others StructArrays' native path, which determines the
+# element type from the values if it is not inferred. Both use the
+# original arguments (so the in-place methods of the nested styles must
+# accept StructArray arguments, which the Base fallbacks do).
 
-# Like StructArrays.isnonemptystructtype, but only for concrete types
-# (non-concrete result types have no definite fields), and arrays (mutable
-# structs since Julia 1.11) and types are not records:
+# Like StructArrays.isnonemptystructtype, but arrays (Array is a struct
+# since Julia 1.11) and types are not records. Of the non-concrete types,
+# only tuple and named tuple types with definite fields are, whose elements
+# StructArrays can rebuild exactly from the fields, unlike types with
+# parameters that the fields do not determine:
 _struct_result(::Type{T}) where {T} =
-    isconcretetype(T) && isstructtype(T) && fieldcount(T) != 0 && !(T <: AbstractArray) && !(T <: Type)
+    isstructtype(T) && !(T <: AbstractArray) && !(T <: Type) && _rebuildable(T)
+
+_rebuildable(::Type{T}) where {T} = isconcretetype(T) && fieldcount(T) != 0
+_rebuildable(::Type{<:Tuple}) = false
+_rebuildable(::Type{<:NTuple{N,Any}}) where {N} = N != 0
+_rebuildable(::Type{<:NamedTuple}) = false
+_rebuildable(::Type{<:NamedTuple{names}}) where {names} = !isempty(names)
 
 # A StructArray with columns that request block-wise evaluation (see
 # NestedArrayStyle) does so too if its blocks can be rebuilt from the
@@ -75,10 +84,24 @@ function Base.copy(bc::Broadcasted{StructArrayStyle{S,N}}) where {S<:AbstractNes
     blocked = ArraysOfArrays._copy_in_blocks(bc)
     blocked === nothing || return blocked
     ElType = Broadcast.combine_eltypes(bc.f, bc.args)
-    if _struct_result(ElType)
-        return invoke(copy, Tuple{Broadcasted}, bc)
-    else
+    # Zero-dimensional results that are not inferred are returned unwrapped,
+    # as Base does:
+    if isconcretetype(ElType) ? !_struct_result(ElType) : N == 0
         return copy(convert(Broadcasted{S}, bc))
+    else
+        return invoke(copy, Tuple{Broadcasted}, bc)
+    end
+end
+
+# Base's copy allocates the result via similar, also when it widens the
+# element type. StructArrays' similar allocates a StructArray for every
+# nonempty struct type, arrays included, so only the result types above
+# get one here:
+function Base.similar(bc::Broadcasted{StructArrayStyle{S,N}}, ::Type{T}) where {S<:AbstractNestedArrayStyle,N,T}
+    if _struct_result(T)
+        return invoke(similar, Tuple{Broadcasted{StructArrayStyle{P,N}} where {P}, Type{T}}, bc, T)
+    else
+        return similar(convert(Broadcasted{S}, bc), T)
     end
 end
 

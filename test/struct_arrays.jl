@@ -10,10 +10,17 @@ using Base: Broadcast
 
 include("waveform_defs.jl")
 
+# A struct type with a type parameter that its fields do not determine:
+struct _Tagged{N,X}
+    x::X
+end
+
 @testset "StructArrays extension" begin
     n = 5
     timedata = fill(0.0:0.1:12.7, n)
     stats(wf) = (mean = sum(wf.signal) / length(wf.signal), t_last = last(wf.time))
+    stats_ni(wf) = Base.inferencebarrier(stats(wf))
+    mixed_ni(wf, i) = Base.inferencebarrier((mean = stats(wf).mean, k = isodd(i) ? i : float(i)))
 
     for signal in (VectorOfSimilarVectors(rand(128, n)), VectorOfVectors([rand(128) for _ in 1:n]))
         A = StructArray{Waveform{eltype(timedata),eltype(signal)}}((timedata, signal))
@@ -58,6 +65,22 @@ include("waveform_defs.jl")
         @test isempty(stats.(A[1:0]))
         f_branchy(wf) = length(wf.signal) > 0 ? (a = 1,) : (b = 2.0,)
         @test f_branchy.(A) == [f_branchy(wf) for wf in A_ref]
+
+        # Results whose type is not inferred take it from their values, struct
+        # results also go into a StructArray then, while arrays are not stored
+        # as structs:
+        @test stats_ni.(A) isa StructArray
+        @test stats_ni.(A) == S
+        S_mixed = mixed_ni.(A, eachindex(A))
+        @test S_mixed isa StructArray
+        @test S_mixed == [mixed_ni(A_ref[i], i) for i in eachindex(A_ref)]
+        R_ni = (wf -> Base.inferencebarrier(2 .* wf.signal)).(A)
+        @test R_ni isa Vector
+        @test R_ni == R
+        # Struct results that StructArrays cannot rebuild from their fields
+        # are kept as they are:
+        tagged(wf, i) = isodd(i) ? _Tagged{:a,Int}(i) : _Tagged{:b,Int}(i)
+        @test tagged.(A, eachindex(A)) == [tagged(A_ref[i], i) for i in eachindex(A_ref)]
     end
 
     # The specialized getindex is used, the elements are not rebuilt from
@@ -83,6 +106,16 @@ include("waveform_defs.jl")
     # declared element type, so returning them fails, as collect(B) does:
     @test_throws MethodError (wf -> wf).(B)
     @test_throws MethodError collect(B)
+    # With a non-concrete declared element type, no result type is inferred:
+    C = StructArray{Waveform}((timedata, signal))
+    @test stats.(C) isa StructArray
+    @test stats.(C).mean == [stats(C[i]).mean for i in eachindex(C)]
+
+    # Zero-dimensional broadcasts return their result unwrapped, as in Base,
+    # also when it is not inferred:
+    Z = StructArray((x = ArrayOfSimilarArrays{Float64,1,0}(ones(3)),))
+    @test (z -> sum(z.x)).(Z) === 3.0
+    @test (z -> Base.inferencebarrier(sum(z.x))).(Z) === 3.0
 
     # Broadcasts with the StructArray style over column arguments instead of
     # a StructArray, as constructed by PropertyFunctions:

@@ -284,6 +284,15 @@ end
         @test S isa StructArray
         @test S.s == sum.(A_ref) && S.e == e.data
         @test (x -> 2 .* x.wf).(sa) isa VectorOfArrays
+        # Struct-valued results whose type is not inferred, here differing
+        # between blocks, are stored in a StructArray as well:
+        f_wide_struct = (x, i) -> Base.inferencebarrier((s = sum(x.wf), k = i <= 480 ? i : float(i)))
+        S_wide = f_wide_struct.(sa, 1:n)
+        @test S_wide isa StructArray
+        @test S_wide == f_wide_struct.(StructArray((wf = A_ref, e = e.data, v = v)), 1:n)
+        # ... unless StructArrays cannot rebuild them from their fields:
+        tagged_wide = (x, i) -> i <= 480 ? _Tagged{:a,Int}(i) : _Tagged{:b,Int}(i)
+        @test tagged_wide.(sa, 1:n) == [tagged_wide(nothing, i) for i in 1:n]
     finally
         DiskArrays.default_chunk_size[] = default_budget
     end

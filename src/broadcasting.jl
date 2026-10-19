@@ -140,13 +140,16 @@ function _copy_in_blocks(bc::Broadcast.Broadcasted)
     fbc, blocks = blocked
     results = map(r -> Broadcast.materialize(_block_broadcasted(fbc, r)), blocks)
     # A single block is not copied again:
-    return length(results) == 1 ? only(results) : _vcat_blocks(results)
+    return length(results) == 1 ? only(results) : _vcat_blocks(fbc, results)
 end
 
 # Blocks with different element types are joined the way a single
-# broadcast widens:
-_vcat_blocks(results::AbstractVector{<:AbstractVector{T}}) where {T} = reduce(vcat, results)
-_vcat_blocks(results) = [x for x in Iterators.flatten(results)]
+# broadcast widens, into a container allocated the same way:
+_vcat_blocks(::Broadcast.Broadcasted, results::AbstractVector{<:AbstractVector{T}}) where {T} = reduce(vcat, results)
+function _vcat_blocks(bc::Broadcast.Broadcasted, results)
+    joined = [x for x in Iterators.flatten(results)]
+    return copyto!(similar(bc, eltype(joined)), joined)
+end
 
 function Broadcast.materialize!(::NestedArrayStyle{1}, dest, bc::Broadcast.Broadcasted)
     ibc = Broadcast.instantiate(Broadcast.Broadcasted(bc.style, bc.f, bc.args, axes(dest)))
