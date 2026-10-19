@@ -81,6 +81,13 @@ end
         # are kept as they are:
         tagged(wf, i) = isodd(i) ? _Tagged{:a,Int}(i) : _Tagged{:b,Int}(i)
         @test tagged.(A, eachindex(A)) == [tagged(A_ref[i], i) for i in eachindex(A_ref)]
+        # ... and so are named tuples with varying names and tuples of varying
+        # length, which StructArrays cannot store, unlike tuples of fixed length:
+        names_ni(wf, i) = Base.inferencebarrier(isodd(i) ? (a = i,) : (b = i,))
+        @test names_ni.(A, eachindex(A)) == [names_ni(A_ref[i], i) for i in eachindex(A_ref)]
+        lengths_ni(wf, i) = Base.inferencebarrier(isodd(i) ? (i,) : (i, i))
+        @test lengths_ni.(A, eachindex(A)) == [lengths_ni(A_ref[i], i) for i in eachindex(A_ref)]
+        @test (wf -> Base.inferencebarrier((length(wf.signal), 1.0))).(A) isa StructArray
     end
 
     # The specialized getindex is used, the elements are not rebuilt from
