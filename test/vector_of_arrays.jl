@@ -243,6 +243,18 @@ include("testdefs.jl")
         @test q_copy == vcat(collect(q), collect(p_partial))
         full_consistency_checks(q_copy)
 
+        # Nested vectors of arrays concatenate their nested data, with the
+        # element type of their elements and without aliasing them:
+        VN = VectorOfVectors(VectorOfVectors(collect(1.0:6.0), [1, 3, 3, 5, 7]), [1, 3, 3, 5])
+        VNN = vcat(VN, VN[2:3])
+        @test VNN == vcat(collect(VN), collect(VN)[2:3])
+        @test fused(VNN) isa VectorOfArrays && eltype(VNN) == eltype(VN)
+        @test reduce(vcat, [VN, VN[2:3]]) == VNN
+        VNN[3][1][1] = 0
+        @test VN[3][1][1] == 3
+        # with other data, they concatenate element by element as before:
+        @test vcat(VN, VectorOfVectors([[[7.0]]])) == vcat(collect(VN), [[[7.0]]])
+
         # Appending to a VectorOfArrays with unused trailing data would
         # corrupt it:
         @test_throws ArgumentError append!(partitioned(collect(1:10), [2, 3]), q)
@@ -678,6 +690,17 @@ include("testdefs.jl")
 
         boolidxs = rand(Bool, length(V1))
         @test @inferred(V1[boolidxs]) == V1[eachindex(V1)[boolidxs]]
+
+        # Index and mask selections of nested vectors of arrays copy the
+        # selected elements like range selections, they do not alias them:
+        VN = VectorOfVectors(VectorOfVectors(collect(1.0:6.0), [1, 3, 3, 5, 7]), [1, 3, 3, 5])
+        for idxs in ([3, 1, 3], [true, false, true], [2], Int[])
+            r = VN[idxs]
+            @test r == collect(VN)[idxs]
+            @test fused(r) isa VectorOfArrays && fused(fused(r)) isa Vector{Float64}
+        end
+        VN[[3, 1]][1][1][1] = 0
+        @test VN[3][1][1] == 3
 
         VV = @inferred(PartsView{Float64}())
         data = @inferred(rand(5))
