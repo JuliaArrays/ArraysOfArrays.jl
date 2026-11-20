@@ -252,8 +252,12 @@ include("testdefs.jl")
         @test reduce(vcat, [VN, VN[2:3]]) == VNN
         VNN[3][1][1] = 0
         @test VN[3][1][1] == 3
-        # with other data, they concatenate element by element as before:
+        # With other data, or nested data of another dimensionality, they
+        # concatenate element by element:
         @test vcat(VN, VectorOfVectors([[[7.0]]])) == vcat(collect(VN), [[[7.0]]])
+        VM = VectorOfVectors(VectorOfArrays(collect(1.0:4.0), [1, 5], [(2,)]), [1, 2])
+        @test vcat(VN, VM) == vcat(collect(VN), collect(VM))
+        @test reduce(vcat, [VN, VM]) == vcat(collect(VN), collect(VM))
 
         # Appending to a VectorOfArrays with unused trailing data would
         # corrupt it:
@@ -697,7 +701,7 @@ include("testdefs.jl")
         for idxs in ([3, 1, 3], [true, false, true], [2], Int[])
             r = VN[idxs]
             @test r == collect(VN)[idxs]
-            @test fused(r) isa VectorOfArrays && fused(fused(r)) isa Vector{Float64}
+            @test typeof(r) == typeof(VN[2:3])
         end
         VN[[3, 1]][1][1][1] = 0
         @test VN[3][1][1] == 3

@@ -623,8 +623,8 @@ Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArray
 
     idxs = _explicit_idxs(eachindex(A), raw_idxs)
 
-    # The elements of nested data are views into it, copying them would alias
-    # the source, or keep views into disk-backed data, so it is gathered too:
+    # Nested data is gathered as well. Its elements are views, so copies of
+    # them would share the data of A, disk-backed data included:
     (_prefers_flat_getindex(typeof(A.data)) || A.data isa VectorOfArrays) && return _gather_elements(A, idxs)
 
     A_ep = A.elem_ptr
@@ -791,9 +791,9 @@ function _vcat_voas(Vs)
     ep_bounds = map(V -> _scalar_first_last(V.elem_ptr), Vs)
     n_data = sum(((ep_first, ep_last),) -> Int(ep_last - ep_first), ep_bounds)
 
-    # Nested data is concatenated as such, the elements of a copy of it would
-    # be views into the data of Vs:
-    nested = all(V -> V.data isa VectorOfArrays, Vs)
+    # Nested data with elements of the same dimensionality is concatenated as
+    # such. Copies of its elements would be views into the data of Vs:
+    nested = all(V -> _vcat_nested(V1.data, V.data), Vs)
     data = nested ? _vcat_voas(map(vecflattened, Vs)) : similar(V1.data, T, n_data)
     elem_ptr = similar(V1.elem_ptr, n_parts + 1)
     _require_elem_ptr_range(elem_ptr, firstindex(data) + n_data)
@@ -825,6 +825,10 @@ function _vcat_voas(Vs)
 
     return VectorOfArrays(data, elem_ptr, kernel_size, no_consistency_checks)
 end
+
+# Whether the data of two vectors of arrays is concatenated as nested data:
+_vcat_nested(::VectorOfArrays{<:Any,N}, ::VectorOfArrays{<:Any,N}) where {N} = true
+_vcat_nested(::AbstractVector, ::AbstractVector) = false
 
 Base.vcat(V1::VectorOfArrays{<:Any,N}, Vs::VectorOfArrays{<:Any,N}...) where {N} = _vcat_voas((V1, Vs...))
 

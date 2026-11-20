@@ -123,9 +123,15 @@ StructArrays.createinstance(::Type{T}, b, a) where {T<:_Swapped} = T(a, b)
         vdisk.reads = 0
         r = Vnest[idxs]
         @test vdisk.reads <= length(idxs)
-        @test fused(fused(r)) isa Vector{Float64}
+        @test typeof(r) == typeof(Vnest[2:3])
         @test r == Vnest_ref[idxs]
     end
+    # Likewise, concatenating them reads the data of each of them once:
+    vdisk.reads = 0
+    r = vcat(Vnest, Vnest)
+    @test vdisk.reads == 2
+    @test typeof(r) == typeof(Vnest[2:3])
+    @test r == vcat(Vnest_ref, Vnest_ref)
     # Elements far apart in the flat data, selected out of order (which
     # DiskArrays before 0.4.25 gathered wrongly), and matrix elements:
     Vf = VectorOfArrays(CountingDiskArray(Float32.(1:200)), [1, 6, 150, 155, 201], fill((), 4))
