@@ -623,7 +623,9 @@ Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArray
 
     idxs = _explicit_idxs(eachindex(A), raw_idxs)
 
-    _prefers_flat_getindex(typeof(A.data)) && return _gather_elements(A, idxs)
+    # Nested data is gathered as well. Its elements are views, so copies of
+    # them would share the data of A, disk-backed data included:
+    (_prefers_flat_getindex(typeof(A.data)) || A.data isa VectorOfArrays) && return _gather_elements(A, idxs)
 
     A_ep = A.elem_ptr
     A_data = A.data
@@ -789,7 +791,10 @@ function _vcat_voas(Vs)
     ep_bounds = map(V -> _scalar_first_last(V.elem_ptr), Vs)
     n_data = sum(((ep_first, ep_last),) -> Int(ep_last - ep_first), ep_bounds)
 
-    data = similar(V1.data, T, n_data)
+    # Nested data with elements of the same dimensionality is concatenated as
+    # such. Copies of its elements would be views into the data of Vs:
+    nested = all(V -> _vcat_nested(V1.data, V.data), Vs)
+    data = nested ? _vcat_voas(map(vecflattened, Vs)) : similar(V1.data, T, n_data)
     elem_ptr = similar(V1.elem_ptr, n_parts + 1)
     _require_elem_ptr_range(elem_ptr, firstindex(data) + n_data)
     kernel_size = similar(V1.kernel_size, n_parts)
@@ -805,7 +810,7 @@ function _vcat_voas(Vs)
     for (V, (ep_first, ep_last)) in zip(Vs, ep_bounds)
         ep = V.elem_ptr
         covered_len = Int(ep_last - ep_first)
-        copyto!(data, i_data, V.data, ep_first, covered_len)
+        nested || copyto!(data, i_data, V.data, ep_first, covered_len)
 
         m = length(ep) - 1
         @views elem_ptr[(i_ptr + 1):(i_ptr + m)] .= ep[(begin + 1):end] .- (Int(ep_first) - base)
@@ -820,6 +825,10 @@ function _vcat_voas(Vs)
 
     return VectorOfArrays(data, elem_ptr, kernel_size, no_consistency_checks)
 end
+
+# Whether the data of two vectors of arrays is concatenated as nested data:
+_vcat_nested(::VectorOfArrays{<:Any,N}, ::VectorOfArrays{<:Any,N}) where {N} = true
+_vcat_nested(::AbstractVector, ::AbstractVector) = false
 
 Base.vcat(V1::VectorOfArrays{<:Any,N}, Vs::VectorOfArrays{<:Any,N}...) where {N} = _vcat_voas((V1, Vs...))
 
