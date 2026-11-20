@@ -740,6 +740,31 @@ include("testdefs.jl")
     end
 
 
+    @testset "element type of nested vectors of arrays" begin
+        # The element type is the type of the elements, and the type of a
+        # view is known without inferring it, at any depth and for all
+        # pointer and index types:
+        for PT in (Int, Int32, UInt8, UInt64)
+            L1 = VectorOfArrays(collect(1.0:24.0), PT[1, 5, 5, 13, 25], [(2,), (2,), (2,), (4,)])
+            L2 = VectorOfVectors(L1, Int32[1, 3, 3, 5])
+            L3 = VectorOfVectors(view(L2, 1:3), PT[1, 2, 4])
+            L4 = VectorOfVectors(L3, [1, 3])
+            for V in (L1, L2, L3, L4)
+                @test isconcretetype(eltype(V))
+                @test eltype(V) == typeof(V[1])
+                for r in (Int32(1):Int32(1), Base.OneTo(1), UInt8(1):UInt8(1))
+                    @test typeof(view(V, r)) == typeof(view(V, 1:1))
+                    @test view(V, r) == V[1:1]
+                end
+            end
+            # Bool ranges index as masks:
+            @test view(L3, false:true) == L3[[false, true]] == L3[2:2]
+        end
+        # Range selections of nested vectors of arrays are inferred:
+        @test @inferred(VectorOfVectors(VectorOfVectors(collect(1.0:6.0), [1, 3, 3, 5, 7]), [1, 3, 3, 5])[2:3]) isa VectorOfArrays
+    end
+
+
     @testset "copy" begin
         A = ref_AoA3(Float32, 3);
         B = VectorOfArrays(A);

@@ -8,9 +8,11 @@ Base.@propagate_inbounds _voa_elem_range(elem_ptr::AbstractVector{<:Integer}, i:
 # pointers of type `VI`, must match the return type of `getindex` exactly:
 @inline function _voa_eltype(::Type{VT}, ::Type{VI}, ::Val{N}) where {VT<:AbstractVector,VI<:AbstractVector{<:Integer},N}
     R = Base.promote_op(_voa_elem_range, VI, Int)
-    SV = Base.promote_op(view, VT, R)
+    SV = _view_type(VT, R)
     return Base.promote_op(_reshape_dataview, SV, NTuple{N,Int})
 end
+
+_view_type(::Type{VT}, ::Type{R}) where {VT,R} = Base.promote_op(view, VT, R)
 
 
 """
@@ -117,6 +119,14 @@ struct VectorOfArrays{
 end
 
 export VectorOfArrays
+
+# A view of nested data is a vector of arrays again (see unsafe_view).
+# Inferring its type would infer the constructor again, recursively, which
+# inference may give up on, depending on what it has inferred before. The
+# element type must not depend on that, so the view type is derived from
+# the type parameters. Not for Bool ranges, which index as masks:
+_view_type(::Type{VectorOfArrays{T,N,M,VT,VI,VD,ET}}, ::Type{<:AbstractUnitRange{<:Union{Signed,Unsigned}}}) where {T,N,M,VT,VI,VD,ET} =
+    VectorOfArrays{T,N,M,VT,_view_type(VI, UnitRange{Int}),_view_type(VD, UnitRange{Int}),ET}
 
 function VectorOfArrays{T,N}(A::AbstractVector{<:AbstractArray{U,N}}) where {T,N,U}
     R = VectorOfArrays{T,N}()
@@ -840,8 +850,10 @@ end
 
 
 Base.@propagate_inbounds function Base.unsafe_view(A::VectorOfArrays, idxs::AbstractUnitRange{<:Integer})
-    from = first(idxs)
-    to = last(idxs)
+    # In Int, so that the type of the view does not depend on the index type
+    # (see _view_type):
+    from = Int(first(idxs))
+    to = Int(last(idxs))
     VectorOfArrays(
         A.data,
         view(A.elem_ptr, from:(to+1)),
