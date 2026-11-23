@@ -826,6 +826,10 @@ Base.view(A::VariedViews, r::AbstractUnitRange{<:Integer}) = Base.inferencebarri
             @test typeof(r) == typeof(V[1:0])
             @test owns_data(V -> vcat(V32, V), V)
         end
+        # Many inputs, in one call:
+        many = fill(nested, 40)
+        @test vcat(many...) == reduce(vcat, many) == reduce(vcat, collect.(many))
+        @test typeof(vcat(many...)) == typeof(nested[1:0])
         # Vectors of arrays of different types but one dimensionality
         # concatenate like equally typed ones, whatever the element type of
         # the vector that holds them:

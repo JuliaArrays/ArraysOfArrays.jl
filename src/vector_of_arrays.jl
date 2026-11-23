@@ -959,7 +959,10 @@ end
 _vcat_all(xs::Tuple) = vcat(xs...)
 _vcat_all(xs::AbstractVector) = reduce(vcat, xs)
 
-Base.vcat(V1::VectorOfArrays{<:Any,N}, Vs::VectorOfArrays{<:Any,N}...) where {N} = _vcat_voas((V1, Vs...))
+# Many arguments are concatenated as a vector. The compiler does not
+# specialize on tuples of 32 or more, they compile and run much slower:
+Base.vcat(V1::VectorOfArrays{<:Any,N}, Vs::VectorOfArrays{<:Any,N}...) where {N} =
+    _vcat_voas(length(Vs) < 31 ? (V1, Vs...) : [V1, Vs...])
 
 Base.reduce(::typeof(vcat), Vs::AbstractVector{<:VectorOfArrays}) = _vcat_voas(_narrowed(Vs))
 # Disambiguation:
