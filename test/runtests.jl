@@ -12,7 +12,9 @@ Test.@testset "Package ArraysOfArrays" begin
     include("static_arrays.jl")
     include("fixed_size_arrays.jl")
     include("struct_arrays.jl")
-    include("gpu_arrays.jl")
+    # JLArrays runs kernels through OpenCL, whose compiler does not support
+    # 32-bit systems:
+    Sys.WORD_SIZE == 64 && include("gpu_arrays.jl")
     include("disk_arrays.jl")
     include("mooncake.jl")
     # Reactant only supports 64-bit Linux and macOS, and some of its
