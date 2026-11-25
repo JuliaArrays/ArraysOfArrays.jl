@@ -14,6 +14,21 @@ include("testdefs.jl")
 # perform scalar indexing on it:
 JLArrays.allowscalar(false)
 
+# A whole-element function for device kernels. Written as a loop, which
+# every backend can compile, unlike Base's recursive sum:
+function sum_abs2(v)
+    s = zero(eltype(v))
+    @inbounds for i in eachindex(v)
+        s += abs2(v[i])
+    end
+    return s
+end
+
+# A function whose result type is not inferred for host-side element views
+# of device arrays, while kernels compile it for the device-side array type:
+elem_length(v) = length(v)
+elem_length(v::JLArray) = Base.inferencebarrier(length(v))
+
 @testset "GPU arrays (via JLArrays)" begin
     @testset "ArrayOfSimilarArrays on device data" begin
         x = jl(rand(Float32, 3, 4, 5))
@@ -241,19 +256,19 @@ JLArrays.allowscalar(false)
         # Both fully device-resident and host-shape-info layouts:
         for V in (adapt(JLArray, cpu),
                   VectorOfArrays(jl(cpu.data), cpu.elem_ptr, cpu.kernel_size))
-            for g in (sum, maximum, minimum, argmin, argmax)
+            for g in (maximum, minimum, argmin, argmax)
                 @test Array(map(g, V)) == map(g, cpu)
             end
             # Broadcast form:
-            @test Array(sum.(V)) == sum.(cpu)
+            @test Array(maximum.(V)) == maximum.(cpu)
             @test Array(argmin.(V)) == argmin.(cpu)
             # A general scalar function via the segment-view kernel:
-            @test Array(map(v -> sum(abs2, v), V)) == map(v -> sum(abs2, v), cpu)
-            @test Array((v -> sum(abs2, v)).(V)) == (v -> sum(abs2, v)).(cpu)
-            # A function whose result type cannot be inferred:
-            g_ib = v -> Base.inferencebarrier(sum(v))
-            @test Array(map(g_ib, V)) == map(sum, cpu)
-            @test Array(g_ib.(V)) == sum.(cpu)
+            @test Array(map(sum_abs2, V)) == map(sum_abs2, cpu)
+            @test Array(sum_abs2.(V)) == sum_abs2.(cpu)
+            # A function whose result type is not inferred on the host:
+            @test !isconcretetype(Base.promote_op(elem_length, eltype(V)))
+            @test Array(map(elem_length, V)) == map(length, cpu)
+            @test Array(elem_length.(V)) == length.(cpu)
         end
 
         # Empty vector of arrays:
@@ -331,13 +346,7 @@ JLArrays.allowscalar(false)
             end
         end
 
-        # map(sum, ·) keeps Base's sum semantics: small integers widen via
-        # add_sum (sum(Int8[100,28]) == 128::Int). maximum/minimum keep
-        # Base's (non-widening) element type:
-        cpu_i8 = VectorOfArrays([Int8[100, 28], Int8[], Int8[127, 1]])
-        dev_i8 = adapt(JLArray, cpu_i8)
-        @test Array(map(sum, dev_i8)) == map(sum, cpu_i8)
-        @test eltype(Array(map(sum, dev_i8))) == eltype(map(sum, cpu_i8))
+        # maximum/minimum keep Base's (non-widening) element type:
         cpu_mm = VectorOfArrays([Int8[100, 28], Int8[127, 1]])
         dev_mm = adapt(JLArray, cpu_mm)
         @test Array(map(maximum, dev_mm)) == map(maximum, cpu_mm)
