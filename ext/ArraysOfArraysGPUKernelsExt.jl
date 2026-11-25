@@ -93,7 +93,7 @@ function _segmented_mapreduce(f, op, init, data, elem_ptr, ::Type{T_out}, backen
     ep_host = Array(elem_ptr)
     counts = cld.(diff(ep_host), _max_chunk_length)
     offsets_host = pushfirst!(cumsum(counts), zero(eltype(counts)))
-    n_chunks = last(offsets_host)
+    n_chunks = Int(last(offsets_host))
     # The decision above uses the full backing data, which may cover more
     # than the elements do (e.g. for views), so it can turn out that no
     # element array is actually longer than a chunk:

@@ -246,6 +246,10 @@ elem_length(v::JLArray) = Base.inferencebarrier(length(v))
         V2 = VectorOfArrays(jl(collect(1f0:100000f0)), jl([1, 100001]), jl([()]))
         @test collect(innersum(V2)) ≈ [sum(1f0:100000f0)]
 
+        # Unsigned element pointers:
+        V4 = VectorOfArrays(jl(x), jl(UInt32.(ep)), jl(fill((), length(lens))))
+        @test collect(innersum(V4)) ≈ sum.(parts)
+
         # Chunks accumulate in the type of init, like a single pass does:
         V3 = VectorOfArrays(jl(fill(UInt16(60000), 2000)), jl([1, 2001]), jl([()]))
         @test collect(innermapreduce(identity, +, V3; init = UInt64(0))) == [UInt64(2000) * 60000]
