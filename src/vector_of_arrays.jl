@@ -14,6 +14,15 @@ end
 
 _view_type(::Type{VT}, ::Type{R}) where {VT,R} = Base.promote_op(view, VT, R)
 
+# The type of an empty element, for an element type ET that inference did
+# not find. It can only stand in if all element pointers are of one type.
+# The views of the data must all be of one type too, which getindex asserts:
+function _empty_elem_type(@nospecialize(ET), data::AbstractVector, elem_ptr::AbstractVector{<:Integer}, ::Val{N}) where {N}
+    isconcretetype(eltype(elem_ptr)) || return ET
+    one_ptr = oneunit(eltype(elem_ptr))
+    return typeof(_reshape_dataview(view(data, one_ptr:(one_ptr - 1)), ntuple(_ -> 0, Val(N))))
+end
+
 
 """
     VectorOfArrays{T,N,M,VT,VI,VD,ET<:AbstractArray{T,N}} <: AbstractVector{ET}
@@ -112,6 +121,10 @@ struct VectorOfArrays{
     }
         N = length((ntuple(_ -> 0, Val{M}())..., 0))
         ET = _voa_eltype(VT, VI, Val(N))
+        # Where inference gives up, ET may not be an array type at all. The
+        # check is written with isa, which inference can decide without
+        # knowing ET as a constant:
+        ET isa Type{<:AbstractArray{T,N}} || (ET = _empty_elem_type(ET, data, elem_ptr, Val(N)))
         A = new{T,N,M,VT,VI,VD,ET}(data, elem_ptr, kernel_size)
         checks(A)
         A
@@ -571,7 +584,7 @@ Base.@propagate_inbounds function Base.getindex(A::VectorOfArrays, i::Integer)
     @boundscheck checkbounds(A, i)
     r, s = _elem_range_size(A, i)
     dataview = view(A.data, r)
-    _reshape_dataview(dataview, s)
+    _reshape_dataview(dataview, s)::eltype(A)
 end
 
 

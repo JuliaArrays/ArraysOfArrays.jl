@@ -11,6 +11,14 @@ using ArraysOfArrays: full_consistency_checks, _append_elemptr!, element_ptr, in
 
 include("testdefs.jl")
 
+# Data whose views are of several types, which inference cannot see:
+struct VariedViews <: AbstractVector{Float64}
+    x::Vector{Float64}
+end
+Base.size(A::VariedViews) = size(A.x)
+Base.getindex(A::VariedViews, i::Int) = A.x[i]
+Base.view(A::VariedViews, r::AbstractUnitRange{<:Integer}) = Base.inferencebarrier(isempty(r) ? view(A.x, r) : A.x[r])
+
 
 @testset "vector_of_arrays" begin
     ref_flatview(A::AbstractVector{<:AbstractArray}) = vcat(map(vec, Array(A))...)
@@ -760,6 +768,16 @@ include("testdefs.jl")
             # Bool ranges index as masks:
             @test view(L3, false:true) == L3[[false, true]] == L3[2:2]
         end
+        # Element types that depend on the values of the element pointers
+        # stay as inferred:
+        U = VectorOfArrays(collect(1.0:6.0), Union{Int,UInt64}[1, UInt64(3), 3, UInt64(7)], fill((), 3))
+        @test all(x -> x isa eltype(U), U)
+        @test collect(U) == [[1.0, 2.0], Float64[], [3.0, 4.0, 5.0, 6.0]]
+        # Where inference fails, the element type is the type of an empty
+        # element, and elements of another type are rejected:
+        W = VectorOfVectors(VariedViews([1.0, 2.0, 3.0]), [1, 1, 3, 4])
+        @test W[1] isa eltype(W)
+        @test_throws TypeError W[2]
         # Range selections of nested vectors of arrays are inferred:
         @test @inferred(VectorOfVectors(VectorOfVectors(collect(1.0:6.0), [1, 3, 3, 5, 7]), [1, 3, 3, 5])[2:3]) isa VectorOfArrays
     end

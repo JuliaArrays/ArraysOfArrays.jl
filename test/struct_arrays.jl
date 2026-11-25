@@ -137,6 +137,13 @@ end
     @test r_array isa VectorOfArrays
     @test r_array == [x .+ y for (x, y) in zip(a, b)]
 
+    # The element type of a vector of arrays does not depend on inference,
+    # which gives up on views of StructArrays with many columns:
+    wide = VectorOfVectors(StructArray(ntuple(_ -> [1, 2, 3], 32)), [1, 3, 4])
+    @test eltype(wide) == typeof(wide[1])
+    @test wide[[2, 1]] == collect(wide)[[2, 1]]
+    @test typeof(wide[[2, 1]]) == typeof(wide[1:0]) == typeof(vcat(wide, wide))
+
     @testset "no method ambiguities or piracy in the StructArrays extension" begin
         ext = Base.get_extension(ArraysOfArrays, :ArraysOfArraysStructArraysExt)
         @test ext !== nothing
