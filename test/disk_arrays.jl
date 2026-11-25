@@ -123,8 +123,34 @@ StructArrays.createinstance(::Type{T}, b, a) where {T<:_Swapped} = T(a, b)
         vdisk.reads = 0
         r = Vnest[idxs]
         @test vdisk.reads <= length(idxs)
-        @test fused(fused(r)) isa Vector{Float64}
+        @test typeof(r) == typeof(Vnest[2:3])
         @test r == Vnest_ref[idxs]
+    end
+    # Likewise, concatenating them reads the data of each of them once, and
+    # getindex broadcasts read the data in blocks or gather the selection:
+    vdisk.reads = 0
+    r = vcat(Vnest, Vnest)
+    @test vdisk.reads == 2
+    @test typeof(r) == typeof(Vnest[2:3])
+    @test r == vcat(Vnest_ref, Vnest_ref)
+    for (V, V_ref) in ((Vd, Vd_ref), (Vnest, Vnest_ref)), idxs in (Ref(:), [isodd.(eachindex(x)) for x in V_ref])
+        vdisk.reads = 0
+        r = getindex.(V, idxs)
+        @test vdisk.reads <= 2
+        @test typeof(r) == typeof(V[2:3])
+        @test r == getindex.(V_ref, idxs)
+    end
+    # So does other data over disk arrays, like equally sized vectors in a
+    # disk-backed matrix:
+    mdisk = CountingDiskArray(rand(2, 6))
+    Vs = VectorOfVectors(VectorOfSimilarVectors(mdisk), [1, 3, 3, 7])
+    Vs_ref = VectorOfVectors(VectorOfSimilarVectors(mdisk.data), Vs.elem_ptr)
+    for (f, max_reads) in ((V -> V[[3, 1, 3]], 2), (V -> V[[true, false, true]], 2), (V -> vcat(V, V), 2), (V -> getindex.(V, Ref(:)), 1))
+        mdisk.reads = 0
+        r = f(Vs)
+        @test mdisk.reads <= max_reads
+        @test typeof(r) == typeof(Vs[2:3]) == typeof(Vs_ref[2:3])
+        @test r == f(Vs_ref)
     end
     # Elements far apart in the flat data, selected out of order (which
     # DiskArrays before 0.4.25 gathered wrongly), and matrix elements:
@@ -138,7 +164,11 @@ StructArrays.createinstance(::Type{T}, b, a) where {T<:_Swapped} = T(a, b)
     @test Vn[[2, 1]].elem_ptr isa Vector{UInt8}
     Vn.data.reads = 0
     @test_throws ArgumentError Vn[[2, 2, 2]]
+    @test_throws ArgumentError vcat(Vn, Vn)
     @test Vn.data.reads == 0
+    # Wide pointer types are converted before they address the disk data:
+    Vw = VectorOfArrays(CountingDiskArray(collect(1.0:10.0)), UInt64[1, 3, 6, 11], fill((), 3))
+    @test vcat(Vw, Vw) == vcat(collect.(Vw), collect.(Vw))
 
     # Bounds violations, including mask axes, are caught before any read:
     disk.reads = 0

@@ -157,6 +157,8 @@ fill!(view(VA_flat, 7:14), 4.2)
 all(x -> x == 4.2, VA[2])
 ```
 
+Selecting several elements (`VA[2:3]`, `VA[[3, 1]]`, `VA[mask]`), `vcat` and `getindex.(VA, idxs)` return a new `VectorOfArrays`. Its data is what the data of `VA` itself returns for the selected elements, for example a `Vector` for disk-backed data and a `VectorOfArrays` for nested data. The result therefore behaves like a selection from the data does: it shares no memory with `VA` if the data stores values, and it has the same type for all kinds of indices if selections from the data do. Data that stores references to arrays, like a `Vector{Vector{Float64}}`, shares these arrays with the result.
+
 ### Type aliases
 The following type aliases are defined:
 

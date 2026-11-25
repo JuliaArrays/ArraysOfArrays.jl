@@ -605,83 +605,153 @@ end
 # findall instead of iterating the mask, which may live on a device:
 @inline _explicit_idxs(::AbstractVector, idxs::Base.LogicalIndex) = findall(idxs.mask)
 
-# Storage with expensive element access (see _prefers_flat_getindex) is read
-# with a single gather of the flat indices of the selected elements. The
-# structural vectors may live on a device, so everything is computed with
-# array operations, without scalar indexing, and pointer arithmetic is done
-# in Int, which narrow pointer types may not be able to hold:
-function _gather_elements(A::VectorOfArrays, idxs::AbstractVector{<:Integer})
-    A_ep = A.elem_ptr
-    idxs_ep = _indices_like(A_ep, idxs)
-    starts = Int.(A_ep[idxs_ep])
-    lens = Int.(A_ep[idxs_ep .+ 1]) .- starts
-    n_flat = sum(lens)
-    # The gathered data is one-based, so the new element pointers are too:
-    _require_elem_ptr_range(A_ep, n_flat + 1)
-    elem_ptr = similar(A_ep, length(idxs) + 1)
-    view(elem_ptr, 1:1) .= 1
-    view(elem_ptr, 2:length(elem_ptr)) .= 1 .+ cumsum(lens)
-    # The flat index of a position of the gathered data is the position plus
-    # the offset of its element, which is constant within an element. The
-    # offsets change at the first position of each element of nonzero
-    # length, so their changes are scattered there and summed up:
-    nonempty = lens .> 0
-    seg_starts = view(elem_ptr, 1:length(idxs))[nonempty]
-    offsets = starts[nonempty] .- Int.(seg_starts)
-    lagged = fill!(similar(offsets), 0)
-    view(lagged, 2:length(lagged)) .= view(offsets, 1:(length(offsets) - 1))
-    changes = fill!(similar(offsets, n_flat), 0)
-    changes[seg_starts] .= offsets .- lagged
-    flat_idxs = cumsum(changes) .+ (1:n_flat)
-    data = _flat_getindex(A.data, flat_idxs)
-    return VectorOfArrays(data, elem_ptr, A.kernel_size[_indices_like(A.kernel_size, idxs)], no_consistency_checks)
-end
-
-# Indices as an Int vector where the indexed array lives, host or device:
-_indices_like(x::AbstractVector, idxs::AbstractVector{<:Integer}) = copyto!(similar(x, Int, length(idxs)), idxs)
-
+# Selecting elements gathers one range of the data per selected element:
 Base.@propagate_inbounds function Base._getindex(l::IndexStyle, A::VectorOfArrays, raw_idxs::AbstractVector{<:Integer})
     @boundscheck checkbounds(A, raw_idxs)
     Base.require_one_based_indexing(raw_idxs)
 
     idxs = _explicit_idxs(eachindex(A), raw_idxs)
+    starts, lens = _elem_ranges(A.elem_ptr, idxs)
+    # The gathered data is one-based, so the new element pointers are too:
+    _require_elem_ptr_range(A.elem_ptr, sum(lens) + 1)
+    data = _gather_ranges(A.data, starts, lens)
+    elem_ptr = _elem_ptr_cumsum!(similar(A.elem_ptr, length(idxs) + 1), data, lens)
+    kernel_size = A.kernel_size[_indices_like(A.kernel_size, idxs)]
+    return VectorOfArrays(data, elem_ptr, kernel_size, no_consistency_checks)
+end
 
-    # The elements of nested data are views into it, copying them would alias
-    # the source, or keep views into disk-backed data, so it is gathered too:
-    (_prefers_flat_getindex(typeof(A.data)) || A.data isa VectorOfArrays) && return _gather_elements(A, idxs)
-
-    A_ep = A.elem_ptr
-    A_data = A.data
-
-    elem_ptr = similar(A_ep, length(eachindex(idxs)) + 1)
-    delta_i = firstindex(elem_ptr) - firstindex(idxs)
-
-    elem_ptr[firstindex(elem_ptr)] = firstindex(A_data)
-    for i in eachindex(idxs)
-        idx = idxs[i]
-        l = A_ep[idx + 1] - A_ep[idx]
-        elem_ptr[i + 1 + delta_i] = elem_ptr[i + delta_i] + l
+# The data ranges of the elements idxs, as starts and lengths. Both are
+# computed in Int, which narrow pointer types may not be able to hold:
+function _elem_ranges(elem_ptr::AbstractVector{<:Integer}, raw_idxs::AbstractVector{<:Integer})
+    idxs = _indices_like(elem_ptr, raw_idxs)
+    if _prefers_flat_getindex(typeof(elem_ptr))
+        # No scalar indexing, the pointers may live on a device:
+        starts = Int.(elem_ptr[idxs])
+        return starts, Int.(elem_ptr[idxs .+ 1]) .- starts
     end
-
-    data = similar(A_data, last(elem_ptr) - first(elem_ptr))
-    if firstindex(data) != firstindex(A_data)
-        @assert firstindex(data) != first(elem_ptr)
-        broadcast!(+, elem_ptr, elem_ptr, firstindex(data) - first(elem_ptr))
+    starts = Vector{Int}(undef, length(idxs))
+    lens = similar(starts)
+    for (k, i) in enumerate(idxs)
+        starts[k] = elem_ptr[i]
+        lens[k] = Int(elem_ptr[i + 1]) - starts[k]
     end
+    return starts, lens
+end
 
-    for i in eachindex(idxs)
-        idx = idxs[i]
-        l = A_ep[idx + 1] - A_ep[idx]
+# Indices for x that live where x does. Host indices for a host array are
+# used as they are, all others are copied to an Int vector of the kind of x:
+function _indices_like(x::AbstractVector, idxs::AbstractVector{<:Integer})
+    _prefers_flat_getindex(typeof(x)) || _prefers_flat_getindex(typeof(idxs)) || return idxs
+    return copyto!(similar(x, Int, length(idxs)), _dense_idxs(idxs))
+end
 
-        # Sanity check:
-        @assert l == elem_ptr[i + 1 + delta_i] - elem_ptr[i + delta_i]
+# Lazy host index vectors, like ranges and views, are collected first.
+# Copying them to a device would index them one by one:
+_dense_idxs(idxs::Array) = idxs
+_dense_idxs(idxs::AbstractVector{<:Integer}) = _prefers_flat_getindex(typeof(idxs)) ? idxs : collect(idxs)
 
-        copyto!(data, elem_ptr[i + delta_i], A_data, A_ep[idx], l)
+
+# _gather_ranges(data, starts, lens) returns the ranges
+# starts[k]:(starts[k] + lens[k] - 1) of data, concatenated to a new array.
+#
+# The result is what the data itself returns for the indices in these
+# ranges. The data type decides in this way what kind of array results and
+# how deep the copy goes. Copying elements of the data into an array made by
+# similar is not equivalent in general: The elements of nested data are
+# views, copies of them would share the data, and lazy elements would stay
+# lazy:
+_gather_ranges(data::AbstractVector, starts::AbstractVector{Int}, lens::AbstractVector{Int}) =
+    _flat_getindex(data, _range_idxs(starts, lens))
+
+# Storage that is known to hold its elements in host memory is copied range
+# by range into an array made by similar instead, which gives the same
+# result faster:
+function _gather_ranges(data::AbstractVector, starts::Vector{Int}, lens::Vector{Int})
+    _copies_blockwise(data) || return _flat_getindex(data, _range_idxs(starts, lens))
+    result = similar(data, sum(lens))
+    pos = firstindex(result)
+    for k in eachindex(starts, lens)
+        copyto!(result, pos, data, starts[k], lens[k])
+        pos += lens[k]
     end
+    return result
+end
 
-    kernel_size = A.kernel_size[idxs]
+# Fails closed: only storage that is known to hold its elements in host
+# memory (see _host_storage) copies blockwise, everything else is left to
+# its own getindex. Bit arrays are not packed as broadcast results, but
+# hold their elements too. The answer depends on the type of the data only:
+_copies_blockwise(data::AbstractArray) = data isa BitArray || _host_storage(typeof(data))
+# The getindex of equally sized arrays in host storage copies them element
+# by element into an array of the same kind as well:
+_copies_blockwise(A::ArrayOfSimilarArrays) = _copies_blockwise(A.data)
 
-    VectorOfArrays(data, elem_ptr, kernel_size, no_consistency_checks)
+# Whether elements of data may be copied into an array made by similar at
+# all: also for storage with expensive element access, which holds plain
+# values. One block per concatenated input is one disk read or device
+# operation there, whereas one block per selected element would be many:
+_copies_elements(data::AbstractArray) = _copies_blockwise(data) || _prefers_flat_getindex(typeof(data))
+
+# A range of elements of nested data covers a range of the data one level
+# below, so every level gathers as many ranges as the outermost one. The
+# element pointers are copied range by range as well, shifted to the new
+# positions of their data:
+function _gather_ranges(A::VectorOfArrays, starts::Vector{Int}, lens::Vector{Int})
+    ep = A.elem_ptr
+    _prefers_flat_getindex(typeof(ep)) && return _flat_getindex(A, _range_idxs(starts, lens))
+
+    data_starts = similar(starts)
+    data_lens = similar(lens)
+    for k in eachindex(starts, lens)
+        data_starts[k] = ep[starts[k]]
+        data_lens[k] = Int(ep[starts[k] + lens[k]]) - data_starts[k]
+    end
+    _require_elem_ptr_range(ep, sum(data_lens) + 1)
+    data = _gather_ranges(A.data, data_starts, data_lens)
+
+    elem_ptr = similar(ep, sum(lens) + 1)
+    pos = firstindex(elem_ptr)
+    data_pos = Int(firstindex(data))
+    for k in eachindex(starts, lens)
+        shift = data_pos - data_starts[k]
+        for i in starts[k]:(starts[k] + lens[k] - 1)
+            elem_ptr[pos] = ep[i] + shift
+            pos += 1
+        end
+        data_pos += data_lens[k]
+    end
+    elem_ptr[pos] = data_pos
+
+    kernel_size = _gather_ranges(A.kernel_size, starts, lens)
+    return VectorOfArrays(data, elem_ptr, kernel_size, no_consistency_checks)
+end
+
+# The indices in the ranges starts[k]:(starts[k] + lens[k] - 1), in order:
+function _range_idxs(starts::Vector{Int}, lens::Vector{Int})
+    idxs = Vector{Int}(undef, sum(lens))
+    pos = firstindex(idxs)
+    for k in eachindex(starts, lens), i in starts[k]:(starts[k] + lens[k] - 1)
+        idxs[pos] = i
+        pos += 1
+    end
+    return idxs
+end
+
+# Ranges that may live on a device are expanded with array operations: The
+# index at a position of the result is the position plus an offset that is
+# constant within a range. The offsets change at the first position of each
+# range of nonzero length, so their changes are scattered there and summed
+# up:
+function _range_idxs(starts::AbstractVector{Int}, lens::AbstractVector{Int})
+    n = sum(lens)
+    nonempty = lens .> 0
+    firsts = (cumsum(lens) .- lens .+ 1)[nonempty]
+    offsets = starts[nonempty] .- firsts
+    lagged = fill!(similar(offsets), 0)
+    view(lagged, 2:length(lagged)) .= view(offsets, 1:(length(offsets) - 1))
+    changes = fill!(similar(offsets, n), 0)
+    changes[firsts] .= offsets .- lagged
+    return cumsum(changes) .+ (1:n)
 end
 
 
@@ -803,23 +873,24 @@ end
 
 
 # Concatenating vectors of arrays concatenates the data covered by their
-# elements, in a single pass:
+# elements:
 
 function _vcat_voas(Vs)
     isempty(Vs) && throw(ArgumentError("reducing over an empty collection is not allowed"))
     V1 = first(Vs)
+    # reduce may pass vectors of arrays of different dimensionality, which
+    # have no common shape information. Base concatenates their elements:
+    _all_by_type(V -> _alike_nested(V1, V), Vs) || return invoke(reduce, Tuple{typeof(vcat),AbstractVector{<:AbstractVector}}, vcat, Vs)
 
-    T = mapreduce(V -> eltype(V.data), promote_type, Vs)
     n_parts = sum(length, Vs)
     ep_bounds = map(V -> _scalar_first_last(V.elem_ptr), Vs)
     n_data = sum(((ep_first, ep_last),) -> Int(ep_last - ep_first), ep_bounds)
+    # The concatenated data is one-based. Checked first, the data may be
+    # expensive to read:
+    _require_elem_ptr_range(V1.elem_ptr, n_data + 1)
 
-    # Nested data is concatenated as such, the elements of a copy of it would
-    # be views into the data of Vs:
-    nested = all(V -> V.data isa VectorOfArrays, Vs)
-    data = nested ? _vcat_voas(map(vecflattened, Vs)) : similar(V1.data, T, n_data)
+    data = _vcat_covered(Vs, ep_bounds, n_data)
     elem_ptr = similar(V1.elem_ptr, n_parts + 1)
-    _require_elem_ptr_range(elem_ptr, firstindex(data) + n_data)
     kernel_size = similar(V1.kernel_size, n_parts)
 
     # The pointers are constructed with vectorized operations, the shape
@@ -827,19 +898,14 @@ function _vcat_voas(Vs)
     fill!(view(elem_ptr, firstindex(elem_ptr):firstindex(elem_ptr)), firstindex(data))
     i_ptr = firstindex(elem_ptr)
     i_ksz = firstindex(kernel_size)
-    i_data = firstindex(data)
     base = Int(firstindex(data))
 
     for (V, (ep_first, ep_last)) in zip(Vs, ep_bounds)
         ep = V.elem_ptr
-        covered_len = Int(ep_last - ep_first)
-        nested || copyto!(data, i_data, V.data, ep_first, covered_len)
-
         m = length(ep) - 1
         @views elem_ptr[(i_ptr + 1):(i_ptr + m)] .= ep[(begin + 1):end] .- (Int(ep_first) - base)
         i_ptr += m
-        i_data += covered_len
-        base += covered_len
+        base += Int(ep_last - ep_first)
 
         ksz = V.kernel_size
         copyto!(kernel_size, i_ksz, ksz, firstindex(ksz), length(ksz))
@@ -849,12 +915,60 @@ function _vcat_voas(Vs)
     return VectorOfArrays(data, elem_ptr, kernel_size, no_consistency_checks)
 end
 
+# Whether a and b are both vectors of arrays of the same dimensionality.
+# Their shape information tells, their element type may not: it is Union{}
+# if inference finds that the data has no views:
+_alike_nested(a::AbstractVector, b::AbstractVector) =
+    a isa VectorOfArrays && b isa VectorOfArrays && eltype(a.kernel_size) == eltype(b.kernel_size)
+
+# Whether pred holds for all of Vs, for a pred that depends on the type of
+# its argument only. In a vector with a concrete element type one element
+# decides then, which keeps the type of the concatenation inferable:
+_all_by_type(pred, Vs::Tuple) = all(pred, Vs)
+_all_by_type(pred, Vs::AbstractVector{T}) where {T} = isconcretetype(T) ? pred(first(Vs)) : all(pred, Vs)
+
+# The data covered by the elements of each of Vs, n_data elements in total,
+# concatenated. As in _gather_ranges, the data itself decides what its
+# concatenation is:
+function _vcat_covered(Vs, ep_bounds, n_data)
+    V1 = first(Vs)
+    T = mapreduce(V -> eltype(V.data), promote_type, Vs)
+    # One block copy per input gives the same for data whose elements may be
+    # copied, if it is of one element type or promotes to a concrete one.
+    # Otherwise similar would not return storage of the same kind:
+    if _all_by_type(V -> _copies_elements(V.data) && (eltype(V.data) == T || isconcretetype(T)), Vs)
+        data = similar(V1.data, T, n_data)
+        pos = firstindex(data)
+        for (V, (ep_first, ep_last)) in zip(Vs, ep_bounds)
+            n = Int(ep_last - ep_first)
+            copyto!(data, pos, V.data, Int(ep_first), n)
+            pos += n
+        end
+        return data
+    elseif _all_by_type(V -> _alike_nested(V1.data, V.data), Vs)
+        # Views of nested data concatenate to an independent result:
+        return _vcat_voas(map(vecflattened, Vs))
+    else
+        # Views of other data may concatenate lazily or share the data, so
+        # the covered parts are selected first:
+        parts = map((V, (ep_first, ep_last)) -> _flat_getindex(V.data, Int(ep_first):(Int(ep_last) - 1)), Vs, ep_bounds)
+        return _vcat_all(parts)
+    end
+end
+
+_vcat_all(xs::Tuple) = vcat(xs...)
+_vcat_all(xs::AbstractVector) = reduce(vcat, xs)
+
 Base.vcat(V1::VectorOfArrays{<:Any,N}, Vs::VectorOfArrays{<:Any,N}...) where {N} = _vcat_voas((V1, Vs...))
 
-Base.reduce(::typeof(vcat), Vs::AbstractVector{<:VectorOfArrays}) = _vcat_voas(Vs)
+Base.reduce(::typeof(vcat), Vs::AbstractVector{<:VectorOfArrays}) = _vcat_voas(_narrowed(Vs))
 # Disambiguation:
-Base.reduce(::typeof(vcat), Vs::AbstractVector{<:VectorOfArrays{<:Any,1}}) = _vcat_voas(Vs)
-Base.reduce(::typeof(vcat), Vs::AbstractVector{<:VectorOfArrays{<:Any,2}}) = _vcat_voas(Vs)
+Base.reduce(::typeof(vcat), Vs::AbstractVector{<:VectorOfArrays{<:Any,1}}) = _vcat_voas(_narrowed(Vs))
+Base.reduce(::typeof(vcat), Vs::AbstractVector{<:VectorOfArrays{<:Any,2}}) = _vcat_voas(_narrowed(Vs))
+
+# A vector with an abstract element type often holds inputs of one type
+# anyhow, which specialized code concatenates much faster:
+_narrowed(Vs::AbstractVector{T}) where {T} = isconcretetype(T) ? Vs : map(identity, Vs)
 
 
 function Base.copy(V::VectorOfArrays)

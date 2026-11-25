@@ -137,6 +137,21 @@ end
     @test r_array isa VectorOfArrays
     @test r_array == [x .+ y for (x, y) in zip(a, b)]
 
+    # Selections and concatenations of a vector of arrays over a StructArray
+    # leave it to the columns how they are copied, so nested columns stay
+    # nested and share no data with their source:
+    for f in (V -> V[[2, 1, 2]], V -> V[[false, true]], V -> vcat(V, V), V -> getindex.(V, Ref(:)))
+        S = StructArray(a = VectorOfVectors(collect(1.0:6.0), [1, 3, 3, 5, 7]), b = collect(1:4))
+        VS = VectorOfVectors(S, [1, 2, 5])
+        r = f(VS)
+        expected = deepcopy(r)
+        @test typeof(r) == typeof(VS[1:0])
+        @test r == f(collect(VS))
+        fill!(S.a.data, 0)
+        fill!(S.b, 0)
+        @test r == expected
+    end
+
     # The element type of a vector of arrays does not depend on inference,
     # which gives up on views of StructArrays with many columns:
     wide = VectorOfVectors(StructArray(ntuple(_ -> [1, 2, 3], 32)), [1, 3, 4])
@@ -148,6 +163,6 @@ end
         ext = Base.get_extension(ArraysOfArrays, :ArraysOfArraysStructArraysExt)
         @test ext !== nothing
         @test isempty(detect_ambiguities(ext))
-        Aqua.test_piracies(ext, treat_as_own = [ArraysOfArrays.AbstractNestedArrayStyle, ArraysOfArrays._block_length, ArraysOfArrays._block_eltype, ArraysOfArrays._read_block])
+        Aqua.test_piracies(ext, treat_as_own = [ArraysOfArrays.AbstractNestedArrayStyle, ArraysOfArrays._block_length, ArraysOfArrays._block_eltype, ArraysOfArrays._read_block, ArraysOfArrays._copies_blockwise])
     end
 end

@@ -48,11 +48,45 @@ JLArrays.allowscalar(false)
         W_data = jl(W_cpu.data)
         for W in (adapt(JLArray, W_cpu), VectorOfArrays(W_data, W_cpu.elem_ptr, W_cpu.kernel_size),
                   VectorOfArrays(view(W_data, 1:length(W_data)), W_cpu.elem_ptr, W_cpu.kernel_size))
-            for idxs in ([3, 1, 1, 2], [true, false, true, true], Int[], jl([3, 1]), jl([true, false, true, true]))
+            for idxs in ([3, 1, 1, 2], [true, false, true, true], 4:-1:1, view([3, 1, 2], 1:2), Int[], jl([3, 1]), jl([true, false, true, true]))
                 r = W[idxs]
                 ref = W_cpu[Array(idxs)]
                 @test fused(r) isa AbstractGPUArray
                 @test collect(fused(r)) == fused(ref)
+                @test Array(innerlengths(r)) == innerlengths(ref)
+            end
+        end
+
+        # Likewise getindex broadcasts with indices on the host or on the
+        # device, and concatenation with host data of another element type.
+        # Also with unsigned pointers on the host, which need not allow
+        # views of device data:
+        W_host = VectorOfArrays(W_data, W_cpu.elem_ptr, W_cpu.kernel_size)
+        W_unsigned = VectorOfArrays(W_data, UInt64.(W_cpu.elem_ptr), W_cpu.kernel_size)
+        nonempty = [1, 3, 4]
+        for (idxs, host_idxs) in ((Ref(:), Ref(:)), (Ref(jl([1])), Ref([1])), ([[1, 3], [2], [1]], [[1, 3], [2], [1]]))
+            r = getindex.(W_host[nonempty], idxs)
+            @test fused(r) isa AbstractGPUArray
+            @test collect(fused(r)) == reduce(vcat, getindex.(collect(W_cpu)[nonempty], host_idxs))
+        end
+        for (A, B) in ((VectorOfArrays(Float64.(W_cpu.data), W_cpu.elem_ptr, W_cpu.kernel_size), W_host), (W_host, W_cpu), (W_unsigned, W_host))
+            r = vcat(A, B)
+            @test collect(fused(r)) == vcat(collect(fused(A)), collect(fused(B)))
+            @test Array(innerlengths(r)) == vcat(Array(innerlengths(A)), Array(innerlengths(B)))
+        end
+
+        # Nested vectors of arrays are gathered and concatenated level by
+        # level, with the shape information of each level on the host or
+        # on the device:
+        Wn_cpu = VectorOfVectors(W_cpu, [1, 3, 5])
+        for Wn in (adapt(JLArray, Wn_cpu), VectorOfVectors(adapt(JLArray, W_cpu), [1, 3, 5]),
+                   VectorOfVectors(VectorOfArrays(W_data, W_cpu.elem_ptr, W_cpu.kernel_size), [1, 3, 5]))
+            for f in (V -> V[[2, 1, 2]], V -> V[2:-1:1], V -> vcat(V, V))
+                r = f(Wn)
+                ref = f(Wn_cpu)
+                @test typeof(r) == typeof(Wn[1:0])
+                @test collect(fused(fused(r))) == fused(fused(ref))
+                @test Array(innerlengths(fused(r))) == innerlengths(fused(ref))
                 @test Array(innerlengths(r)) == innerlengths(ref)
             end
         end

@@ -229,6 +229,9 @@ function _packable_result(::Type{ET}) where {ET}
     ET <: AbstractArray && isconcretetype(ET) && ndims(ET) >= 1 && _host_storage(ET)
 end
 
+# Data of vectors of arrays in such storage is also copied blockwise (see
+# _copies_blockwise), so similar and copyto! must give for such a type what
+# its own getindex gives:
 _host_storage(::Type) = false
 _host_storage(::Type{<:Array}) = true
 # Memory is host memory by its address-space parameter (device memory
@@ -329,7 +332,8 @@ function _bcast_getindex_impl(A, Idxs...)
     # Checks size compatibility:
     bcsz = Base.Broadcast.broadcast_shape(size(A), map(_generic_size, Idxs)...)
 
-    new_sizes = _similar_idx_vector(A, NTuple{length(Idxs),_idx_type(A)}, prod(bcsz))
+    # In Int, the pointer type may not be able to hold the sizes:
+    new_sizes = _similar_idx_vector(A, NTuple{length(Idxs),Int}, prod(bcsz))
     broadcast!(new_sizes, A, Idxs...) do a, idxs...
         map(length, _to_indices(a, idxs))
     end
@@ -337,8 +341,20 @@ function _bcast_getindex_impl(A, Idxs...)
     new_lengths = prod.(new_sizes)
     new_kernel_size = Base.tail.(new_sizes)
 
-    T = eltype(A.data)
-    newA = _new_vector_of_arrays_with_lengths(A, T, new_kernel_size, new_lengths)
+    # Equally sized vectors are copied into an array made by similar, and so
+    # is data of vectors of arrays that allows it (see _copies_elements):
+    (A isa VectorOfSimilarVectors || _copies_elements(A.data)) && return _copy_selections(A, new_kernel_size, new_lengths, Idxs...)
+    # Other data is gathered by its own getindex, like in _gather_ranges.
+    # Its indices are selected like the data itself would be, from a vector
+    # of arrays over the indices of the data:
+    data_idxs = VectorOfArrays(LinearIndices(A.data), A.elem_ptr, A.kernel_size, no_consistency_checks)
+    selected = _copy_selections(data_idxs, new_kernel_size, new_lengths, Idxs...)
+    data = _flat_getindex(A.data, selected.data)
+    return VectorOfArrays(data, selected.elem_ptr, selected.kernel_size, no_consistency_checks)
+end
+
+function _copy_selections(A, new_kernel_size, new_lengths, Idxs...)
+    newA = _new_vector_of_arrays_with_lengths(A, eltype(A.data), new_kernel_size, new_lengths)
     newA .= _elem_view.(A, Idxs...)
     return newA
 end

@@ -33,6 +33,13 @@ _rebuildable(::Type{<:NTuple{N,Any}}) where {N} = N != 0
 _rebuildable(::Type{<:NamedTuple}) = false
 _rebuildable(::Type{<:NamedTuple{names}}) where {names} = !isempty(names)
 
+# StructArrays allocate, copy and index column by column, so they copy
+# blockwise as data of vectors of arrays if all of their columns do. Not
+# with columns of an abstract declared type, the answer must depend on the
+# type of the StructArray only:
+ArraysOfArrays._copies_blockwise(A::StructArray{<:Any,<:Any,C}) where {C} =
+    isconcretetype(Tuple{fieldtypes(C)...}) && mapreduce(ArraysOfArrays._copies_blockwise, &, values(components(A)))
+
 # A StructArray with columns that request block-wise evaluation (see
 # NestedArrayStyle) does so too if its blocks can be rebuilt from the
 # column blocks:

@@ -11,6 +11,22 @@ using ArraysOfArrays: full_consistency_checks, _append_elemptr!, element_ptr, in
 
 include("testdefs.jl")
 
+# The innermost data of nested arrays:
+leafdata(A::AbstractArray) = A
+leafdata(A::Union{VectorOfArrays,ArrayOfSimilarArrays}) = leafdata(fused(A))
+
+# Whether f(V) remains unchanged when the innermost data of V is overwritten:
+function owns_data(f, V)
+    r = f(V)
+    expected = deepcopy(r)
+    leaf = leafdata(V)
+    saved = copy(leaf)
+    fill!(leaf, zero(eltype(leaf)))
+    owned = r == expected
+    copyto!(leaf, saved)
+    return owned
+end
+
 # Data whose views are of several types, which inference cannot see:
 struct VariedViews <: AbstractVector{Float64}
     x::Vector{Float64}
@@ -116,6 +132,14 @@ Base.view(A::VariedViews, r::AbstractUnitRange{<:Integer}) = Base.inferencebarri
         B = VectorOfArrays(collect(1:100), UInt8[1, 101], [()])
         @test vcat(B, B) == vcat(Array(B), Array(B))
         @test_throws ArgumentError vcat(B, B, B)
+        # Selections that repeat elements grow as well, at any level of
+        # nested data:
+        @test B[[1, 1]] == vcat(Array(B), Array(B))
+        @test_throws ArgumentError B[[1, 1, 1]]
+        C = VectorOfVectors(VectorOfVectors(collect(1:200), UInt8[1, 101, 201]), UInt8[1, 3])
+        @test C[[1]] == C
+        @test_throws ArgumentError C[[1, 1]]
+        @test_throws ArgumentError getindex.(B, [fill(1, 300)])
     end
 
 
@@ -250,18 +274,6 @@ Base.view(A::VariedViews, r::AbstractUnitRange{<:Integer}) = Base.inferencebarri
         append!(q_copy, p_partial)
         @test q_copy == vcat(collect(q), collect(p_partial))
         full_consistency_checks(q_copy)
-
-        # Nested vectors of arrays concatenate their nested data, with the
-        # element type of their elements and without aliasing them:
-        VN = VectorOfVectors(VectorOfVectors(collect(1.0:6.0), [1, 3, 3, 5, 7]), [1, 3, 3, 5])
-        VNN = vcat(VN, VN[2:3])
-        @test VNN == vcat(collect(VN), collect(VN)[2:3])
-        @test fused(VNN) isa VectorOfArrays && eltype(VNN) == eltype(VN)
-        @test reduce(vcat, [VN, VN[2:3]]) == VNN
-        VNN[3][1][1] = 0
-        @test VN[3][1][1] == 3
-        # with other data, they concatenate element by element as before:
-        @test vcat(VN, VectorOfVectors([[[7.0]]])) == vcat(collect(VN), [[[7.0]]])
 
         # Appending to a VectorOfArrays with unused trailing data would
         # corrupt it:
@@ -699,17 +711,6 @@ Base.view(A::VariedViews, r::AbstractUnitRange{<:Integer}) = Base.inferencebarri
         boolidxs = rand(Bool, length(V1))
         @test @inferred(V1[boolidxs]) == V1[eachindex(V1)[boolidxs]]
 
-        # Index and mask selections of nested vectors of arrays copy the
-        # selected elements like range selections, they do not alias them:
-        VN = VectorOfVectors(VectorOfVectors(collect(1.0:6.0), [1, 3, 3, 5, 7]), [1, 3, 3, 5])
-        for idxs in ([3, 1, 3], [true, false, true], [2], Int[])
-            r = VN[idxs]
-            @test r == collect(VN)[idxs]
-            @test fused(r) isa VectorOfArrays && fused(fused(r)) isa Vector{Float64}
-        end
-        VN[[3, 1]][1][1][1] = 0
-        @test VN[3][1][1] == 3
-
         VV = @inferred(PartsView{Float64}())
         data = @inferred(rand(5))
         @inferred(push!(VV, data))
@@ -744,6 +745,95 @@ Base.view(A::VariedViews, r::AbstractUnitRange{<:Integer}) = Base.inferencebarri
         @test innersize(A,1) == innersize(A,3)
         for i in 1:length(A_deep)
             @test A_deep[i] == zeros(3,3,3)
+        end
+    end
+
+
+    @testset "data of selections and concatenations" begin
+        # Index selections, concatenations and getindex broadcasts build
+        # their data by operations of the data itself, like range selections
+        # do. Whatever the data is, they return the type that a range
+        # selection returns and share no data with their source.
+        flat = VectorOfVectors(collect(1.0:12.0), [1, 3, 3, 6, 7, 10, 13])
+        nested = VectorOfVectors(flat, [1, 3, 3, 5, 7])
+        samples = (
+            flat,
+            VectorOfVectors(BitVector(isodd.(1:12)), flat.elem_ptr),
+            nested,
+            VectorOfVectors(nested, [1, 2, 5]),
+            # Matrix elements, narrow pointers and data covered only in part:
+            VectorOfVectors(VectorOfArrays(collect(1.0:14.0), Int32[3, 7, 7, 13], [(2,), (2,), (3,)]), Int32[1, 2, 4]),
+            VectorOfVectors(view(flat, 2:6), [1, 2, 4, 6]),
+            VectorOfVectors(VectorOfVectors(collect(1.0:12.0), UInt64[1, 3, 3, 6, 7, 10, 13]), UInt64[1, 3, 3, 5, 7]),
+            # Data of other kinds: equally sized vectors, offset axes, and
+            # storage that is not known to copy blockwise:
+            VectorOfVectors(VectorOfSimilarVectors(reshape(collect(1.0:12.0), 2, 6)), [1, 3, 3, 7]),
+            VectorOfVectors(OffsetVector(collect(1.0:12.0), -5), [-4, -2, -2, 1, 2, 5, 8]),
+            VectorOfVectors(view(collect(1.0:14.0), [2:13;]), flat.elem_ptr),
+        )
+
+        for V in samples
+            n = length(V)
+            ref = collect(V)
+            T = typeof(V[1:0])
+
+            for idxs in ([n, 1, n], isodd.(1:n), BitVector(iseven.(1:n)), n:-1:1, Int[])
+                r = V[idxs]
+                @test r == ref[idxs]
+                @test typeof(r) == T
+                @test owns_data(V -> V[idxs], V)
+            end
+
+            for cat in (V -> vcat(V, V[1:1], V), V -> reduce(vcat, [V, V[1:1], V]))
+                r = cat(V)
+                @test r == vcat(ref, ref[1:1], ref)
+                @test typeof(r) == T
+                @test owns_data(cat, V)
+            end
+
+            for idxs in (Ref(:), [isodd.(eachindex(x)) for x in ref], [[lastindex(x), firstindex(x)][1:min(2, length(x))] for x in ref])
+                r = getindex.(V, idxs)
+                @test r == getindex.(ref, idxs)
+                @test typeof(r) == T
+                @test owns_data(V -> getindex.(V, idxs), V)
+            end
+        end
+        @test_throws BoundsError getindex.(nested, Ref([3]))
+
+        # Data that holds references keeps the shallow semantics of its own
+        # getindex:
+        inner = [[1.0], [2.0, 3.0], [4.0]]
+        @test VectorOfVectors(inner, [1, 3, 4])[[2, 1]][2][1] === inner[1]
+
+        # Nested data of different dimensionality has no common shape
+        # information. It concatenates to a plain vector of its elements,
+        # which are owned as well:
+        VM = VectorOfVectors(VectorOfArrays(collect(1.0:4.0), [1, 5], [(2,)]), [1, 2])
+        for cat in ((A, B) -> vcat(A, B), (A, B) -> reduce(vcat, [A, B]))
+            @test cat(nested, VM) == vcat(collect(nested), collect(VM))
+            @test owns_data(V -> cat(V, VM), nested)
+            @test owns_data(V -> cat(nested, V), VM)
+        end
+        @test vcat(nested, VectorOfVectors([[[7.0]]])) == vcat(collect(nested), [[[7.0]]])
+        # Likewise vectors of arrays of different dimensionality themselves,
+        # which concatenate to a plain vector of views of their elements:
+        @test reduce(vcat, [flat, fused(VM)]) == vcat(flat, fused(VM)) == vcat(collect(flat), collect(fused(VM)))
+        # Data of different element types is promoted like by its own vcat:
+        for V in (flat, nested)
+            V32 = deepmap(Float32, V)
+            r = vcat(V32, V)
+            @test r == vcat(collect(V32), collect(V))
+            @test typeof(r) == typeof(V[1:0])
+            @test owns_data(V -> vcat(V32, V), V)
+        end
+        # Vectors of arrays of different types but one dimensionality
+        # concatenate like equally typed ones, whatever the element type of
+        # the vector that holds them:
+        flat32 = VectorOfVectors(collect(1.0:4.0), Int32[1, 2, 5])
+        for Vs in ([flat, flat32], VectorOfArrays[flat, flat32])
+            r = reduce(vcat, Vs)
+            @test r == vcat(collect(flat), collect(flat32))
+            @test typeof(r) == typeof(flat[1:0])
         end
     end
 
